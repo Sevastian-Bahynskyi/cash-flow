@@ -18,18 +18,32 @@ type Props = {
   visible: boolean;
   onClose: () => void;
   onSelect: (option: CategoryOption) => void;
+  frequentIds?: readonly string[];
 };
 
-export function CategorySheet({ visible, onClose, onSelect }: Props): JSX.Element {
+export function CategorySheet({ visible, onClose, onSelect, frequentIds }: Props) {
   const state = useCategories();
   const [query, setQuery] = useState('');
 
   const filtered = useMemo<CategoryOption[]>(() => {
     if (state.status !== 'ready') return [];
     const q = query.trim().toLowerCase();
-    if (q.length === 0) return state.options;
-    return state.options.filter((o) => o.searchKey.includes(q));
-  }, [state, query]);
+    if (q.length > 0) {
+      return state.options.filter((o) => o.searchKey.includes(q));
+    }
+    const ids = frequentIds ?? [];
+    if (ids.length === 0) return state.options;
+    const rank = new Map<string, number>();
+    ids.forEach((id, i) => rank.set(id, i));
+    const head: CategoryOption[] = [];
+    const tail: CategoryOption[] = [];
+    for (const opt of state.options) {
+      if (rank.has(opt.id)) head.push(opt);
+      else tail.push(opt);
+    }
+    head.sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0));
+    return [...head, ...tail];
+  }, [state, query, frequentIds]);
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>

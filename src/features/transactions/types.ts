@@ -11,4 +11,6 @@ export type TransactionInsert = {
   country_iso: string | null;
   recurring: boolean;
   shared: boolean;
+  is_salary: boolean;
+  is_shared_topup: boolean;
 };

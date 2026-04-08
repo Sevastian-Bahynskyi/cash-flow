@@ -1,18 +1,20 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 import AddTransactionModal from '@/features/transactions/AddTransactionModal';
+import Overview from '@/features/overview/Overview';
 
-export default function HomeScreen(): JSX.Element {
+export default function HomeScreen() {
   const [open, setOpen] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <View style={styles.content}>
+      <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.title}>Cash Flow</Text>
-        <Text style={styles.subtitle}>Tap + to log a transaction.</Text>
-      </View>
+        <Overview refreshKey={refreshKey} />
+      </ScrollView>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Add transaction"
@@ -21,16 +23,23 @@ export default function HomeScreen(): JSX.Element {
       >
         <Text style={styles.fabText}>+</Text>
       </Pressable>
-      <AddTransactionModal visible={open} onClose={() => setOpen(false)} onSaved={() => undefined} />
+      <AddTransactionModal
+        visible={open}
+        onClose={() => setOpen(false)}
+        onSaved={() => setRefreshKey((k) => k + 1)}
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
-  content: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
-  title: { ...typography.h1, color: colors.text },
-  subtitle: { ...typography.body, color: colors.textMuted, marginTop: spacing.sm },
+  scroll: { paddingTop: spacing.xl, paddingBottom: spacing.xxl * 3, gap: spacing.lg },
+  title: {
+    ...typography.h1,
+    color: colors.text,
+    paddingHorizontal: spacing.lg,
+  },
   fab: {
     position: 'absolute',
     right: spacing.xl,
