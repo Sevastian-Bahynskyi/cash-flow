@@ -1,0 +1,11 @@
+.mcp.json
+.env
+.env.*
+!.env.example
+node_modules/
+.expo/
+dist/
+ios/
+android/
+*.log
+.DS_Store

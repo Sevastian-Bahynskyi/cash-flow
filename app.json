@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "name": "cash-flow",
+    "slug": "cash-flow",
+    "scheme": "cashflow",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": { "supportsTablet": false, "bundleIdentifier": "com.seva.cashflow" },
+    "android": { "package": "com.seva.cashflow" },
+    "plugins": ["expo-router"],
+    "experiments": { "typedRoutes": true }
+  }
+}
