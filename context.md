@@ -18,16 +18,21 @@ The system must optimize for fast input and a consistent mental model, not featu
 
 ## Core Source of Truth
 
-Transactions are the only source of truth.
+Transactions are the source of truth for day-to-day cash flow.
 
 The following must always be derived from transactions:
-- balances
+- cycle balance
 - salary cycles
 - shared ratios
 - analytics
 - dashboards
 
-Do not introduce duplicated balances, manual counters, or hidden state that can drift from transaction data.
+Bank objects have their own source tables:
+- savings accounts and savings events
+- loans and loan events
+- receivables and receivable events
+
+Do not introduce duplicated balances, manual counters, or hidden state that can drift from their source records.
 
 ## Transactions
 
@@ -98,19 +103,31 @@ Do not introduce duplicated balances, manual counters, or hidden state that can 
 - Balances provide orientation, not strict accounting.
 
 ### Balance types
-- `personal_balance`
+- `cycle_balance`
+- `bank_balance`
 - `shared_balance`
 
 ### Rules
-- Balances are fully derived from transactions.
+- `cycle_balance` is derived from transactions only.
+- `bank_balance` is derived from bank objects only.
 - No manual balance edits are allowed.
 
-### Personal balance includes
+### Cycle balance includes
 - income
 - expenses
+- shared contributions
+
+### Cycle balance excludes
 - savings movements
 - loan events
-- shared contributions
+- receivables
+
+### Bank balance includes
+- savings totals
+- remaining loan balances as deductions
+
+### Bank balance excludes
+- money others owe you until it is actually returned
 
 ### Shared balance includes
 - shared top-ups
@@ -199,7 +216,8 @@ This screen shows:
 - Long press opens edit actions.
 
 ### Rule
-- Savings reduce personal balance.
+- Savings do not affect cycle balance directly.
+- Savings count toward bank balance.
 
 ## Loans
 
@@ -214,6 +232,20 @@ This screen shows:
 ### Repayment
 - Repayments are handled through transactions and category-based logic.
 
+## Receivables
+
+### Intent
+- Money owed back to the user should be visible without pretending it is cash already in hand.
+
+### Behavior
+- Multiple receivables are allowed.
+- Store original amount and remaining amount.
+- Do not model interest.
+
+### Rule
+- Receivables do not affect cycle balance.
+- Receivables do not affect bank balance until money is actually returned.
+
 ## Bank Screen
 
 ### Intent
@@ -222,11 +254,12 @@ This screen shows:
 ### Contains
 - savings
 - loans
+- receivables
 
 ### UX
 - Items are displayed as progress bars.
 - Long press opens edit options.
-- New savings and loan items are created only from this screen.
+- New savings, loan, and receivable items are created only from this screen.
 
 ## AI Categorization
 

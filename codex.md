@@ -33,6 +33,12 @@
 - Default flows must minimize taps and typing.
 - Animations must never delay interaction.
 
+## Error Handling
+- Always handle errors explicitly.
+- Never swallow errors with an empty `catch`, silent `return null`, or ignored `error` value.
+- For non-blocking flows, log enough detail in development to debug the failure and return a safe fallback.
+- For blocking flows, surface a clear user-facing error state instead of failing silently.
+
 ## Forbidden
 - Overengineering.
 - Unnecessary indirection.
