@@ -8,22 +8,20 @@ import {
 import { personalBalance, type BalanceTxn } from '@/lib/balance';
 import { computeSharedCycle, type SharedCycleResult } from '@/lib/shared';
 import { savingsTotal } from '@/lib/savings';
-import type { SavingsEventRow } from '@/features/savings/types';
+import type { SavingsAccountRow, SavingsEventRow } from '@/features/savings/types';
 import type { LoanEventRow, LoanRow } from '@/features/loans/types';
 import type { CategoryRow } from '@/features/categories/types';
+import type { TransactionRow } from '@/features/transactions/types';
 
-type TxnRow = BalanceTxn & {
-  id: string;
-  occurred_on: string;
-  category_id: string | null;
-  is_salary: boolean;
-};
+type TxnRow = BalanceTxn & TransactionRow;
 
-type BudgetRow = {
+export type BudgetRow = {
   id: string;
+  user_id: string;
   category_id: string;
   salary_cycle_id: string;
   amount_minor: number;
+  created_at: string;
 };
 
 export type TopCategory = {
@@ -43,14 +41,25 @@ export type BudgetAlert = {
 export type OverviewData = {
   loading: boolean;
   error: string | null;
+  userId: string | null;
   personalMinor: number;
   savingsMinor: number;
+  savingsAccounts: SavingsAccountRow[];
+  savingsEvents: SavingsEventRow[];
+  savingsTotalsByAccount: Record<string, number>;
+  transactions: TxnRow[];
+  categories: CategoryRow[];
+  budgets: BudgetRow[];
+  loans: LoanRow[];
   openLoans: LoanRow[];
+  loanEvents: LoanEventRow[];
   activeCycle: SalaryCycle | null;
+  previousCycle: SalaryCycle | null;
   shared: SharedCycleResult;
   cycleSpendMinor: number;
   topCategories: TopCategory[];
   budgetAlerts: BudgetAlert[];
+  categoryLabels: Record<string, string>;
   reload: () => Promise<void>;
 };
 
@@ -66,14 +75,25 @@ const EMPTY_SHARED: SharedCycleResult = {
 export const useOverview = (): OverviewData => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const [personalMinor, setPersonalMinor] = useState(0);
   const [savingsMinorState, setSavingsMinorState] = useState(0);
+  const [savingsAccounts, setSavingsAccounts] = useState<SavingsAccountRow[]>([]);
+  const [savingsEvents, setSavingsEvents] = useState<SavingsEventRow[]>([]);
+  const [savingsTotalsByAccount, setSavingsTotalsByAccount] = useState<Record<string, number>>({});
+  const [transactions, setTransactions] = useState<TxnRow[]>([]);
+  const [categories, setCategories] = useState<CategoryRow[]>([]);
+  const [budgets, setBudgets] = useState<BudgetRow[]>([]);
+  const [loansState, setLoansState] = useState<LoanRow[]>([]);
   const [openLoans, setOpenLoans] = useState<LoanRow[]>([]);
+  const [loanEvents, setLoanEvents] = useState<LoanEventRow[]>([]);
   const [cycle, setCycle] = useState<SalaryCycle | null>(null);
+  const [previousCycleState, setPreviousCycleState] = useState<SalaryCycle | null>(null);
   const [shared, setShared] = useState<SharedCycleResult>(EMPTY_SHARED);
   const [cycleSpendMinor, setCycleSpendMinor] = useState(0);
   const [topCategories, setTopCategories] = useState<TopCategory[]>([]);
   const [budgetAlerts, setBudgetAlerts] = useState<BudgetAlert[]>([]);
+  const [categoryLabels, setCategoryLabels] = useState<Record<string, string>>({});
 
   const load = useCallback(async (): Promise<void> => {
     setLoading(true);
@@ -81,38 +101,45 @@ export const useOverview = (): OverviewData => {
     try {
       const { data: userData, error: userErr } = await supabase.auth.getUser();
       if (userErr || !userData.user) {
+        setUserId(null);
         setError('Not signed in');
         return;
       }
+      setUserId(userData.user.id);
 
-      const [txnsRes, savingsRes, loansRes, loanEventsRes, budgetsRes, catsRes] = await Promise.all([
+      const [txnsRes, savingsAccountsRes, savingsRes, loansRes, loanEventsRes, budgetsRes, catsRes] = await Promise.all([
         supabase
           .from('transactions')
           .select(
-            'id, kind, amount_minor, occurred_on, shared, is_shared_topup, is_salary, category_id',
+            'id, user_id, kind, amount_minor, occurred_on, name, comment, category_id, country_iso, recurring, shared, shared_participant, is_shared_topup, is_salary, currency_code, original_amount_minor, converted_amount_minor, fx_rate, created_at, updated_at',
           )
           .order('occurred_on', { ascending: true }),
         supabase
+          .from('savings_accounts')
+          .select('id, user_id, name, goal_minor, color, icon, created_at')
+          .order('created_at', { ascending: true }),
+        supabase
           .from('savings_events')
-          .select('id, user_id, action, amount_minor, occurred_on, note, created_at')
+          .select('id, user_id, savings_account_id, action, amount_minor, occurred_on, note, created_at')
           .order('occurred_on', { ascending: true })
           .order('created_at', { ascending: true }),
         supabase
           .from('loans')
           .select('id, user_id, name, principal_minor, remaining_minor, status, created_at')
-          .eq('status', 'open'),
+          .order('created_at', { ascending: false }),
         supabase
           .from('loan_events')
           .select('id, loan_id, user_id, kind, amount_minor, occurred_on, created_at'),
         supabase
           .from('budgets')
-          .select('id, category_id, salary_cycle_id, amount_minor'),
+          .select('id, user_id, category_id, salary_cycle_id, amount_minor, created_at'),
         supabase
           .from('categories')
-          .select('id, user_id, parent_id, name, level, is_system'),
+          .select('id, user_id, parent_id, name, level, is_system, icon, color'),
       ]);
 
       if (txnsRes.error) throw txnsRes.error;
+      if (savingsAccountsRes.error) throw savingsAccountsRes.error;
       if (savingsRes.error) throw savingsRes.error;
       if (loansRes.error) throw loansRes.error;
       if (loanEventsRes.error) throw loanEventsRes.error;
@@ -120,6 +147,7 @@ export const useOverview = (): OverviewData => {
       if (catsRes.error) throw catsRes.error;
 
       const txns = (txnsRes.data ?? []) as TxnRow[];
+      const savingsAccountsRows = (savingsAccountsRes.data ?? []) as SavingsAccountRow[];
       const savings = (savingsRes.data ?? []) as SavingsEventRow[];
       const loans = (loansRes.data ?? []) as LoanRow[];
       const loanEvents = (loanEventsRes.data ?? []) as LoanEventRow[];
@@ -139,6 +167,7 @@ export const useOverview = (): OverviewData => {
 
       const cycles = buildSalaryCycles(txns.filter((t) => t.is_salary));
       const active = activeCycle(cycles);
+      const previousCycle = cycles.length > 1 ? cycles[cycles.length - 2] ?? null : null;
 
       const inActive = (occurredOn: string): boolean => {
         if (!active) return false;
@@ -198,14 +227,31 @@ export const useOverview = (): OverviewData => {
         }
       }
 
+      const totalsByAccount: Record<string, number> = {};
+      for (const account of savingsAccountsRows) {
+        totalsByAccount[account.id] = savingsTotal(
+          savings.filter((event) => event.savings_account_id === account.id),
+        );
+      }
+
+      setTransactions(txns);
+      setCategories(cats);
+      setBudgets(budgets);
       setCycle(active);
+      setPreviousCycleState(previousCycle);
       setShared(computeSharedCycle(cycleTopups, cycleSharedExpenses));
       setPersonalMinor(personalBalance(txns, savings, loanEvents));
+      setSavingsAccounts(savingsAccountsRows);
+      setSavingsEvents(savings);
+      setSavingsTotalsByAccount(totalsByAccount);
       setSavingsMinorState(savingsTotal(savings));
-      setOpenLoans(loans);
+      setLoansState(loans);
+      setOpenLoans(loans.filter((loan) => loan.status === 'open'));
+      setLoanEvents(loanEvents);
       setCycleSpendMinor(cycleSpend);
       setTopCategories(topCats);
       setBudgetAlerts(alerts);
+      setCategoryLabels(Object.fromEntries(catLabels.entries()));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load overview');
     } finally {
@@ -220,14 +266,25 @@ export const useOverview = (): OverviewData => {
   return {
     loading,
     error,
+    userId,
     personalMinor,
     savingsMinor: savingsMinorState,
+    savingsAccounts,
+    savingsEvents,
+    savingsTotalsByAccount,
+    transactions,
+    categories,
+    budgets,
+    loans: loansState,
     openLoans,
+    loanEvents,
     activeCycle: cycle,
+    previousCycle: previousCycleState,
     shared,
     cycleSpendMinor,
     topCategories,
     budgetAlerts,
+    categoryLabels,
     reload: load,
   };
 };

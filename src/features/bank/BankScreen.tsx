@@ -1,0 +1,870 @@
+import { useMemo, useState } from 'react';
+import {
+  Alert,
+  Modal,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useAuth } from '@/features/auth/AuthProvider';
+import { categoryColorOptions, categoryIconOptions } from '@/features/categories/presentation';
+import { useOverview } from '@/features/overview/useOverview';
+import type { LoanEventKind, LoanRow } from '@/features/loans/types';
+import type { SavingsAction, SavingsAccountRow } from '@/features/savings/types';
+import { formatDateLabel, formatMinor } from '@/lib/format';
+import { supabase } from '@/lib/supabase';
+import { ProgressBar } from '@/ui/ProgressBar';
+import { ScreenHeader } from '@/ui/ScreenHeader';
+import { colors, radius, spacing, typography } from '@/ui/tokens';
+
+type SavingsAccountDraft = {
+  id?: string;
+  name: string;
+  goal: string;
+  color: string;
+  icon: string;
+};
+
+type SavingsActionDraft = {
+  accountId: string;
+  accountName: string;
+  action: SavingsAction;
+  amount: string;
+  note: string;
+};
+
+type LoanDraft = {
+  id?: string;
+  name: string;
+  principal: string;
+  remaining: string;
+};
+
+type LoanEventDraft = {
+  loanId: string;
+  loanName: string;
+  kind: LoanEventKind;
+  amount: string;
+};
+
+const todayIso = (): string => new Date().toISOString().slice(0, 10);
+
+const parseMinor = (raw: string): number | null => {
+  const normalized = raw.trim().replace(',', '.');
+  if (!normalized) return null;
+  const value = Number(normalized);
+  if (!Number.isFinite(value) || value < 0) return null;
+  return Math.round(value * 100);
+};
+
+export default function BankScreen() {
+  const { signOut } = useAuth();
+  const data = useOverview();
+  const [refreshing, setRefreshing] = useState(false);
+  const [expandedSavingsId, setExpandedSavingsId] = useState<string | null>(null);
+  const [expandedLoanId, setExpandedLoanId] = useState<string | null>(null);
+  const [accountDraft, setAccountDraft] = useState<SavingsAccountDraft | null>(null);
+  const [savingsDraft, setSavingsDraft] = useState<SavingsActionDraft | null>(null);
+  const [loanDraft, setLoanDraft] = useState<LoanDraft | null>(null);
+  const [loanEventDraft, setLoanEventDraft] = useState<LoanEventDraft | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const savingsWithHistory = useMemo(
+    () =>
+      data.savingsAccounts.map((account) => ({
+        account,
+        totalMinor: data.savingsTotalsByAccount[account.id] ?? 0,
+        events: data.savingsEvents
+          .filter((event) => event.savings_account_id === account.id)
+          .sort((a, b) => {
+            if (a.occurred_on === b.occurred_on) return b.created_at.localeCompare(a.created_at);
+            return b.occurred_on.localeCompare(a.occurred_on);
+          }),
+      })),
+    [data.savingsAccounts, data.savingsEvents, data.savingsTotalsByAccount],
+  );
+
+  const loansWithHistory = useMemo(
+    () =>
+      data.loans.map((loan) => ({
+        loan,
+        events: data.loanEvents
+          .filter((event) => event.loan_id === loan.id)
+          .sort((a, b) => {
+            if (a.occurred_on === b.occurred_on) return b.created_at.localeCompare(a.created_at);
+            return b.occurred_on.localeCompare(a.occurred_on);
+          }),
+      })),
+    [data.loanEvents, data.loans],
+  );
+
+  const totalSavingsMinor = savingsWithHistory.reduce((sum, item) => sum + item.totalMinor, 0);
+  const totalLoanRemainingMinor = data.openLoans.reduce((sum, loan) => sum + loan.remaining_minor, 0);
+
+  const onRefresh = async (): Promise<void> => {
+    setRefreshing(true);
+    try {
+      await data.reload();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const removeSavingsAccount = async (accountId: string): Promise<void> => {
+    const { error } = await supabase.from('savings_accounts').delete().eq('id', accountId);
+    if (!error) {
+      await data.reload();
+      setExpandedSavingsId(null);
+    }
+  };
+
+  const removeLoan = async (loanId: string): Promise<void> => {
+    const { error } = await supabase.from('loans').delete().eq('id', loanId);
+    if (!error) {
+      await data.reload();
+      setExpandedLoanId(null);
+    }
+  };
+
+  const saveSavingsAccount = async (): Promise<void> => {
+    if (!accountDraft || !data.userId || accountDraft.name.trim().length === 0) return;
+    const goalMinor = accountDraft.goal.trim().length > 0 ? parseMinor(accountDraft.goal) : null;
+    if (accountDraft.goal.trim().length > 0 && goalMinor === null) return;
+
+    setSaving(true);
+    try {
+      if (accountDraft.id) {
+        const { error } = await supabase
+          .from('savings_accounts')
+          .update({
+            name: accountDraft.name.trim(),
+            goal_minor: goalMinor,
+            color: accountDraft.color,
+            icon: accountDraft.icon,
+          })
+          .eq('id', accountDraft.id);
+        if (!error) {
+          await data.reload();
+          setAccountDraft(null);
+        }
+        return;
+      }
+
+      const { error } = await supabase.from('savings_accounts').insert({
+        user_id: data.userId,
+        name: accountDraft.name.trim(),
+        goal_minor: goalMinor,
+        color: accountDraft.color,
+        icon: accountDraft.icon,
+      });
+      if (!error) {
+        await data.reload();
+        setAccountDraft(null);
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveSavingsAction = async (): Promise<void> => {
+    if (!savingsDraft || !data.userId) return;
+    const amountMinor = parseMinor(savingsDraft.amount);
+    if (amountMinor === null) return;
+
+    setSaving(true);
+    try {
+      const { error } = await supabase.from('savings_events').insert({
+        user_id: data.userId,
+        savings_account_id: savingsDraft.accountId,
+        action: savingsDraft.action,
+        amount_minor: amountMinor,
+        occurred_on: todayIso(),
+        note: savingsDraft.note.trim().length > 0 ? savingsDraft.note.trim() : null,
+      });
+      if (!error) {
+        await data.reload();
+        setSavingsDraft(null);
+        setExpandedSavingsId(savingsDraft.accountId);
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveLoan = async (): Promise<void> => {
+    if (!loanDraft || !data.userId || loanDraft.name.trim().length === 0) return;
+    const principalMinor = parseMinor(loanDraft.principal);
+    const remainingMinor = parseMinor(loanDraft.remaining);
+    if (principalMinor === null || remainingMinor === null || remainingMinor > principalMinor) return;
+
+    setSaving(true);
+    try {
+      if (loanDraft.id) {
+        const { error } = await supabase
+          .from('loans')
+          .update({
+            name: loanDraft.name.trim(),
+            principal_minor: principalMinor,
+            remaining_minor: remainingMinor,
+            status: remainingMinor === 0 ? 'closed' : 'open',
+          })
+          .eq('id', loanDraft.id);
+        if (!error) {
+          await data.reload();
+          setLoanDraft(null);
+        }
+        return;
+      }
+
+      const { data: inserted, error } = await supabase
+        .from('loans')
+        .insert({
+          user_id: data.userId,
+          name: loanDraft.name.trim(),
+          principal_minor: principalMinor,
+          remaining_minor: remainingMinor,
+          status: remainingMinor === 0 ? 'closed' : 'open',
+        })
+        .select('id')
+        .single();
+      if (!error && inserted) {
+        await supabase.from('loan_events').insert({
+          loan_id: inserted.id,
+          user_id: data.userId,
+          kind: 'borrowed',
+          amount_minor: principalMinor,
+          occurred_on: todayIso(),
+        });
+        await data.reload();
+        setLoanDraft(null);
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveLoanEvent = async (): Promise<void> => {
+    if (!loanEventDraft || !data.userId) return;
+    const amountMinor = parseMinor(loanEventDraft.amount);
+    if (amountMinor === null || amountMinor <= 0) return;
+
+    const currentLoan = data.loans.find((loan) => loan.id === loanEventDraft.loanId);
+    if (!currentLoan) return;
+
+    const nextPrincipal =
+      loanEventDraft.kind === 'borrowed'
+        ? currentLoan.principal_minor + amountMinor
+        : currentLoan.principal_minor;
+    const nextRemaining =
+      loanEventDraft.kind === 'borrowed'
+        ? currentLoan.remaining_minor + amountMinor
+        : Math.max(0, currentLoan.remaining_minor - amountMinor);
+
+    setSaving(true);
+    try {
+      const { error: eventError } = await supabase.from('loan_events').insert({
+        loan_id: currentLoan.id,
+        user_id: data.userId,
+        kind: loanEventDraft.kind,
+        amount_minor: amountMinor,
+        occurred_on: todayIso(),
+      });
+      if (eventError) return;
+
+      const { error: updateError } = await supabase
+        .from('loans')
+        .update({
+          principal_minor: nextPrincipal,
+          remaining_minor: nextRemaining,
+          status: nextRemaining === 0 ? 'closed' : 'open',
+        })
+        .eq('id', currentLoan.id);
+      if (!updateError) {
+        await data.reload();
+        setLoanEventDraft(null);
+        setExpandedLoanId(currentLoan.id);
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.text} />}
+      >
+        <ScreenHeader
+          title="Bank"
+          subtitle="Savings and loans as first-class objects"
+          actions={[{ icon: 'logout', onPress: () => void signOut() }]}
+        />
+
+        <View style={styles.heroRow}>
+          <View style={styles.heroCard}>
+            <Text style={styles.heroLabel}>Savings total</Text>
+            <Text style={styles.heroAmount}>{formatMinor(totalSavingsMinor)}</Text>
+            <Text style={styles.heroMeta}>{savingsWithHistory.length} accounts</Text>
+          </View>
+          <View style={styles.heroCard}>
+            <Text style={styles.heroLabel}>Open loans</Text>
+            <Text style={styles.heroAmount}>{formatMinor(totalLoanRemainingMinor)}</Text>
+            <Text style={styles.heroMeta}>{data.openLoans.length} active</Text>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <View style={styles.sectionHead}>
+            <Text style={styles.sectionTitle}>Savings</Text>
+            <Pressable
+              style={({ pressed }) => [styles.inlineButton, pressed && styles.rowPressed]}
+              onPress={() =>
+                setAccountDraft({
+                  name: '',
+                  goal: '',
+                  color: '#3DD68C',
+                  icon: 'piggy-bank-outline',
+                })
+              }
+            >
+              <Text style={styles.inlineButtonText}>New savings</Text>
+            </Pressable>
+          </View>
+
+          {savingsWithHistory.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyText}>Create a savings item here instead of burying it inside transactions.</Text>
+            </View>
+          ) : (
+            savingsWithHistory.map(({ account, totalMinor, events }) => {
+              const ratio = account.goal_minor && account.goal_minor > 0 ? totalMinor / account.goal_minor : 0;
+              const lastEvent = events[0];
+              const expanded = expandedSavingsId === account.id;
+              return (
+                <Pressable
+                  key={account.id}
+                  style={({ pressed }) => [styles.itemCard, pressed && styles.rowPressed]}
+                  onPress={() => setExpandedSavingsId((current) => (current === account.id ? null : account.id))}
+                  onLongPress={() =>
+                    Alert.alert(account.name, undefined, [
+                      {
+                        text: 'Edit',
+                        onPress: () =>
+                          setAccountDraft({
+                            id: account.id,
+                            name: account.name,
+                            goal: account.goal_minor ? (account.goal_minor / 100).toFixed(2) : '',
+                            color: account.color,
+                            icon: account.icon,
+                          }),
+                      },
+                      {
+                        text: 'Delete',
+                        style: 'destructive',
+                        onPress: () => {
+                          void removeSavingsAccount(account.id);
+                        },
+                      },
+                      { text: 'Cancel', style: 'cancel' },
+                    ])
+                  }
+                >
+                  <View style={styles.itemHead}>
+                    <View style={[styles.iconWrap, { backgroundColor: `${account.color}22` }]}>
+                      <MaterialCommunityIcons name={account.icon as never} size={22} color={account.color} />
+                    </View>
+                    <View style={styles.itemCopy}>
+                      <Text style={styles.itemTitle}>{account.name}</Text>
+                      <Text style={styles.itemMeta}>
+                        {lastEvent ? `${lastEvent.action} · ${formatDateLabel(lastEvent.occurred_on)}` : 'No activity yet'}
+                      </Text>
+                    </View>
+                    <Text style={styles.itemAmount}>{formatMinor(totalMinor)}</Text>
+                  </View>
+                  <ProgressBar value={ratio} color={account.color} />
+                  <Text style={styles.itemMeta}>
+                    {account.goal_minor ? `Goal ${formatMinor(account.goal_minor)}` : 'No goal set yet'}
+                  </Text>
+
+                  {expanded ? (
+                    <View style={styles.expandedBody}>
+                      <View style={styles.actionRow}>
+                        {(['add', 'remove', 'set'] as const).map((action) => (
+                          <Pressable
+                            key={action}
+                            style={({ pressed }) => [styles.actionChip, pressed && styles.rowPressed]}
+                            onPress={() =>
+                              setSavingsDraft({
+                                accountId: account.id,
+                                accountName: account.name,
+                                action,
+                                amount: '',
+                                note: '',
+                              })
+                            }
+                          >
+                            <Text style={styles.actionChipText}>{action}</Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                      <View style={styles.historyList}>
+                        {events.length === 0 ? (
+                          <Text style={styles.itemMeta}>No history yet.</Text>
+                        ) : (
+                          events.slice(0, 6).map((event) => (
+                            <View key={event.id} style={styles.historyRow}>
+                              <Text style={styles.historyText}>
+                                {event.action} {formatMinor(event.amount_minor)}
+                              </Text>
+                              <Text style={styles.historyMeta}>{formatDateLabel(event.occurred_on)}</Text>
+                            </View>
+                          ))
+                        )}
+                      </View>
+                    </View>
+                  ) : null}
+                </Pressable>
+              );
+            })
+          )}
+        </View>
+
+        <View style={styles.section}>
+          <View style={styles.sectionHead}>
+            <Text style={styles.sectionTitle}>Loans</Text>
+            <Pressable
+              style={({ pressed }) => [styles.inlineButton, pressed && styles.rowPressed]}
+              onPress={() =>
+                setLoanDraft({
+                  name: '',
+                  principal: '',
+                  remaining: '',
+                })
+              }
+            >
+              <Text style={styles.inlineButtonText}>New loan</Text>
+            </Pressable>
+          </View>
+
+          {loansWithHistory.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyText}>Create a loan here and keep its repayment history visible.</Text>
+            </View>
+          ) : (
+            loansWithHistory.map(({ loan, events }) => {
+              const ratio = loan.principal_minor === 0 ? 1 : 1 - loan.remaining_minor / loan.principal_minor;
+              const lastPayment = events.find((event) => event.kind === 'repaid');
+              const expanded = expandedLoanId === loan.id;
+              return (
+                <Pressable
+                  key={loan.id}
+                  style={({ pressed }) => [styles.itemCard, pressed && styles.rowPressed]}
+                  onPress={() => setExpandedLoanId((current) => (current === loan.id ? null : loan.id))}
+                  onLongPress={() =>
+                    Alert.alert(loan.name, undefined, [
+                      {
+                        text: 'Edit',
+                        onPress: () =>
+                          setLoanDraft({
+                            id: loan.id,
+                            name: loan.name,
+                            principal: (loan.principal_minor / 100).toFixed(2),
+                            remaining: (loan.remaining_minor / 100).toFixed(2),
+                          }),
+                      },
+                      {
+                        text: 'Delete',
+                        style: 'destructive',
+                        onPress: () => {
+                          void removeLoan(loan.id);
+                        },
+                      },
+                      { text: 'Cancel', style: 'cancel' },
+                    ])
+                  }
+                >
+                  <View style={styles.itemHead}>
+                    <View style={[styles.iconWrap, { backgroundColor: 'rgba(124,92,255,0.18)' }]}>
+                      <MaterialCommunityIcons name="bank-outline" size={22} color={colors.accent} />
+                    </View>
+                    <View style={styles.itemCopy}>
+                      <Text style={styles.itemTitle}>{loan.name}</Text>
+                      <Text style={styles.itemMeta}>
+                        {lastPayment ? `Last payment ${formatDateLabel(lastPayment.occurred_on)}` : 'No repayments yet'}
+                      </Text>
+                    </View>
+                    <Text style={styles.itemAmount}>{formatMinor(loan.remaining_minor)}</Text>
+                  </View>
+                  <ProgressBar value={ratio} color={loan.remaining_minor === 0 ? colors.success : colors.accent} />
+                  <Text style={styles.itemMeta}>
+                    {loan.remaining_minor === 0 ? 'Closed' : `Principal ${formatMinor(loan.principal_minor)}`}
+                  </Text>
+
+                  {expanded ? (
+                    <View style={styles.expandedBody}>
+                      <View style={styles.actionRow}>
+                        <Pressable
+                          style={({ pressed }) => [styles.actionChip, pressed && styles.rowPressed]}
+                          onPress={() =>
+                            setLoanEventDraft({
+                              loanId: loan.id,
+                              loanName: loan.name,
+                              kind: 'repaid',
+                              amount: '',
+                            })
+                          }
+                        >
+                          <Text style={styles.actionChipText}>Repayment</Text>
+                        </Pressable>
+                        <Pressable
+                          style={({ pressed }) => [styles.actionChip, pressed && styles.rowPressed]}
+                          onPress={() =>
+                            setLoanEventDraft({
+                              loanId: loan.id,
+                              loanName: loan.name,
+                              kind: 'borrowed',
+                              amount: '',
+                            })
+                          }
+                        >
+                          <Text style={styles.actionChipText}>Borrow more</Text>
+                        </Pressable>
+                      </View>
+                      <View style={styles.historyList}>
+                        {events.length === 0 ? (
+                          <Text style={styles.itemMeta}>No history yet.</Text>
+                        ) : (
+                          events.slice(0, 6).map((event) => (
+                            <View key={event.id} style={styles.historyRow}>
+                              <Text style={styles.historyText}>
+                                {event.kind} {formatMinor(event.amount_minor)}
+                              </Text>
+                              <Text style={styles.historyMeta}>{formatDateLabel(event.occurred_on)}</Text>
+                            </View>
+                          ))
+                        )}
+                      </View>
+                    </View>
+                  ) : null}
+                </Pressable>
+              );
+            })
+          )}
+        </View>
+      </ScrollView>
+
+      <Modal
+        visible={accountDraft !== null}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setAccountDraft(null)}
+      >
+        <SafeAreaView style={styles.modalSafeArea} edges={['top', 'bottom']}>
+          <ScreenHeader
+            back
+            title={accountDraft?.id ? 'Edit Savings' : 'New Savings'}
+            actions={[{ icon: 'check', onPress: () => void saveSavingsAccount() }]}
+          />
+          <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalContent}>
+            <Text style={styles.label}>Name</Text>
+            <TextInput
+              value={accountDraft?.name ?? ''}
+              onChangeText={(value) => setAccountDraft((current) => (current ? { ...current, name: value } : current))}
+              placeholder="Emergency fund"
+              placeholderTextColor={colors.textMuted}
+              style={styles.input}
+            />
+
+            <Text style={styles.label}>Goal</Text>
+            <TextInput
+              value={accountDraft?.goal ?? ''}
+              onChangeText={(value) => setAccountDraft((current) => (current ? { ...current, goal: value } : current))}
+              keyboardType="decimal-pad"
+              placeholder="0.00"
+              placeholderTextColor={colors.textMuted}
+              style={styles.input}
+            />
+
+            <Text style={styles.label}>Icon</Text>
+            <View style={styles.optionRow}>
+              {categoryIconOptions.map((icon) => {
+                const active = accountDraft?.icon === icon;
+                return (
+                  <Pressable
+                    key={icon}
+                    style={({ pressed }) => [
+                      styles.optionTile,
+                      active && styles.optionTileActive,
+                      pressed && styles.rowPressed,
+                    ]}
+                    onPress={() => setAccountDraft((current) => (current ? { ...current, icon } : current))}
+                  >
+                    <MaterialCommunityIcons name={icon as never} size={18} color={active ? colors.text : colors.textMuted} />
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <Text style={styles.label}>Color</Text>
+            <View style={styles.optionRow}>
+              {categoryColorOptions.map((color) => {
+                const active = accountDraft?.color === color;
+                return (
+                  <Pressable
+                    key={color}
+                    style={({ pressed }) => [
+                      styles.colorChip,
+                      { backgroundColor: color },
+                      active && styles.colorChipActive,
+                      pressed && styles.rowPressed,
+                    ]}
+                    onPress={() => setAccountDraft((current) => (current ? { ...current, color } : current))}
+                  />
+                );
+              })}
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      <Modal
+        visible={savingsDraft !== null}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setSavingsDraft(null)}
+      >
+        <SafeAreaView style={styles.modalSafeArea} edges={['top', 'bottom']}>
+          <ScreenHeader
+            back
+            title="Savings Action"
+            subtitle={savingsDraft?.accountName}
+            actions={[{ icon: 'check', onPress: () => void saveSavingsAction() }]}
+          />
+          <View style={styles.modalContent}>
+            <Text style={styles.label}>Action</Text>
+            <View style={styles.actionRow}>
+              {(['add', 'remove', 'set'] as const).map((action) => (
+                <Pressable
+                  key={action}
+                  style={({ pressed }) => [
+                    styles.actionChip,
+                    savingsDraft?.action === action && styles.actionChipActive,
+                    pressed && styles.rowPressed,
+                  ]}
+                  onPress={() => setSavingsDraft((current) => (current ? { ...current, action } : current))}
+                >
+                  <Text style={styles.actionChipText}>{action}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <Text style={styles.label}>Amount</Text>
+            <TextInput
+              value={savingsDraft?.amount ?? ''}
+              onChangeText={(value) => setSavingsDraft((current) => (current ? { ...current, amount: value } : current))}
+              keyboardType="decimal-pad"
+              placeholder="0.00"
+              placeholderTextColor={colors.textMuted}
+              style={styles.input}
+            />
+
+            <Text style={styles.label}>Note</Text>
+            <TextInput
+              value={savingsDraft?.note ?? ''}
+              onChangeText={(value) => setSavingsDraft((current) => (current ? { ...current, note: value } : current))}
+              placeholder="Optional"
+              placeholderTextColor={colors.textMuted}
+              style={styles.input}
+            />
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      <Modal
+        visible={loanDraft !== null}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setLoanDraft(null)}
+      >
+        <SafeAreaView style={styles.modalSafeArea} edges={['top', 'bottom']}>
+          <ScreenHeader
+            back
+            title={loanDraft?.id ? 'Edit Loan' : 'New Loan'}
+            actions={[{ icon: 'check', onPress: () => void saveLoan() }]}
+          />
+          <View style={styles.modalContent}>
+            <Text style={styles.label}>Name</Text>
+            <TextInput
+              value={loanDraft?.name ?? ''}
+              onChangeText={(value) => setLoanDraft((current) => (current ? { ...current, name: value } : current))}
+              placeholder="Student loan"
+              placeholderTextColor={colors.textMuted}
+              style={styles.input}
+            />
+
+            <Text style={styles.label}>Principal</Text>
+            <TextInput
+              value={loanDraft?.principal ?? ''}
+              onChangeText={(value) => setLoanDraft((current) => (current ? { ...current, principal: value } : current))}
+              keyboardType="decimal-pad"
+              placeholder="0.00"
+              placeholderTextColor={colors.textMuted}
+              style={styles.input}
+            />
+
+            <Text style={styles.label}>Remaining</Text>
+            <TextInput
+              value={loanDraft?.remaining ?? ''}
+              onChangeText={(value) => setLoanDraft((current) => (current ? { ...current, remaining: value } : current))}
+              keyboardType="decimal-pad"
+              placeholder="0.00"
+              placeholderTextColor={colors.textMuted}
+              style={styles.input}
+            />
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      <Modal
+        visible={loanEventDraft !== null}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setLoanEventDraft(null)}
+      >
+        <SafeAreaView style={styles.modalSafeArea} edges={['top', 'bottom']}>
+          <ScreenHeader
+            back
+            title={loanEventDraft?.kind === 'repaid' ? 'Repayment' : 'Borrow More'}
+            subtitle={loanEventDraft?.loanName}
+            actions={[{ icon: 'check', onPress: () => void saveLoanEvent() }]}
+          />
+          <View style={styles.modalContent}>
+            <Text style={styles.label}>Amount</Text>
+            <TextInput
+              value={loanEventDraft?.amount ?? ''}
+              onChangeText={(value) => setLoanEventDraft((current) => (current ? { ...current, amount: value } : current))}
+              keyboardType="decimal-pad"
+              placeholder="0.00"
+              placeholderTextColor={colors.textMuted}
+              style={styles.input}
+            />
+          </View>
+        </SafeAreaView>
+      </Modal>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: colors.bg },
+  container: { flex: 1, backgroundColor: colors.bg },
+  content: { paddingBottom: spacing.xxl * 3, gap: spacing.lg },
+  heroRow: { flexDirection: 'row', gap: spacing.md, paddingHorizontal: spacing.lg },
+  heroCard: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    gap: spacing.xs,
+  },
+  heroLabel: { ...typography.label, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
+  heroAmount: { ...typography.h2, color: colors.text },
+  heroMeta: { ...typography.label, color: colors.textMuted },
+  section: { paddingHorizontal: spacing.lg, gap: spacing.sm },
+  sectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  sectionTitle: { ...typography.label, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
+  inlineButton: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+  },
+  inlineButtonText: { ...typography.label, color: colors.text },
+  emptyCard: {
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+  },
+  emptyText: { ...typography.body, color: colors.textMuted },
+  itemCard: {
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    gap: spacing.sm,
+  },
+  itemHead: { flexDirection: 'row', gap: spacing.md, alignItems: 'center' },
+  iconWrap: {
+    width: 46,
+    height: 46,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  itemCopy: { flex: 1, gap: 2 },
+  itemTitle: { ...typography.body, color: colors.text, fontWeight: '600' },
+  itemMeta: { ...typography.label, color: colors.textMuted },
+  itemAmount: { ...typography.body, color: colors.text, fontWeight: '700' },
+  expandedBody: { gap: spacing.sm, paddingTop: spacing.sm },
+  actionRow: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
+  actionChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceAlt,
+  },
+  actionChipActive: { backgroundColor: 'rgba(124,92,255,0.18)' },
+  actionChipText: { ...typography.label, color: colors.text },
+  historyList: { gap: spacing.xs },
+  historyRow: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md },
+  historyText: { ...typography.label, color: colors.text },
+  historyMeta: { ...typography.label, color: colors.textMuted },
+  rowPressed: { opacity: 0.86 },
+  modalSafeArea: { flex: 1, backgroundColor: colors.bg },
+  modalScroll: { flex: 1 },
+  modalContent: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.md },
+  label: {
+    ...typography.label,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  input: {
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    color: colors.text,
+    ...typography.body,
+  },
+  optionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  optionTile: {
+    width: 42,
+    height: 42,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  optionTileActive: {
+    borderColor: colors.accent,
+    backgroundColor: 'rgba(124,92,255,0.18)',
+  },
+  colorChip: {
+    width: 28,
+    height: 28,
+    borderRadius: radius.pill,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  colorChipActive: { borderColor: colors.text },
+});
