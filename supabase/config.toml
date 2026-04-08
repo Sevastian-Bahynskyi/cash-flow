@@ -1,0 +1,2 @@
+[functions.suggest-category]
+verify_jwt = false

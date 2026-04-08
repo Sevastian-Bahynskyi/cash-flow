@@ -7,6 +7,12 @@ declare const Deno: {
   serve(handler: (req: Request) => Response | Promise<Response>): void;
 };
 
+declare const console: {
+  info: (...args: unknown[]) => void;
+  warn: (...args: unknown[]) => void;
+  error: (...args: unknown[]) => void;
+};
+
 type Body = {
   name?: string;
   comment?: string | null;
@@ -19,12 +25,24 @@ type SuggestResult = {
   confidence: number;
 };
 
+type ErrorBody = SuggestResult & {
+  error?: string;
+};
+
 const json = (body: SuggestResult, init?: ResponseInit): Response =>
   new Response(JSON.stringify(body), {
     ...init,
     headers: {
       "Content-Type": "application/json",
       ...(init?.headers ?? {}),
+    },
+  });
+
+const errorJson = (message: string, status: number): Response =>
+  new Response(JSON.stringify({ categoryId: null, confidence: 0, error: message } satisfies ErrorBody), {
+    status,
+    headers: {
+      "Content-Type": "application/json",
     },
   });
 
@@ -65,15 +83,38 @@ Deno.serve(async (req: Request) => {
     return json({ categoryId: null, confidence: 0 }, { status: 405 });
   }
 
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+  const authHeader = req.headers.get("Authorization");
+  if (!supabaseUrl || !anonKey || !authHeader) {
+    console.warn("[suggest-category] Missing auth configuration or Authorization header.");
+    return errorJson("Unauthorized", 401);
+  }
+
+  const authResponse = await fetch(`${supabaseUrl}/auth/v1/user`, {
+    headers: {
+      Authorization: authHeader,
+      apikey: anonKey,
+    },
+  }).catch(() => null);
+  if (!authResponse?.ok) {
+    console.warn("[suggest-category] Auth validation failed.", {
+      status: authResponse?.status ?? null,
+    });
+    return errorJson("Unauthorized", 401);
+  }
+
   const key = Deno.env.get("GROQ_API_KEY");
   if (!key) {
-    return json({ categoryId: null, confidence: 0 });
+    console.error("[suggest-category] GROQ_API_KEY is missing.");
+    return errorJson("AI provider is not configured", 503);
   }
 
   let body: Body;
   try {
     body = await req.json();
   } catch {
+    console.warn("[suggest-category] Invalid JSON body.");
     return json({ categoryId: null, confidence: 0 }, { status: 400 });
   }
 
@@ -83,6 +124,10 @@ Deno.serve(async (req: Request) => {
   const history = Array.isArray(body.history) ? body.history : [];
 
   if (name.length === 0 || candidates.length === 0) {
+    console.warn("[suggest-category] Missing required input.", {
+      hasName: name.length > 0,
+      candidateCount: candidates.length,
+    });
     return json({ categoryId: null, confidence: 0 });
   }
 
@@ -107,6 +152,8 @@ Deno.serve(async (req: Request) => {
     "Pick the single best candidate category id and a confidence from 0 to 1.",
     'Respond with strict JSON only: {"categoryId":"uuid-or-null","confidence":0.0}',
     "Use high confidence only for a strong, specific merchant match.",
+    "Use the transaction name as a primary clue, not only the history examples.",
+    "Infer common merchant intent when it is obvious, for example supermarkets, groceries, transport, rent, or restaurants.",
     `Transaction name: ${name}`,
     `Comment: ${comment || "(none)"}`,
     `Past categorized examples:\n${historyList || "(none)"}`,
@@ -114,6 +161,12 @@ Deno.serve(async (req: Request) => {
   ].join("\n");
 
   try {
+    console.info("[suggest-category] Invoking Groq.", {
+      candidateCount: candidates.length,
+      historyCount: history.length,
+      hasComment: comment.length > 0,
+      nameLength: name.length,
+    });
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -136,13 +189,23 @@ Deno.serve(async (req: Request) => {
     });
 
     if (!response.ok) {
-      return json({ categoryId: null, confidence: 0 });
+      const responseText = await response.text().catch(() => "");
+      console.error("[suggest-category] Groq request failed.", {
+        status: response.status,
+        statusText: response.statusText,
+        body: responseText.slice(0, 400),
+      });
+      return errorJson("AI provider request failed", 502);
     }
 
     const payload = await response.json();
     const text: string = payload?.choices?.[0]?.message?.content ?? "";
+    console.info("[suggest-category] Groq returned a response.", {
+      hasContent: text.length > 0,
+    });
     return json(parseResult(text, candidates));
-  } catch {
-    return json({ categoryId: null, confidence: 0 });
+  } catch (error) {
+    console.error("[suggest-category] Unexpected Groq error.", error);
+    return errorJson("AI provider request failed", 502);
   }
 });
