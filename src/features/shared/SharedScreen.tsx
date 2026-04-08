@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { useOverview } from '@/features/overview/useOverview';
 import { useComposer } from '@/features/transactions/ComposerContext';
 import { TransactionList } from '@/features/transactions/TransactionList';
 import { buildCategoryMeta } from '@/features/categories/helpers';
 import { FilterChips } from '@/ui/FilterChips';
+import { MotionScope } from '@/ui/MotionScope';
+import { MotionView } from '@/ui/MotionView';
 import { ProgressBar } from '@/ui/ProgressBar';
 import { ScreenHeader } from '@/ui/ScreenHeader';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
@@ -32,11 +35,18 @@ export default function SharedScreen() {
   const composer = useComposer();
   const [filter, setFilter] = useState<RangeFilter>('current');
   const [refreshing, setRefreshing] = useState(false);
+  const [motionRun, setMotionRun] = useState(0);
 
   useEffect(() => {
     if (composer.refreshKey > 0) void data.reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [composer.refreshKey]);
+
+  useFocusEffect(
+    useCallback(() => {
+      setMotionRun((current) => current + 1);
+    }, []),
+  );
 
   const selectedCycle = filter === 'current' ? data.activeCycle : data.previousCycle;
   const categoryMeta = useMemo(() => buildCategoryMeta(data.categories), [data.categories]);
@@ -107,41 +117,48 @@ export default function SharedScreen() {
   };
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.text} />}
-    >
-      <ScreenHeader title="Shared" subtitle="Fairness and shared spend" />
+    <MotionScope value={motionRun}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.text} />}
+      >
+        <ScreenHeader title="Shared" subtitle="Fairness and shared spend" />
 
-      <View style={styles.hero}>
-        <Text style={styles.heroLabel}>Shared balance</Text>
-        <Text style={styles.heroAmount}>{formatMinor(sharedBalance)}</Text>
-        <View style={styles.heroStats}>
-          <View style={styles.heroStatChip}>
-            <Text style={styles.heroStatLabel}>Cycle</Text>
-            <Text style={styles.heroStatValue}>{selectedCycle?.label ?? 'Not set'}</Text>
+      <MotionView direction="right" distance={210} delayMs={90} rotateFrom={8}>
+        <View style={styles.hero}>
+          <Text style={styles.heroLabel}>Shared balance</Text>
+          <Text style={styles.heroAmount}>{formatMinor(sharedBalance)}</Text>
+          <View style={styles.heroStats}>
+            <MotionView direction="up" distance={90} delayMs={210}>
+              <View style={styles.heroStatChip}>
+                <Text style={styles.heroStatLabel}>Cycle</Text>
+                <Text style={styles.heroStatValue}>{selectedCycle?.label ?? 'Not set'}</Text>
+              </View>
+            </MotionView>
+            <MotionView direction="left" distance={120} delayMs={270}>
+              <View style={styles.heroStatChip}>
+                <Text style={styles.heroStatLabel}>Ratio</Text>
+                <Text style={styles.heroStatValue}>
+                  {formatPercent(ratio)} · {formatPercent(1 - ratio)}
+                </Text>
+              </View>
+            </MotionView>
           </View>
-          <View style={styles.heroStatChip}>
-            <Text style={styles.heroStatLabel}>Ratio</Text>
-            <Text style={styles.heroStatValue}>
-              {formatPercent(ratio)} · {formatPercent(1 - ratio)}
-            </Text>
-          </View>
+          <Pressable
+            style={styles.heroButton}
+            onPress={() =>
+              composer.openCreate({
+                kind: 'expense',
+                is_shared_topup: true,
+                name: 'Shared top-up',
+              })
+            }
+          >
+            <Text style={styles.heroButtonText}>Top up</Text>
+          </Pressable>
         </View>
-        <Pressable
-          style={styles.heroButton}
-          onPress={() =>
-            composer.openCreate({
-              kind: 'expense',
-              is_shared_topup: true,
-              name: 'Shared top-up',
-            })
-          }
-        >
-          <Text style={styles.heroButtonText}>Top up</Text>
-        </Pressable>
-      </View>
+      </MotionView>
 
       <FilterChips value={filter} options={filterOptions} onChange={setFilter} />
 
@@ -168,102 +185,117 @@ export default function SharedScreen() {
       ) : null}
 
       <View style={styles.metricsRow}>
-        <View style={styles.metricCard}>
-          <Text style={styles.metricLabel}>Contributed</Text>
-          <Text style={styles.metricAmount}>{formatMinor(userTopupTotal)}</Text>
-        </View>
-        <View style={styles.metricCard}>
-          <Text style={styles.metricLabel}>Spent</Text>
-          <Text style={styles.metricAmount}>{formatMinor(sharedSpendTotal)}</Text>
-        </View>
+        <MotionView style={styles.metricMotion} direction="left" distance={150} delayMs={180}>
+          <View style={styles.metricCard}>
+            <Text style={styles.metricLabel}>Contributed</Text>
+            <Text style={styles.metricAmount}>{formatMinor(userTopupTotal)}</Text>
+          </View>
+        </MotionView>
+        <MotionView style={styles.metricMotion} direction="right" distance={150} delayMs={220}>
+          <View style={styles.metricCard}>
+            <Text style={styles.metricLabel}>Spent</Text>
+            <Text style={styles.metricAmount}>{formatMinor(sharedSpendTotal)}</Text>
+          </View>
+        </MotionView>
       </View>
 
       <View style={styles.metricsRow}>
-        <View style={styles.metricCard}>
-          <Text style={styles.metricLabel}>Your share</Text>
-          <Text style={styles.metricAmount}>{formatMinor(userEffectiveShare)}</Text>
-          <Text style={styles.metricMeta}>{formatPercent(ratio)}</Text>
-        </View>
-        <View style={styles.metricCard}>
-          <Text style={styles.metricLabel}>GF share</Text>
-          <Text style={styles.metricAmount}>{formatMinor(sharedSpendTotal - userEffectiveShare)}</Text>
-          <Text style={styles.metricMeta}>current cycle</Text>
-        </View>
+        <MotionView style={styles.metricMotion} direction="left" distance={165} delayMs={260}>
+          <View style={styles.metricCard}>
+            <Text style={styles.metricLabel}>Your share</Text>
+            <Text style={styles.metricAmount}>{formatMinor(userEffectiveShare)}</Text>
+            <Text style={styles.metricMeta}>{formatPercent(ratio)}</Text>
+          </View>
+        </MotionView>
+        <MotionView style={styles.metricMotion} direction="right" distance={165} delayMs={300}>
+          <View style={styles.metricCard}>
+            <Text style={styles.metricLabel}>GF share</Text>
+            <Text style={styles.metricAmount}>{formatMinor(sharedSpendTotal - userEffectiveShare)}</Text>
+            <Text style={styles.metricMeta}>current cycle</Text>
+          </View>
+        </MotionView>
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Ratio</Text>
-        <View style={styles.ratioLegend}>
-          <Text style={styles.ratioPill}>You {formatPercent(ratio)}</Text>
-          <Text style={styles.ratioPill}>GF {formatPercent(1 - ratio)}</Text>
+      <MotionView direction="left" distance={150} delayMs={320}>
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Ratio</Text>
+          <View style={styles.ratioLegend}>
+            <Text style={styles.ratioPill}>You {formatPercent(ratio)}</Text>
+            <Text style={styles.ratioPill}>GF {formatPercent(1 - ratio)}</Text>
+          </View>
+          <ProgressBar value={ratio} color={colors.accent} />
+          <Text style={styles.metricMeta}>Updated by top-ups in the active cycle.</Text>
         </View>
-        <ProgressBar value={ratio} color={colors.accent} />
-        <Text style={styles.metricMeta}>Updated by top-ups in the active cycle.</Text>
-      </View>
+      </MotionView>
 
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Top-ups</Text>
-        <View style={styles.timelineList}>
-          {topups.length === 0 ? (
-            <Text style={styles.metricMeta}>No top-ups in this cycle yet.</Text>
-          ) : (
-            topups.map((row) => (
-              <View key={row.id} style={styles.timelineRow}>
-                <Text style={styles.timelineLabel}>{row.name}</Text>
-                <Text style={styles.timelineAmount}>{formatMinor(row.amount_minor)}</Text>
-              </View>
-            ))
-          )}
-        </View>
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Top shared categories</Text>
-        <View style={styles.timelineList}>
-          {sharedSpendByCategory.length === 0 ? (
-            <Text style={styles.metricMeta}>No shared spending in this range yet.</Text>
-          ) : (
-            sharedSpendByCategory.map((item) => (
-              <View key={item.categoryId} style={styles.categoryRow}>
-                <View style={styles.categoryHead}>
-                  <Text style={styles.timelineLabel}>{item.label}</Text>
-                  <Text style={styles.timelineAmount}>{formatMinor(item.spentMinor)}</Text>
+      <MotionView direction="right" distance={145} delayMs={360}>
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Top-ups</Text>
+          <View style={styles.timelineList}>
+            {topups.length === 0 ? (
+              <Text style={styles.metricMeta}>No top-ups in this cycle yet.</Text>
+            ) : (
+              topups.map((row) => (
+                <View key={row.id} style={styles.timelineRow}>
+                  <Text style={styles.timelineLabel}>{row.name}</Text>
+                  <Text style={styles.timelineAmount}>{formatMinor(row.amount_minor)}</Text>
                 </View>
-                <ProgressBar value={sharedSpendTotal === 0 ? 0 : item.spentMinor / sharedSpendTotal} color={item.color} />
-              </View>
-            ))
-          )}
+              ))
+            )}
+          </View>
         </View>
-      </View>
+      </MotionView>
 
-      <TransactionList
-        title="Shared history"
-        items={itemList}
-        emptyLabel="Shared expenses and top-ups for this cycle will appear here."
-        onEdit={(row) => composer.openEdit(row)}
-        onDuplicate={(row) =>
-          composer.openCreate({
-            kind: row.kind,
-            amount_minor: row.converted_amount_minor,
-            original_amount_minor: row.original_amount_minor,
-            currency_code: row.currency_code,
-            category_id: row.category_id,
-            name: row.name,
-            comment: row.comment,
-            occurred_on: row.occurred_on,
-            recurring: row.recurring,
-            shared: row.shared,
-            shared_participant: row.shared_participant,
-            is_salary: row.is_salary,
-            is_shared_topup: row.is_shared_topup,
-            country_iso: row.country_iso,
-          })
-        }
-        onDelete={(row) => {
-          void deleteTransaction(row);
-        }}
-      />
-    </ScrollView>
+      <MotionView direction="left" distance={155} delayMs={400}>
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Top shared categories</Text>
+          <View style={styles.timelineList}>
+            {sharedSpendByCategory.length === 0 ? (
+              <Text style={styles.metricMeta}>No shared spending in this range yet.</Text>
+            ) : (
+              sharedSpendByCategory.map((item) => (
+                <View key={item.categoryId} style={styles.categoryRow}>
+                  <View style={styles.categoryHead}>
+                    <Text style={styles.timelineLabel}>{item.label}</Text>
+                    <Text style={styles.timelineAmount}>{formatMinor(item.spentMinor)}</Text>
+                  </View>
+                  <ProgressBar value={sharedSpendTotal === 0 ? 0 : item.spentMinor / sharedSpendTotal} color={item.color} />
+                </View>
+              ))
+            )}
+          </View>
+        </View>
+      </MotionView>
+
+        <TransactionList
+          title="Shared history"
+          items={itemList}
+          emptyLabel="Shared expenses and top-ups for this cycle will appear here."
+          onEdit={(row) => composer.openEdit(row)}
+          onDuplicate={(row) =>
+            composer.openCreate({
+              kind: row.kind,
+              amount_minor: row.converted_amount_minor,
+              original_amount_minor: row.original_amount_minor,
+              currency_code: row.currency_code,
+              category_id: row.category_id,
+              name: row.name,
+              comment: row.comment,
+              occurred_on: row.occurred_on,
+              recurring: row.recurring,
+              shared: row.shared,
+              shared_participant: row.shared_participant,
+              is_salary: row.is_salary,
+              is_shared_topup: row.is_shared_topup,
+              country_iso: row.country_iso,
+            })
+          }
+          onDelete={(row) => {
+            void deleteTransaction(row);
+          }}
+        />
+      </ScrollView>
+    </MotionScope>
   );
 }
 
@@ -299,6 +331,7 @@ const styles = StyleSheet.create({
   },
   heroButtonText: { ...typography.label, color: colors.text },
   metricsRow: { flexDirection: 'row', gap: spacing.md, paddingHorizontal: spacing.lg },
+  metricMotion: { flex: 1 },
   metricCard: { flex: 1, backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.lg, gap: spacing.xs },
   metricLabel: { ...typography.label, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
   metricAmount: { ...typography.h2, color: colors.text },

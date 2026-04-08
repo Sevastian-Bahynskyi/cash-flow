@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -9,9 +9,12 @@ import { useComposer } from '@/features/transactions/ComposerContext';
 import { TransactionList } from '@/features/transactions/TransactionList';
 import { buildCategoryMeta } from '@/features/categories/helpers';
 import { FilterChips } from '@/ui/FilterChips';
+import { MotionScope } from '@/ui/MotionScope';
+import { MotionView } from '@/ui/MotionView';
 import { ProgressBar } from '@/ui/ProgressBar';
 import { ScreenHeader } from '@/ui/ScreenHeader';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
+import { transactionBalance } from '@/lib/balance';
 import { formatMinor, formatPercent } from '@/lib/format';
 import type { SalaryCycle } from '@/lib/cycles';
 import type { TransactionRow } from '@/features/transactions/types';
@@ -38,6 +41,7 @@ export default function HomeScreen() {
   const composer = useComposer();
   const [filter, setFilter] = useState<RangeFilter>('current');
   const [refreshing, setRefreshing] = useState(false);
+  const [motionRun, setMotionRun] = useState(0);
 
   useEffect(() => {
     if (composer.refreshKey > 0) void data.reload();
@@ -45,17 +49,27 @@ export default function HomeScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [composer.refreshKey]);
 
+  useFocusEffect(
+    useCallback(() => {
+      setMotionRun((current) => current + 1);
+    }, []),
+  );
+
   const selectedCycle = filter === 'current' ? data.activeCycle : filter === 'previous' ? data.previousCycle : null;
   const categoryMeta = useMemo(() => buildCategoryMeta(data.categories), [data.categories]);
+  const rangeTransactions = useMemo(() => {
+    if (filter === 'all') return data.transactions;
+    return data.transactions.filter((row) => cycleMatch(row, selectedCycle));
+  }, [data.transactions, filter, selectedCycle]);
+  const snapshotMinor = useMemo(() => transactionBalance(rangeTransactions), [rangeTransactions]);
 
   const personalTransactions = useMemo(() => {
-    const base = data.transactions.filter((row) => !row.shared);
-    const filtered = filter === 'all' ? base : base.filter((row) => cycleMatch(row, selectedCycle));
-    return [...filtered].sort((a, b) => {
+    const base = rangeTransactions.filter((row) => !row.shared);
+    return [...base].sort((a, b) => {
       if (a.occurred_on === b.occurred_on) return b.updated_at.localeCompare(a.updated_at);
       return b.occurred_on.localeCompare(a.occurred_on);
     });
-  }, [data.transactions, filter, selectedCycle]);
+  }, [rangeTransactions]);
 
   const recentItems = personalTransactions.slice(0, 8).map((row) => ({
     row,
@@ -137,58 +151,67 @@ export default function HomeScreen() {
   };
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.text} />}
-    >
-      <ScreenHeader
-        title="Home"
-        subtitle="Personal flow"
-        actions={[
-          { icon: 'bell-outline', onPress: () => router.push('/alerts') },
-          { icon: 'brain', onPress: () => router.push('/ai-rules') },
-          { icon: 'shape-outline', onPress: () => router.push('/categories') },
-          { icon: 'target', onPress: () => router.push('/budgets') },
-        ]}
-      />
+    <MotionScope value={motionRun}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.text} />}
+      >
+        <ScreenHeader
+          title="Home"
+          subtitle="Personal flow"
+          actions={[
+            { icon: 'bell-outline', onPress: () => router.push('/alerts') },
+            { icon: 'brain', onPress: () => router.push('/ai-rules') },
+            { icon: 'shape-outline', onPress: () => router.push('/categories') },
+            { icon: 'target', onPress: () => router.push('/budgets') },
+          ]}
+        />
 
-      <LinearGradient colors={['#1F2438', '#101219', '#0B0B0F']} style={styles.hero}>
-        <Text style={styles.heroEyebrow}>Balance</Text>
-        <Text style={styles.heroAmount}>{formatMinor(data.personalMinor)}</Text>
-        <View style={styles.heroStats}>
-          <View style={styles.heroStatChip}>
-            <Text style={styles.heroStatLabel}>Cycle</Text>
-            <Text style={styles.heroStatValue}>{currentCycleLabel}</Text>
+      <MotionView direction="left" distance={210} delayMs={90} rotateFrom={-9}>
+        <LinearGradient colors={['#1F2438', '#101219', '#0B0B0F']} style={styles.hero}>
+          <Text style={styles.heroEyebrow}>{filter === 'all' ? 'All-time balance' : 'Cycle balance'}</Text>
+          <Text style={styles.heroAmount}>{formatMinor(snapshotMinor)}</Text>
+          <View style={styles.heroStats}>
+            <MotionView direction="up" distance={90} delayMs={220}>
+              <View style={styles.heroStatChip}>
+                <Text style={styles.heroStatLabel}>Cycle</Text>
+                <Text style={styles.heroStatValue}>{currentCycleLabel}</Text>
+              </View>
+            </MotionView>
+            <MotionView direction="right" distance={120} delayMs={280}>
+              <View style={styles.heroStatChip}>
+                <Text style={styles.heroStatLabel}>Spend</Text>
+                <Text style={styles.heroStatValue}>
+                  {formatMinor(categorySpend.reduce((sum, item) => sum + item.spentMinor, 0))}
+                </Text>
+              </View>
+            </MotionView>
           </View>
-          <View style={styles.heroStatChip}>
-            <Text style={styles.heroStatLabel}>Spend</Text>
-            <Text style={styles.heroStatValue}>
-              {formatMinor(categorySpend.reduce((sum, item) => sum + item.spentMinor, 0))}
-            </Text>
-          </View>
-        </View>
-      </LinearGradient>
+        </LinearGradient>
+      </MotionView>
 
       <FilterChips value={filter} options={filterOptions} onChange={setFilter} />
 
       <View style={styles.quickRow}>
-        <Pressable style={styles.quickCard} onPress={() => router.push('/budgets')}>
-          <MaterialCommunityIcons name="target" size={20} color={colors.accent} />
-          <Text style={styles.quickTitle}>Budgets</Text>
-          <Text style={styles.quickMeta}>Cycle targets</Text>
-        </Pressable>
-        <Pressable style={styles.quickCard} onPress={() => router.push('/categories')}>
-          <MaterialCommunityIcons name="shape-outline" size={20} color={colors.success} />
-          <Text style={styles.quickTitle}>Categories</Text>
-          <Text style={styles.quickMeta}>Icons and groups</Text>
-        </Pressable>
+        <MotionView style={styles.quickMotion} direction="left" distance={165} delayMs={170}>
+          <Pressable style={styles.quickCard} onPress={() => router.push('/budgets')}>
+            <MaterialCommunityIcons name="target" size={20} color={colors.accent} />
+            <Text style={styles.quickTitle}>Budgets</Text>
+          </Pressable>
+        </MotionView>
+        <MotionView style={styles.quickMotion} direction="right" distance={165} delayMs={230}>
+          <Pressable style={styles.quickCard} onPress={() => router.push('/categories')}>
+            <MaterialCommunityIcons name="shape-outline" size={20} color={colors.success} />
+            <Text style={styles.quickTitle}>Categories</Text>
+          </Pressable>
+        </MotionView>
       </View>
 
       {data.loading && data.transactions.length === 0 ? (
         <View style={styles.section}>
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>Loading your dashboard...</Text>
+            <Text style={styles.emptyText}>Loading...</Text>
           </View>
         </View>
       ) : null}
@@ -206,20 +229,22 @@ export default function HomeScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Budget pressure</Text>
           <View style={styles.sectionBody}>
-            {filteredBudgetAlerts.map((alert) => {
+            {filteredBudgetAlerts.map((alert, index) => {
               const ratio = alert.spentMinor / alert.amountMinor;
               const tone = alert.level === 'critical' ? colors.danger : '#F5B942';
               return (
-                <View key={alert.categoryId} style={styles.alertCard}>
-                  <View style={styles.alertRow}>
-                    <Text style={styles.alertTitle}>{alert.label}</Text>
-                    <Text style={[styles.alertRatio, { color: tone }]}>{formatPercent(ratio)}</Text>
+                <MotionView key={alert.categoryId} index={index} direction="right" distance={150} delayMs={210}>
+                  <View style={styles.alertCard}>
+                    <View style={styles.alertRow}>
+                      <Text style={styles.alertTitle}>{alert.label}</Text>
+                      <Text style={[styles.alertRatio, { color: tone }]}>{formatPercent(ratio)}</Text>
+                    </View>
+                    <Text style={styles.alertMeta}>
+                      {formatMinor(alert.spentMinor)} of {formatMinor(alert.amountMinor)}
+                    </Text>
+                    <ProgressBar value={ratio} color={tone} />
                   </View>
-                  <Text style={styles.alertMeta}>
-                    {formatMinor(alert.spentMinor)} of {formatMinor(alert.amountMinor)}
-                  </Text>
-                  <ProgressBar value={ratio} color={tone} />
-                </View>
+                </MotionView>
               );
             })}
           </View>
@@ -234,14 +259,16 @@ export default function HomeScreen() {
               <Text style={styles.emptyText}>No spending in this range yet.</Text>
             </View>
           ) : (
-            categorySpend.map((item) => (
-              <View key={item.categoryId} style={styles.categoryCard}>
-                <View style={styles.alertRow}>
-                  <Text style={styles.categoryLabel}>{item.label}</Text>
-                  <Text style={styles.categoryAmount}>{formatMinor(item.spentMinor)}</Text>
+            categorySpend.map((item, index) => (
+              <MotionView key={item.categoryId} index={index} direction="left" distance={145} delayMs={250}>
+                <View style={styles.categoryCard}>
+                  <View style={styles.alertRow}>
+                    <Text style={styles.categoryLabel}>{item.label}</Text>
+                    <Text style={styles.categoryAmount}>{formatMinor(item.spentMinor)}</Text>
+                  </View>
+                  <ProgressBar value={spendTotal === 0 ? 0 : item.spentMinor / spendTotal} color={item.color} />
                 </View>
-                <ProgressBar value={spendTotal === 0 ? 0 : item.spentMinor / spendTotal} color={item.color} />
-              </View>
+              </MotionView>
             ))
           )}
         </View>
@@ -251,46 +278,49 @@ export default function HomeScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Helpful nudges</Text>
           <View style={styles.sectionBody}>
-            {hints.map((hint) => (
-              <View key={hint} style={styles.hintCard}>
-                <MaterialCommunityIcons name="lightbulb-outline" size={18} color={colors.accent} />
-                <Text style={styles.hintText}>{hint}</Text>
-              </View>
+            {hints.map((hint, index) => (
+              <MotionView key={hint} index={index} direction="down" distance={120} delayMs={290}>
+                <View style={styles.hintCard}>
+                  <MaterialCommunityIcons name="lightbulb-outline" size={18} color={colors.accent} />
+                  <Text style={styles.hintText}>{hint}</Text>
+                </View>
+              </MotionView>
             ))}
           </View>
         </View>
       ) : null}
 
-      <View style={[styles.section, styles.sectionFlush]}>
-        <TransactionList
-          title="Recent personal activity"
-          items={recentItems}
-          emptyLabel="Log the first transaction to start building your personal history."
-          onEdit={(row) => composer.openEdit(row)}
-          onDuplicate={(row) => {
-            composer.openCreate({
-              kind: row.kind,
-              amount_minor: row.converted_amount_minor,
-              original_amount_minor: row.original_amount_minor,
-              currency_code: row.currency_code,
-              category_id: row.category_id,
-              name: row.name,
-              comment: row.comment,
-              occurred_on: row.occurred_on,
-              recurring: row.recurring,
-              shared: row.shared,
-              shared_participant: row.shared_participant,
-              is_salary: row.is_salary,
-              is_shared_topup: row.is_shared_topup,
-              country_iso: row.country_iso,
-            });
-          }}
-          onDelete={(row) => {
-            void deleteTransaction(row);
-          }}
-        />
-      </View>
-    </ScrollView>
+        <View style={[styles.section, styles.sectionFlush]}>
+          <TransactionList
+            title="Recent personal activity"
+            items={recentItems}
+            emptyLabel="Log the first transaction to start building your personal history."
+            onEdit={(row) => composer.openEdit(row)}
+            onDuplicate={(row) => {
+              composer.openCreate({
+                kind: row.kind,
+                amount_minor: row.converted_amount_minor,
+                original_amount_minor: row.original_amount_minor,
+                currency_code: row.currency_code,
+                category_id: row.category_id,
+                name: row.name,
+                comment: row.comment,
+                occurred_on: row.occurred_on,
+                recurring: row.recurring,
+                shared: row.shared,
+                shared_participant: row.shared_participant,
+                is_salary: row.is_salary,
+                is_shared_topup: row.is_shared_topup,
+                country_iso: row.country_iso,
+              });
+            }}
+            onDelete={(row) => {
+              void deleteTransaction(row);
+            }}
+          />
+        </View>
+      </ScrollView>
+    </MotionScope>
   );
 }
 
@@ -318,6 +348,7 @@ const styles = StyleSheet.create({
   heroStatLabel: { ...typography.label, color: colors.textMuted, fontSize: 11, textTransform: 'uppercase' },
   heroStatValue: { ...typography.label, color: colors.text, fontWeight: '600' },
   quickRow: { flexDirection: 'row', gap: spacing.md, paddingHorizontal: spacing.lg },
+  quickMotion: { flex: 1 },
   quickCard: {
     flex: 1,
     backgroundColor: colors.surface,
@@ -326,7 +357,6 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   quickTitle: { ...typography.body, color: colors.text, fontWeight: '600' },
-  quickMeta: { ...typography.label, color: colors.textMuted },
   section: { paddingHorizontal: spacing.lg, gap: spacing.sm },
   sectionFlush: { paddingHorizontal: 0 },
   sectionTitle: { ...typography.label, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },

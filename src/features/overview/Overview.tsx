@@ -19,6 +19,7 @@ type Props = {
 export default function Overview({ refreshKey }: Props) {
   const data = useOverview();
   const router = useRouter();
+  const totalLoanRemainingMinor = data.openLoans.reduce((sum, loan) => sum + loan.remaining_minor, 0);
 
   useEffect(() => {
     if (refreshKey > 0) void data.reload();
@@ -28,11 +29,19 @@ export default function Overview({ refreshKey }: Props) {
   return (
     <View style={styles.wrap}>
       <View style={styles.card}>
-        <Text style={styles.label}>Personal balance</Text>
-        <Text style={styles.big}>{data.loading ? '—' : formatMinor(data.personalMinor)}</Text>
+        <Text style={styles.label}>Cycle balance</Text>
+        <Text style={styles.big}>{data.loading ? '—' : formatMinor(data.cycleBalanceMinor)}</Text>
         <Text style={styles.meta}>
           cycle spend {formatMinor(data.cycleSpendMinor)}
           {data.activeCycle ? ` · ${data.activeCycle.label}` : ''}
+        </Text>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.label}>Bank balance</Text>
+        <Text style={styles.big}>{data.loading ? '—' : formatMinor(data.bankBalanceMinor)}</Text>
+        <Text style={styles.meta}>
+          savings {formatMinor(data.savingsMinor)} · loans {formatMinor(totalLoanRemainingMinor)}
         </Text>
       </View>
 
