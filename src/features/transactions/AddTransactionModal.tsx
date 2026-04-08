@@ -28,8 +28,8 @@ import {
   type SuggestedCategoryResult,
 } from './suggestions';
 import { currencyOptions, convertToDkk } from '@/lib/currency';
-import { getDeviceCountryIso, getDeviceCurrencyCode } from '@/lib/device';
-import { formatDateLabel, formatMinor } from '@/lib/format';
+import { getDeviceCountryIso, getDeviceCurrencyCode, getLiveCountryIso } from '@/lib/device';
+import { formatCountryFlag, formatDateLabel, formatMinor, normalizeCountryIso } from '@/lib/format';
 import { activeCycle, buildSalaryCycles } from '@/lib/cycles';
 import type { TransactionDraft, TransactionInsert, TransactionKind, TransactionRow } from './types';
 
@@ -58,6 +58,28 @@ type BudgetIndicator = {
 const participantOptions = [
   { label: 'Me', value: 'me' },
   { label: 'GF', value: 'gf' },
+] as const;
+
+const countryOptions = [
+  { code: 'DK', label: 'Denmark' },
+  { code: 'SE', label: 'Sweden' },
+  { code: 'NO', label: 'Norway' },
+  { code: 'DE', label: 'Germany' },
+  { code: 'PL', label: 'Poland' },
+  { code: 'GB', label: 'United Kingdom' },
+  { code: 'US', label: 'United States' },
+  { code: 'FR', label: 'France' },
+  { code: 'ES', label: 'Spain' },
+  { code: 'IT', label: 'Italy' },
+  { code: 'NL', label: 'Netherlands' },
+  { code: 'CH', label: 'Switzerland' },
+  { code: 'CZ', label: 'Czechia' },
+  { code: 'HU', label: 'Hungary' },
+  { code: 'RO', label: 'Romania' },
+  { code: 'UA', label: 'Ukraine' },
+  { code: 'JP', label: 'Japan' },
+  { code: 'AU', label: 'Australia' },
+  { code: 'CA', label: 'Canada' },
 ] as const;
 
 const todayIso = (): string => {
@@ -94,6 +116,26 @@ const formatAmountDisplay = (raw: string): string => {
   const value = Number(normalized);
   if (!Number.isFinite(value)) return raw;
   return value.toFixed(2);
+};
+
+const highlightedAmount = (raw: string): { display: string; activeIndex: number | null } => {
+  const display = formatAmountDisplay(raw);
+  const normalized = raw.trim().replace(',', '.');
+  const displayDotAt = display.indexOf('.');
+
+  if (normalized.endsWith('.')) {
+    return { display, activeIndex: displayDotAt >= 0 ? displayDotAt + 1 : null };
+  }
+
+  let rawIndex = normalized.length - 1;
+
+  while (rawIndex >= 0 && !/[0-9]/.test(normalized[rawIndex] ?? '')) {
+    rawIndex -= 1;
+  }
+
+  if (rawIndex < 0) return { display, activeIndex: null };
+
+  return { display, activeIndex: rawIndex };
 };
 
 const buildBudgetIndicators = async (
@@ -161,6 +203,8 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
   const [date, setDate] = useState(todayIso());
   const [countryIso, setCountryIso] = useState('DK');
   const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [countryPickerOpen, setCountryPickerOpen] = useState(false);
+  const [keypadOpen, setKeypadOpen] = useState(true);
   const [recurring, setRecurring] = useState(false);
   const [shared, setShared] = useState(false);
   const [sharedParticipant, setSharedParticipant] = useState<'me' | 'gf'>('me');
@@ -184,9 +228,13 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
   );
 
   const editing = Boolean(draft?.id);
+  const amountDisplayState = useMemo(() => highlightedAmount(amount), [amount]);
   const suggestionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recentTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reopenKeypadAfterDatePicker = useRef(false);
+  const autoAppliedCategoryId = useRef<string | null>(null);
+  const suggestionRunId = useRef(0);
 
   const reset = (nextDraft?: TransactionDraft | null): void => {
     const deviceCountry = (nextDraft?.country_iso ?? getDeviceCountryIso() ?? 'DK').toUpperCase();
@@ -203,6 +251,9 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
     setComment(nextDraft?.comment ?? '');
     setDate(nextDraft?.occurred_on ?? todayIso());
     setCountryIso(deviceCountry);
+    setDatePickerOpen(false);
+    setCountryPickerOpen(false);
+    setKeypadOpen(true);
     setRecurring(nextDraft?.recurring ?? false);
     setShared(nextDraft?.shared ?? false);
     setSharedParticipant(nextDraft?.shared_participant ?? 'me');
@@ -214,6 +265,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
     setSuggestion(null);
     setRecentSuggestions([]);
     setSaveState(null);
+    autoAppliedCategoryId.current = null;
   };
 
   useEffect(() => {
@@ -223,6 +275,22 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
       if (closeTimer.current) clearTimeout(closeTimer.current);
     };
   }, [visible, draft]);
+
+  useEffect(() => {
+    if (!visible || draft?.country_iso) return;
+
+    let cancelled = false;
+    const localeCountry = (getDeviceCountryIso() ?? 'DK').toUpperCase();
+
+    void getLiveCountryIso().then((liveCountry) => {
+      if (cancelled || !liveCountry) return;
+      setCountryIso((current) => (current === localeCountry ? liveCountry : current));
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [draft?.country_iso, visible]);
 
   useEffect(() => {
     if (!visible || categoryOptions.length === 0) return;
@@ -268,6 +336,66 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
     };
   }, [draft?.id, name, visible]);
 
+  const runCategorySuggestion = async ({
+    preferRemote = false,
+    forceApply = false,
+  }: {
+    preferRemote?: boolean;
+    forceApply?: boolean;
+  } = {}): Promise<void> => {
+    if (!visible || kind !== 'expense' || categoryOptions.length === 0) {
+      setSuggestion(null);
+      return;
+    }
+
+    const q = name.trim();
+    if (q.length < 2) {
+      setSuggestion(null);
+      if (!userTouchedCategory && category && autoAppliedCategoryId.current === category.id) {
+        setCategory(null);
+        autoAppliedCategoryId.current = null;
+      }
+      return;
+    }
+
+    const runId = ++suggestionRunId.current;
+    const result = await resolveSuggestedCategory(
+      q,
+      comment.trim().length > 0 ? comment.trim() : null,
+      categoryOptions.map((option) => ({
+        id: option.id,
+        parent: option.parentName,
+        name: option.name,
+      })),
+      { preferRemote },
+    );
+
+    if (runId !== suggestionRunId.current) return;
+
+    if (!result) {
+      setSuggestion(null);
+      if (!userTouchedCategory && category && autoAppliedCategoryId.current === category.id) {
+        setCategory(null);
+        autoAppliedCategoryId.current = null;
+      }
+      return;
+    }
+
+    const match = categoryOptions.find((option) => option.id === result.categoryId);
+    if (!match) {
+      setSuggestion(null);
+      return;
+    }
+
+    setSuggestion({ ...result, category: match });
+
+    const shouldApply = !userTouchedCategory && (forceApply || result.confidence >= 0.84);
+    if (shouldApply) {
+      setCategory(match);
+      autoAppliedCategoryId.current = match.id;
+    }
+  };
+
   useEffect(() => {
     if (!visible || kind !== 'expense' || categoryOptions.length === 0) {
       setSuggestion(null);
@@ -281,26 +409,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
     }
 
     suggestionTimer.current = setTimeout(async () => {
-      const result = await resolveSuggestedCategory(
-        q,
-        comment.trim().length > 0 ? comment.trim() : null,
-        categoryOptions.map((option) => ({
-          id: option.id,
-          parent: option.parentName,
-          name: option.name,
-        })),
-      );
-      if (!result) {
-        setSuggestion(null);
-        return;
-      }
-      const match = categoryOptions.find((option) => option.id === result.categoryId);
-      if (!match) return;
-      const nextSuggestion: SuggestionState = { ...result, category: match };
-      setSuggestion(nextSuggestion);
-      if (!userTouchedCategory && result.confidence >= 0.84) {
-        setCategory(match);
-      }
+      await runCategorySuggestion();
     }, 420);
 
     return () => {
@@ -311,6 +420,20 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
   const handleClose = (): void => {
     reset(null);
     onClose();
+  };
+
+  const closeDatePicker = (): void => {
+    setDatePickerOpen(false);
+    if (reopenKeypadAfterDatePicker.current) {
+      setKeypadOpen(true);
+      reopenKeypadAfterDatePicker.current = false;
+    }
+  };
+
+  const openDatePicker = (): void => {
+    reopenKeypadAfterDatePicker.current = keypadOpen;
+    if (keypadOpen) setKeypadOpen(false);
+    setDatePickerOpen(true);
   };
 
   const handleSave = async (): Promise<void> => {
@@ -353,7 +476,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
         name: name.trim(),
         comment: comment.trim().length > 0 ? comment.trim() : null,
         category_id: kind === 'expense' ? category?.id ?? null : null,
-        country_iso: countryIso.trim().length > 0 ? countryIso.trim().toUpperCase() : null,
+        country_iso: normalizeCountryIso(countryIso),
         recurring,
         shared: kind === 'expense' && !isSharedTopup ? shared : false,
         shared_participant:
@@ -401,7 +524,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
         shared_participant: shared ? sharedParticipant : null,
         is_salary: isSalary,
         is_shared_topup: isSharedTopup,
-        country_iso: countryIso,
+        country_iso: normalizeCountryIso(countryIso),
       };
 
       if (draft?.id) {
@@ -423,8 +546,15 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
   };
 
   const onDateChange = (event: DateTimePickerEvent, selected?: Date): void => {
-    if (Platform.OS === 'android') setDatePickerOpen(false);
-    if (event.type === 'dismissed') return;
+    if (Platform.OS === 'android') {
+      if (selected) setDate(toIsoDate(selected));
+      closeDatePicker();
+      return;
+    }
+    if (event.type === 'dismissed') {
+      closeDatePicker();
+      return;
+    }
     if (selected) setDate(toIsoDate(selected));
   };
 
@@ -442,6 +572,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
     setCountryIso(row.country_iso ?? countryIso);
     const match = categoryOptions.find((option) => option.id === row.category_id);
     if (match) {
+      autoAppliedCategoryId.current = null;
       setCategory(match);
       setUserTouchedCategory(true);
     }
@@ -481,17 +612,27 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
                 setKind('income');
                 setShared(false);
                 setIsSharedTopup(false);
+                autoAppliedCategoryId.current = null;
                 setCategory(null);
               }}
             >
               <Text style={[styles.kindChipText, kind === 'income' && styles.kindChipTextActive]}>Income</Text>
             </Pressable>
           </View>
-          <Text style={styles.amountValue}>{formatAmountDisplay(amount)}</Text>
+          <Text style={styles.amountValue}>
+            {amountDisplayState.display.split('').map((char, index) => (
+              <Text
+                key={`${char}-${index}`}
+                style={index === amountDisplayState.activeIndex ? styles.amountValueActive : undefined}
+              >
+                {char}
+              </Text>
+            ))}
+          </Text>
           <Text style={styles.amountMeta}>
             {currencyCode === 'DKK'
-              ? 'Stored directly in DKK'
-              : `Stored as fixed DKK on save · entered in ${currencyCode}`}
+              ? 'In DKK'
+              : `Saved in DKK · entered in ${currencyCode}`}
           </Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.currencyRow}>
             {currencyOptions.map((currency) => {
@@ -526,6 +667,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
               <Pressable
                 style={styles.fieldCard}
                 onPress={() => {
+                  autoAppliedCategoryId.current = null;
                   setUserTouchedCategory(true);
                   setPickerOpen(true);
                 }}
@@ -540,21 +682,22 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
             <View style={styles.suggestionCard}>
               <View style={styles.suggestionHead}>
                 <Text style={styles.suggestionTitle}>
-                  Suggested {suggestion.category.parentName} · {suggestion.category.name}
+                  Suggestion: {suggestion.category.parentName} · {suggestion.category.name}
                 </Text>
                 <Text style={styles.suggestionConfidence}>{Math.round(suggestion.confidence * 100)}%</Text>
               </View>
               <Text style={styles.suggestionMeta}>
                 {suggestion.source === 'memory'
-                  ? 'Learned from your past correction.'
+                  ? 'From a past correction.'
                   : suggestion.source === 'history'
-                    ? 'Based on your local history first.'
-                    : 'Fallback AI suggestion.'}
+                    ? 'From your local history.'
+                    : 'AI fallback.'}
               </Text>
               <View style={styles.actionRow}>
                 <Pressable
                   style={({ pressed }) => [styles.smallAction, pressed && styles.rowPressed]}
                   onPress={() => {
+                    autoAppliedCategoryId.current = null;
                     setCategory(suggestion.category);
                     setUserTouchedCategory(true);
                   }}
@@ -582,6 +725,9 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
           <TextInput
             value={name}
             onChangeText={setName}
+            onBlur={() => {
+              void runCategorySuggestion({ preferRemote: true, forceApply: true });
+            }}
             placeholder="What was it?"
             placeholderTextColor={colors.textMuted}
             style={styles.input}
@@ -612,22 +758,28 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
 
           <Text style={styles.label}>Details</Text>
           <View style={styles.detailRow}>
-            <Pressable style={[styles.fieldCard, styles.detailCard]} onPress={() => setDatePickerOpen(true)}>
-              <Text style={styles.fieldText}>{formatDateLabel(date)}</Text>
+            <Pressable
+              style={[styles.fieldCard, styles.detailCard]}
+              onPress={openDatePicker}
+            >
+              <View style={styles.detailValueRow}>
+                <MaterialCommunityIcons name="calendar-month-outline" size={18} color={colors.textMuted} />
+                <Text style={styles.fieldText}>{formatDateLabel(date)}</Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-down" size={18} color={colors.textMuted} />
             </Pressable>
-            <TextInput
-              value={countryIso}
-              onChangeText={(value) => setCountryIso(value.toUpperCase().slice(0, 2))}
-              placeholder="DK"
-              placeholderTextColor={colors.textMuted}
-              autoCapitalize="characters"
-              autoCorrect={false}
-              maxLength={2}
-              style={[styles.input, styles.detailCard]}
-            />
+            <Pressable
+              style={[styles.fieldCard, styles.detailCard]}
+              onPress={() => setCountryPickerOpen(true)}
+            >
+              <View style={styles.detailValueRow}>
+                <Text style={styles.flagValue}>{formatCountryFlag(countryIso)}</Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-down" size={18} color={colors.textMuted} />
+            </Pressable>
           </View>
 
-          <Text style={styles.label}>Comment</Text>
+          <Text style={styles.label}>Note</Text>
           <TextInput
             value={comment}
             onChangeText={setComment}
@@ -636,7 +788,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
             style={styles.input}
           />
 
-          <Text style={styles.label}>Flags</Text>
+          <Text style={styles.label}>Options</Text>
           <View style={styles.actionRow}>
             <Pressable
               style={({ pressed }) => [styles.toggleChip, recurring && styles.toggleChipActive, pressed && styles.rowPressed]}
@@ -704,25 +856,30 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
           {validationMessage ? <Text style={styles.validation}>{validationMessage}</Text> : null}
         </ScrollView>
 
-        <View style={styles.bottomBar}>
-          <Pressable
-            style={({ pressed }) => [styles.primaryButton, (pressed || saving) && styles.rowPressed]}
-            onPress={() => void handleSave()}
-            disabled={saving}
-          >
-            <Text style={styles.primaryButtonText}>{editing ? 'Save changes' : 'Save transaction'}</Text>
-          </Pressable>
-        </View>
-
-        <NumericKeypad value={amount} onChange={setAmount} />
+        {keypadOpen ? (
+          <NumericKeypad value={amount} onChange={setAmount} onClose={() => setKeypadOpen(false)} />
+        ) : (
+          <View style={styles.keyboardDock}>
+            <Pressable
+              style={({ pressed }) => [styles.keyboardDockButton, pressed && styles.rowPressed]}
+              onPress={() => setKeypadOpen(true)}
+            >
+              <MaterialCommunityIcons name="keyboard-outline" size={18} color={colors.text} />
+              <Text style={styles.keyboardDockText}>Open keypad</Text>
+              <MaterialCommunityIcons name="chevron-up" size={18} color={colors.text} />
+            </Pressable>
+          </View>
+        )}
 
         {datePickerOpen && (
-          <>
-            {Platform.OS === 'ios' ? (
-              <View style={styles.iosPickerWrap}>
-                <View style={styles.iosPickerHeader}>
-                  <Pressable onPress={() => setDatePickerOpen(false)}>
-                    <Text style={styles.headerAction}>Done</Text>
+          Platform.OS === 'ios' ? (
+            <View style={styles.datePickerOverlay}>
+              <Pressable style={styles.datePickerBackdrop} onPress={closeDatePicker} />
+              <View style={styles.datePickerCard}>
+                <View style={styles.datePickerHeader}>
+                  <Text style={styles.datePickerTitle}>Select date</Text>
+                  <Pressable onPress={closeDatePicker}>
+                    <Text style={styles.datePickerDone}>Done</Text>
                   </Pressable>
                 </View>
                 <DateTimePicker
@@ -733,16 +890,57 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
                   onChange={onDateChange}
                 />
               </View>
-            ) : (
-              <DateTimePicker value={parseIsoDate(date)} mode="date" display="default" onChange={onDateChange} />
-            )}
-          </>
+            </View>
+          ) : (
+            <DateTimePicker value={parseIsoDate(date)} mode="date" display="calendar" onChange={onDateChange} />
+          )
         )}
+
+        {countryPickerOpen ? (
+          <View style={styles.countryPickerOverlay}>
+            <Pressable style={styles.countryPickerBackdrop} onPress={() => setCountryPickerOpen(false)} />
+            <View style={styles.countryPickerSheet}>
+              <View style={styles.countryPickerHeader}>
+                <Text style={styles.countryPickerTitle}>Select country</Text>
+                <Pressable onPress={() => setCountryPickerOpen(false)} hitSlop={12}>
+                  <Text style={styles.headerAction}>Done</Text>
+                </Pressable>
+              </View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.countryPickerRow}
+              >
+                {countryOptions.map((option) => {
+                  const active = option.code === normalizeCountryIso(countryIso);
+                  return (
+                    <Pressable
+                      key={option.code}
+                      style={({ pressed }) => [
+                        styles.countryChip,
+                        active && styles.countryChipActive,
+                        pressed && styles.rowPressed,
+                      ]}
+                      onPress={() => {
+                        setCountryIso(option.code);
+                        setCountryPickerOpen(false);
+                      }}
+                    >
+                      <Text style={styles.countryChipFlag}>{formatCountryFlag(option.code)}</Text>
+                      <Text style={styles.countryChipLabel}>{option.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          </View>
+        ) : null}
 
         <CategorySheet
           visible={pickerOpen}
           onClose={() => setPickerOpen(false)}
           onSelect={(option) => {
+            autoAppliedCategoryId.current = null;
             setCategory(option);
             setUserTouchedCategory(true);
           }}
@@ -761,7 +959,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
               <Text style={styles.successTitle}>{saveState.title}</Text>
               {!saveState.editing ? (
                 <>
-                  <Text style={styles.successMeta}>Choose what you want to do next.</Text>
+                  <Text style={styles.successMeta}>What next?</Text>
                   <View style={styles.successActions}>
                     <Pressable
                       style={({ pressed }) => [styles.successButton, pressed && styles.rowPressed]}
@@ -834,6 +1032,7 @@ const styles = StyleSheet.create({
   kindChipText: { ...typography.label, color: colors.textMuted },
   kindChipTextActive: { color: colors.text },
   amountValue: { ...typography.amount, color: colors.text },
+  amountValueActive: { color: colors.accentAlt },
   amountMeta: { ...typography.label, color: colors.textMuted },
   currencyRow: { gap: spacing.sm, paddingTop: spacing.xs },
   currencyChip: {
@@ -868,7 +1067,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  detailValueRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   fieldText: { ...typography.body, color: colors.text },
+  flagValue: { fontSize: 24, lineHeight: 28 },
   placeholder: { color: colors.textMuted },
   input: {
     borderRadius: radius.md,
@@ -925,32 +1126,95 @@ const styles = StyleSheet.create({
   toggleChipActive: { backgroundColor: 'rgba(124,92,255,0.18)' },
   toggleChipText: { ...typography.label, color: colors.text },
   validation: { ...typography.label, color: colors.danger, marginTop: spacing.sm },
-  bottomBar: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
-  },
-  primaryButton: {
-    borderRadius: radius.lg,
-    backgroundColor: colors.accent,
-    paddingVertical: spacing.md,
+  datePickerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.36)',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
   },
-  primaryButtonText: { ...typography.body, color: colors.text, fontWeight: '700' },
-  iosPickerWrap: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
+  datePickerBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  datePickerCard: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  datePickerHeader: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  datePickerTitle: { ...typography.body, color: colors.text, fontWeight: '700' },
+  datePickerDone: { ...typography.body, color: colors.accentAlt, fontWeight: '700' },
+  keyboardDock: {
     backgroundColor: colors.surface,
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
-    paddingBottom: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
   },
-  iosPickerHeader: {
+  keyboardDockButton: {
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(245,185,66,0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(245,185,66,0.32)',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    padding: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
   },
+  keyboardDockText: { ...typography.label, color: colors.text, fontWeight: '600' },
+  countryPickerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'flex-end',
+  },
+  countryPickerBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.36)',
+  },
+  countryPickerSheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xl,
+    gap: spacing.md,
+  },
+  countryPickerHeader: {
+    paddingHorizontal: spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  countryPickerTitle: { ...typography.body, color: colors.text, fontWeight: '700' },
+  countryPickerRow: { paddingHorizontal: spacing.lg, gap: spacing.sm },
+  countryChip: {
+    width: 108,
+    minHeight: 96,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surfaceAlt,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+  },
+  countryChipActive: {
+    backgroundColor: 'rgba(124,92,255,0.18)',
+    borderWidth: 1,
+    borderColor: colors.accent,
+  },
+  countryChipFlag: { fontSize: 28, lineHeight: 32 },
+  countryChipLabel: { ...typography.label, color: colors.text, textAlign: 'center' },
   successOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.48)',

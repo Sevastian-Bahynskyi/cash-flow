@@ -11,6 +11,7 @@ type Body = {
   name?: string;
   comment?: string | null;
   candidates?: { id: string; parent: string; name: string }[];
+  history?: { name?: string; categoryId?: string }[];
 };
 
 type SuggestResult = {
@@ -79,6 +80,7 @@ Deno.serve(async (req: Request) => {
   const name = (body.name ?? "").trim();
   const comment = (body.comment ?? "").trim();
   const candidates = Array.isArray(body.candidates) ? body.candidates : [];
+  const history = Array.isArray(body.history) ? body.history : [];
 
   if (name.length === 0 || candidates.length === 0) {
     return json({ categoryId: null, confidence: 0 });
@@ -86,6 +88,18 @@ Deno.serve(async (req: Request) => {
 
   const candidateList = candidates
     .map((candidate, index) => `${index + 1}. ${candidate.parent} / ${candidate.name} [${candidate.id}]`)
+    .join("\n");
+  const candidateById = new Map(candidates.map((candidate) => [candidate.id, candidate]));
+  const historyList = history
+    .map((item) => {
+      const historyName = (item.name ?? "").trim();
+      const categoryId = typeof item.categoryId === "string" ? item.categoryId : "";
+      const match = candidateById.get(categoryId);
+      if (!historyName || !match) return null;
+      return `- ${historyName} -> ${match.parent} / ${match.name} [${match.id}]`;
+    })
+    .filter((item): item is string => Boolean(item))
+    .slice(0, 12)
     .join("\n");
 
   const prompt = [
@@ -95,6 +109,7 @@ Deno.serve(async (req: Request) => {
     "Use high confidence only for a strong, specific merchant match.",
     `Transaction name: ${name}`,
     `Comment: ${comment || "(none)"}`,
+    `Past categorized examples:\n${historyList || "(none)"}`,
     `Candidates:\n${candidateList}`,
   ].join("\n");
 

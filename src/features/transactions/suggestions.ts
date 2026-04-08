@@ -9,6 +9,11 @@ export type SuggestedCategoryResult = {
   patternKey: string;
 };
 
+type SuggestionHistoryRow = {
+  name: string;
+  category_id: string | null;
+};
+
 type AiRuleRow = {
   category_id: string | null;
   is_blocked: boolean;
@@ -57,14 +62,7 @@ export const upsertAiRule = async ({
   );
 };
 
-// Local history suggestion: prefer exact normalized merchant-pattern matches,
-// then fall back to fuzzy contains matches.
-export const localSuggestCategory = async (
-  nameQuery: string,
-): Promise<{ categoryId: string; confidence: number } | null> => {
-  const q = nameQuery.trim();
-  if (q.length < 2) return null;
-
+const fetchSuggestionHistory = async (): Promise<SuggestionHistoryRow[]> => {
   const { data, error } = await supabase
     .from('transactions')
     .select('name, category_id')
@@ -73,13 +71,27 @@ export const localSuggestCategory = async (
     .order('updated_at', { ascending: false })
     .limit(60);
 
-  if (error || !data || data.length === 0) return null;
+  if (error || !data) return [];
+  return data as SuggestionHistoryRow[];
+};
+
+// Local history suggestion: prefer exact normalized merchant-pattern matches,
+// then fall back to fuzzy contains matches.
+export const localSuggestCategory = async (
+  nameQuery: string,
+  historyRows?: SuggestionHistoryRow[],
+): Promise<{ categoryId: string; confidence: number } | null> => {
+  const q = nameQuery.trim();
+  if (q.length < 2) return null;
+
+  const rows = historyRows ?? (await fetchSuggestionHistory());
+  if (rows.length === 0) return null;
 
   const exactPattern = normalizePattern(q);
   const exactCounts = new Map<string, number>();
   const fuzzyCounts = new Map<string, number>();
 
-  for (const row of data as { name: string; category_id: string | null }[]) {
+  for (const row of rows) {
     if (!row.category_id) continue;
     if (normalizePattern(row.name) === exactPattern) {
       exactCounts.set(row.category_id, (exactCounts.get(row.category_id) ?? 0) + 1);
@@ -159,11 +171,20 @@ export const remoteSuggestCategory = async (
   name: string,
   comment: string | null,
   candidates: { id: string; parent: string; name: string }[],
+  historyRows: SuggestionHistoryRow[],
 ): Promise<{ categoryId: string; confidence: number } | null> => {
   try {
+    const history = historyRows
+      .filter((row): row is { name: string; category_id: string } => Boolean(row.category_id))
+      .slice(0, 12)
+      .map((row) => ({
+        name: row.name,
+        categoryId: row.category_id,
+      }));
+
     const { data, error } = await supabase.functions.invoke<SuggestFunctionResponse>(
       'suggest-category',
-      { body: { name, comment, candidates } },
+      { body: { name, comment, candidates, history } },
     );
     if (error || !data?.categoryId) return null;
     return {
@@ -202,6 +223,7 @@ export const resolveSuggestedCategory = async (
   name: string,
   comment: string | null,
   candidates: { id: string; parent: string; name: string }[],
+  options?: { preferRemote?: boolean },
 ): Promise<SuggestedCategoryResult | null> => {
   const patternKey = normalizePattern(name);
   if (patternKey.length < 2) return null;
@@ -217,7 +239,22 @@ export const resolveSuggestedCategory = async (
     };
   }
 
-  const local = await localSuggestCategory(name);
+  const historyRows = await fetchSuggestionHistory();
+  let remote: { categoryId: string; confidence: number } | null = null;
+
+  if (options?.preferRemote) {
+    remote = await remoteSuggestCategory(name, comment, candidates, historyRows);
+    if (remote) {
+      return {
+        categoryId: remote.categoryId,
+        confidence: remote.confidence,
+        source: 'ai',
+        patternKey,
+      };
+    }
+  }
+
+  const local = await localSuggestCategory(name, historyRows);
   if (local) {
     return {
       categoryId: local.categoryId,
@@ -227,7 +264,9 @@ export const resolveSuggestedCategory = async (
     };
   }
 
-  const remote = await remoteSuggestCategory(name, comment, candidates);
+  if (!remote) {
+    remote = await remoteSuggestCategory(name, comment, candidates, historyRows);
+  }
   if (!remote) return null;
 
   return {
