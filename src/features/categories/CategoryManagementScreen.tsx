@@ -280,6 +280,7 @@ export default function CategoryManagementScreen() {
         <SafeAreaView style={styles.modalSafeArea} edges={['top', 'bottom']}>
           <ScreenHeader
             back
+            onBack={() => setDraft(null)}
             title={draft?.mode === 'edit' ? 'Edit Category' : draft?.level === 1 ? 'New Category' : 'New Subcategory'}
             subtitle={draft?.readOnly ? 'System categories are read-only' : undefined}
             actions={

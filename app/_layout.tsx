@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack, usePathname, useRouter, useSegments } from 'expo-router';
 import { ActivityIndicator, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -13,16 +13,23 @@ function AuthGate() {
   const { session, loading } = useAuth();
   const router = useRouter();
   const segments = useSegments();
+  const pathname = usePathname();
 
   useEffect(() => {
-    if (loading) return;
-    const onSignIn = segments[0] === 'sign-in';
-    const onAuthCallback = segments[0] === 'auth-callback';
-    const onOAuthRoute = segments[0] === 'oauth';
+    if (loading || !pathname) return;
+    const rootSegment = segments[0];
+    const onSignIn = rootSegment === 'sign-in';
+    const onAuthCallback = rootSegment === 'auth-callback';
+    const onOAuthRoute = rootSegment === 'oauth';
     const isPublicRoute = onSignIn || onAuthCallback || onOAuthRoute;
-    if (!session && !isPublicRoute) router.replace('/sign-in');
-    else if (session && onSignIn) router.replace('/');
-  }, [session, loading, segments, router]);
+    if (!session && !isPublicRoute && pathname !== '/sign-in') {
+      router.replace('/sign-in');
+      return;
+    }
+    if (session && onSignIn && pathname !== '/') {
+      router.replace('/');
+    }
+  }, [session, loading, pathname, segments, router]);
 
   if (loading) {
     return (

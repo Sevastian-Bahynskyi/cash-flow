@@ -274,6 +274,10 @@ export default function BudgetScreen() {
         <SafeAreaView style={styles.modalSafeArea} edges={['top', 'bottom']}>
           <ScreenHeader
             back
+            onBack={() => {
+              setDraft(null);
+              setKeypadOpen(true);
+            }}
             title="Edit Budget"
             subtitle={draft?.label}
             actions={[

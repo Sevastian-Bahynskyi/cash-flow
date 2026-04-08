@@ -114,7 +114,7 @@ export default function AiRulesScreen() {
         <View style={styles.section}>
           {loading ? (
             <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>Loading learned patterns...</Text>
+              <Text style={styles.emptyText}>Loading...</Text>
             </View>
           ) : rules.length === 0 ? (
             <View style={styles.emptyCard}>
@@ -162,6 +162,7 @@ export default function AiRulesScreen() {
         <SafeAreaView style={styles.modalSafeArea} edges={['top', 'bottom']}>
           <ScreenHeader
             back
+            onBack={() => setDraft(null)}
             title="Edit Rule"
             subtitle={draft?.pattern_key}
             actions={[{ icon: 'check', onPress: () => void saveDraft() }]}
