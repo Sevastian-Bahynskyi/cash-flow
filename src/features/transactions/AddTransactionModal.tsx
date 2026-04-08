@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Modal,
   Platform,
   Pressable,
@@ -218,6 +219,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
   const [budgetStateByCategory, setBudgetStateByCategory] = useState<Record<string, BudgetIndicator>>({});
   const [userTouchedCategory, setUserTouchedCategory] = useState(false);
   const [suggestion, setSuggestion] = useState<SuggestionState | null>(null);
+  const [isSuggestingCategory, setIsSuggestingCategory] = useState(false);
   const [recentSuggestions, setRecentSuggestions] = useState<TransactionRow[]>([]);
   const [saveState, setSaveState] = useState<SaveState | null>(null);
   const categoriesState = useCategories();
@@ -263,6 +265,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
     setValidationMessage(null);
     setUserTouchedCategory(Boolean(nextDraft?.category_id));
     setSuggestion(null);
+    setIsSuggestingCategory(false);
     setRecentSuggestions([]);
     setSaveState(null);
     autoAppliedCategoryId.current = null;
@@ -345,12 +348,17 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
   } = {}): Promise<void> => {
     if (!visible || kind !== 'expense' || categoryOptions.length === 0) {
       setSuggestion(null);
+      setIsSuggestingCategory(false);
       return;
     }
 
-    const q = name.trim();
-    if (q.length < 2) {
+    const trimmedName = name.trim();
+    const trimmedComment = comment.trim();
+    const lookupText = trimmedName.length >= 2 ? trimmedName : trimmedComment;
+
+    if (lookupText.length < 2) {
       setSuggestion(null);
+      setIsSuggestingCategory(false);
       if (!userTouchedCategory && category && autoAppliedCategoryId.current === category.id) {
         setCategory(null);
         autoAppliedCategoryId.current = null;
@@ -359,9 +367,10 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
     }
 
     const runId = ++suggestionRunId.current;
+    setIsSuggestingCategory(true);
     const result = await resolveSuggestedCategory(
-      q,
-      comment.trim().length > 0 ? comment.trim() : null,
+      lookupText,
+      trimmedComment.length > 0 ? trimmedComment : null,
       categoryOptions.map((option) => ({
         id: option.id,
         parent: option.parentName,
@@ -371,6 +380,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
     );
 
     if (runId !== suggestionRunId.current) return;
+    setIsSuggestingCategory(false);
 
     if (!result) {
       setSuggestion(null);
@@ -389,22 +399,72 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
 
     setSuggestion({ ...result, category: match });
 
-    const shouldApply = !userTouchedCategory && (forceApply || result.confidence >= 0.84);
+    const shouldApply = !userTouchedCategory && (forceApply || result.confidence > 0);
     if (shouldApply) {
       setCategory(match);
       autoAppliedCategoryId.current = match.id;
     }
   };
 
+  const acceptSuggestion = async (): Promise<void> => {
+    if (!suggestion) return;
+
+    autoAppliedCategoryId.current = null;
+    setCategory(suggestion.category);
+    setUserTouchedCategory(true);
+
+    const saved = await upsertAiRule({
+      patternKey: suggestion.patternKey,
+      categoryId: suggestion.category.id,
+      isBlocked: false,
+    });
+    if (!saved) {
+      setValidationMessage('Could not save this category preference right now.');
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      return;
+    }
+
+    setValidationMessage(null);
+    setSuggestion(null);
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  const blockSuggestion = async (): Promise<void> => {
+    if (!suggestion) return;
+
+    const saved = await upsertAiRule({
+      patternKey: suggestion.patternKey,
+      categoryId: null,
+      isBlocked: true,
+    });
+    if (!saved) {
+      setValidationMessage('Could not save this block right now.');
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      return;
+    }
+
+    setValidationMessage(null);
+    if (!userTouchedCategory && category && autoAppliedCategoryId.current === category.id) {
+      setCategory(null);
+      autoAppliedCategoryId.current = null;
+    }
+    setSuggestion(null);
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
   useEffect(() => {
     if (!visible || kind !== 'expense' || categoryOptions.length === 0) {
       setSuggestion(null);
+      setIsSuggestingCategory(false);
       return;
     }
     if (suggestionTimer.current) clearTimeout(suggestionTimer.current);
-    const q = name.trim();
-    if (q.length < 2) {
+    const trimmedName = name.trim();
+    const trimmedComment = comment.trim();
+    const lookupText = trimmedName.length >= 2 ? trimmedName : trimmedComment;
+    if (lookupText.length < 2) {
       setSuggestion(null);
+      setIsSuggestingCategory(false);
       return;
     }
 
@@ -579,6 +639,9 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
   };
 
   const visibleCategoryLabel = category ? `${category.parentName} · ${category.name}` : 'Pick a category';
+  const showSuggestionCard = Boolean(
+    suggestion && (!userTouchedCategory || !category || category.id !== suggestion.category.id),
+  );
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={handleClose}>
@@ -673,33 +736,30 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
                 }}
               >
                 <Text style={[styles.fieldText, !category && styles.placeholder]}>{visibleCategoryLabel}</Text>
-                <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textMuted} />
+                <View style={styles.fieldTrailing}>
+                  {isSuggestingCategory ? (
+                    <ActivityIndicator size="small" color={colors.textMuted} />
+                  ) : (
+                    <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textMuted} />
+                  )}
+                </View>
               </Pressable>
             </>
           ) : null}
 
-          {suggestion ? (
+          {showSuggestionCard && suggestion ? (
             <View style={styles.suggestionCard}>
               <View style={styles.suggestionHead}>
                 <Text style={styles.suggestionTitle}>
-                  Suggestion: {suggestion.category.parentName} · {suggestion.category.name}
+                  {suggestion.category.parentName} · {suggestion.category.name}
                 </Text>
                 <Text style={styles.suggestionConfidence}>{Math.round(suggestion.confidence * 100)}%</Text>
               </View>
-              <Text style={styles.suggestionMeta}>
-                {suggestion.source === 'memory'
-                  ? 'From a past correction.'
-                  : suggestion.source === 'history'
-                    ? 'From your local history.'
-                    : 'AI fallback.'}
-              </Text>
               <View style={styles.actionRow}>
                 <Pressable
                   style={({ pressed }) => [styles.smallAction, pressed && styles.rowPressed]}
                   onPress={() => {
-                    autoAppliedCategoryId.current = null;
-                    setCategory(suggestion.category);
-                    setUserTouchedCategory(true);
+                    void acceptSuggestion();
                   }}
                 >
                   <Text style={styles.smallActionText}>Use this</Text>
@@ -707,12 +767,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
                 <Pressable
                   style={({ pressed }) => [styles.smallActionMuted, pressed && styles.rowPressed]}
                   onPress={() => {
-                    void upsertAiRule({
-                      patternKey: suggestion.patternKey,
-                      categoryId: null,
-                      isBlocked: true,
-                    });
-                    setSuggestion(null);
+                    void blockSuggestion();
                   }}
                 >
                   <Text style={styles.smallActionText}>Don't suggest again</Text>
@@ -783,6 +838,9 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
           <TextInput
             value={comment}
             onChangeText={setComment}
+            onBlur={() => {
+              void runCategorySuggestion({ preferRemote: true, forceApply: true });
+            }}
             placeholder="Optional"
             placeholderTextColor={colors.textMuted}
             style={styles.input}
@@ -959,7 +1017,6 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
               <Text style={styles.successTitle}>{saveState.title}</Text>
               {!saveState.editing ? (
                 <>
-                  <Text style={styles.successMeta}>What next?</Text>
                   <View style={styles.successActions}>
                     <Pressable
                       style={({ pressed }) => [styles.successButton, pressed && styles.rowPressed]}
@@ -1067,6 +1124,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  fieldTrailing: { width: 20, alignItems: 'center', justifyContent: 'center' },
   detailValueRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   fieldText: { ...typography.body, color: colors.text },
   flagValue: { fontSize: 24, lineHeight: 28 },
@@ -1088,7 +1146,6 @@ const styles = StyleSheet.create({
   suggestionHead: { flexDirection: 'row', gap: spacing.md, alignItems: 'center' },
   suggestionTitle: { ...typography.body, color: colors.text, flex: 1, fontWeight: '600' },
   suggestionConfidence: { ...typography.label, color: colors.accent, fontWeight: '700' },
-  suggestionMeta: { ...typography.label, color: colors.textMuted },
   actionRow: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
   smallAction: {
     paddingHorizontal: spacing.md,

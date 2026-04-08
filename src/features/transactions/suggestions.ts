@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase';
+import { supabase, supabaseFunctionsUrl, supabasePublishableKey } from '@/lib/supabase';
 import { normalizePattern } from '@/lib/currency';
 import type { TransactionRow } from './types';
 
@@ -12,6 +12,12 @@ export type SuggestedCategoryResult = {
 type SuggestionHistoryRow = {
   name: string;
   category_id: string | null;
+};
+
+type LocalSuggestionResult = {
+  categoryId: string;
+  confidence: number;
+  matchKind: 'exact' | 'fuzzy';
 };
 
 type AiRuleRow = {
@@ -46,11 +52,16 @@ export const upsertAiRule = async ({
   patternKey: string;
   categoryId: string | null;
   isBlocked: boolean;
-}): Promise<void> => {
+}): Promise<boolean> => {
   const { data: userData, error: userError } = await supabase.auth.getUser();
-  if (userError || !userData.user) return;
+  if (userError || !userData.user) {
+    if (__DEV__) {
+      console.warn('[ai-rule] Could not resolve current user for rule update.');
+    }
+    return false;
+  }
 
-  await supabase.from('ai_category_rules').upsert(
+  const { error } = await supabase.from('ai_category_rules').upsert(
     {
       user_id: userData.user.id,
       pattern_key: patternKey,
@@ -60,6 +71,13 @@ export const upsertAiRule = async ({
     },
     { onConflict: 'user_id,pattern_key' },
   );
+  if (error) {
+    if (__DEV__) {
+      console.warn('[ai-rule] Failed to persist rule update.', error.message);
+    }
+    return false;
+  }
+  return true;
 };
 
 const fetchSuggestionHistory = async (): Promise<SuggestionHistoryRow[]> => {
@@ -80,7 +98,7 @@ const fetchSuggestionHistory = async (): Promise<SuggestionHistoryRow[]> => {
 export const localSuggestCategory = async (
   nameQuery: string,
   historyRows?: SuggestionHistoryRow[],
-): Promise<{ categoryId: string; confidence: number } | null> => {
+): Promise<LocalSuggestionResult | null> => {
   const q = nameQuery.trim();
   if (q.length < 2) return null;
 
@@ -118,6 +136,7 @@ export const localSuggestCategory = async (
     return {
       categoryId: exact[0],
       confidence: exact[1] >= 3 ? 0.96 : 0.88,
+      matchKind: 'exact',
     };
   }
 
@@ -127,6 +146,7 @@ export const localSuggestCategory = async (
   return {
     categoryId: fuzzy[0],
     confidence: fuzzy[1] >= 3 ? 0.78 : 0.66,
+    matchKind: 'fuzzy',
   };
 };
 
@@ -174,6 +194,17 @@ export const remoteSuggestCategory = async (
   historyRows: SuggestionHistoryRow[],
 ): Promise<{ categoryId: string; confidence: number } | null> => {
   try {
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
+    if (sessionError || !session?.access_token) {
+      if (__DEV__) {
+        console.warn('[suggest-category] Missing Supabase session for edge function invoke.');
+      }
+      return null;
+    }
+
     const history = historyRows
       .filter((row): row is { name: string; category_id: string } => Boolean(row.category_id))
       .slice(0, 12)
@@ -182,16 +213,48 @@ export const remoteSuggestCategory = async (
         categoryId: row.category_id,
       }));
 
-    const { data, error } = await supabase.functions.invoke<SuggestFunctionResponse>(
-      'suggest-category',
-      { body: { name, comment, candidates, history } },
-    );
-    if (error || !data?.categoryId) return null;
+    if (!supabaseFunctionsUrl || !supabasePublishableKey) {
+      if (__DEV__) {
+        console.warn(
+          '[suggest-category] Missing Supabase function URL or publishable key for edge function calls.',
+        );
+      }
+      return null;
+    }
+
+    const response = await fetch(`${supabaseFunctionsUrl}/suggest-category`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+        apikey: supabasePublishableKey,
+      },
+      body: JSON.stringify({ name, comment, candidates, history }),
+    });
+
+    if (!response.ok) {
+      if (__DEV__) {
+        const responseText = await response.text().catch(() => '');
+        console.warn(
+          `[suggest-category] Edge function request failed: ${response.status} ${response.statusText}${
+            responseText ? ` — ${responseText}` : ''
+          }`,
+        );
+      }
+      return null;
+    }
+
+    const data = (await response.json()) as SuggestFunctionResponse;
+    if (!data?.categoryId) return null;
     return {
       categoryId: data.categoryId,
       confidence: Math.max(0, Math.min(1, data.confidence ?? 0.6)),
     };
-  } catch {
+  } catch (error) {
+    if (__DEV__) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn('[suggest-category] Unexpected invoke error:', message);
+    }
     return null;
   }
 };
@@ -240,11 +303,30 @@ export const resolveSuggestedCategory = async (
   }
 
   const historyRows = await fetchSuggestionHistory();
-  let remote: { categoryId: string; confidence: number } | null = null;
+  const local = await localSuggestCategory(name, historyRows);
 
-  if (options?.preferRemote) {
-    remote = await remoteSuggestCategory(name, comment, candidates, historyRows);
-    if (remote) {
+  if (local?.matchKind === 'exact' && !options?.preferRemote) {
+    return {
+      categoryId: local.categoryId,
+      confidence: local.confidence,
+      source: 'history',
+      patternKey,
+    };
+  }
+
+  const remote = await remoteSuggestCategory(name, comment, candidates, historyRows);
+
+  if (local && remote) {
+    if (local.matchKind === 'exact' && remote.categoryId !== local.categoryId && remote.confidence < 0.94) {
+      return {
+        categoryId: local.categoryId,
+        confidence: local.confidence,
+        source: 'history',
+        patternKey,
+      };
+    }
+
+    if (remote.confidence >= local.confidence + 0.08) {
       return {
         categoryId: remote.categoryId,
         confidence: remote.confidence,
@@ -252,9 +334,15 @@ export const resolveSuggestedCategory = async (
         patternKey,
       };
     }
+
+    return {
+      categoryId: local.categoryId,
+      confidence: local.confidence,
+      source: 'history',
+      patternKey,
+    };
   }
 
-  const local = await localSuggestCategory(name, historyRows);
   if (local) {
     return {
       categoryId: local.categoryId,
@@ -264,9 +352,6 @@ export const resolveSuggestedCategory = async (
     };
   }
 
-  if (!remote) {
-    remote = await remoteSuggestCategory(name, comment, candidates, historyRows);
-  }
   if (!remote) return null;
 
   return {
