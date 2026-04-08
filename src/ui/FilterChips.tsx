@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, spacing, typography } from './tokens';
+import { MotionView } from './MotionView';
 
 export function FilterChips<T extends string>({
   value,
@@ -12,20 +13,28 @@ export function FilterChips<T extends string>({
 }) {
   return (
     <View style={styles.wrap}>
-      {options.map((option) => {
+      {options.map((option, index) => {
         const active = option.value === value;
         return (
-          <Pressable
+          <MotionView
             key={option.value}
-            style={({ pressed }) => [
-              styles.chip,
-              active && styles.chipActive,
-              pressed && styles.chipPressed,
-            ]}
-            onPress={() => onChange(option.value)}
+            index={index}
+            direction={active ? 'down' : 'up'}
+            distance={70}
+            delayMs={120}
+            stepMs={55}
           >
-            <Text style={[styles.text, active && styles.textActive]}>{option.label}</Text>
-          </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.chip,
+                active && styles.chipActive,
+                pressed && styles.chipPressed,
+              ]}
+              onPress={() => onChange(option.value)}
+            >
+              <Text style={[styles.text, active && styles.textActive]}>{option.label}</Text>
+            </Pressable>
+          </MotionView>
         );
       })}
     </View>

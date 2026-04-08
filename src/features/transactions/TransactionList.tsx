@@ -4,6 +4,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 import { formatDateLabel, formatMinor } from '@/lib/format';
 import type { TransactionRow } from './types';
+import { MotionView } from '@/ui/MotionView';
 
 type TransactionListItem = {
   row: TransactionRow;
@@ -23,11 +24,13 @@ type Props = {
 
 function TransactionRowCard({
   item,
+  index,
   onEdit,
   onDuplicate,
   onDelete,
 }: {
   item: TransactionListItem;
+  index: number;
   onEdit: (row: TransactionRow) => void;
   onDuplicate: (row: TransactionRow) => void;
   onDelete: (row: TransactionRow) => void;
@@ -49,41 +52,43 @@ function TransactionRowCard({
       : formatMinor(row.amount_minor, 'DKK');
 
   return (
-    <Pressable style={({ pressed }) => [styles.row, pressed && styles.rowPressed]} onPress={() => onEdit(row)} onLongPress={openActions}>
-      <View style={[styles.iconWrap, { backgroundColor: `${item.categoryColor}22` }]}>
-        <MaterialCommunityIcons name={item.categoryIcon as never} size={20} color={item.categoryColor} />
-      </View>
-      <View style={styles.rowBody}>
-        <View style={styles.rowTop}>
-          <Text style={styles.name} numberOfLines={1}>
-            {row.name}
-          </Text>
-          <Text style={styles.amount}>{displayAmount}</Text>
+    <MotionView index={index} direction="right" distance={155} delayMs={160} stepMs={65}>
+      <Pressable style={({ pressed }) => [styles.row, pressed && styles.rowPressed]} onPress={() => onEdit(row)} onLongPress={openActions}>
+        <View style={[styles.iconWrap, { backgroundColor: `${item.categoryColor}22` }]}>
+          <MaterialCommunityIcons name={item.categoryIcon as never} size={20} color={item.categoryColor} />
         </View>
-        <View style={styles.rowMetaWrap}>
-          <Text style={styles.meta} numberOfLines={1}>
-            {item.categoryLabel} · {formatDateLabel(row.occurred_on)}
-          </Text>
-          <View style={styles.chips}>
-            {row.shared ? (
-              <View style={styles.chip}>
-                <Text style={styles.chipText}>Shared {row.shared_participant?.toUpperCase() ?? ''}</Text>
-              </View>
-            ) : null}
-            {row.is_shared_topup ? (
-              <View style={styles.chip}>
-                <Text style={styles.chipText}>Top-up</Text>
-              </View>
-            ) : null}
-            {row.is_salary ? (
-              <View style={[styles.chip, styles.chipAccent]}>
-                <Text style={styles.chipText}>Salary</Text>
-              </View>
-            ) : null}
+        <View style={styles.rowBody}>
+          <View style={styles.rowTop}>
+            <Text style={styles.name} numberOfLines={1}>
+              {row.name}
+            </Text>
+            <Text style={styles.amount}>{displayAmount}</Text>
+          </View>
+          <View style={styles.rowMetaWrap}>
+            <Text style={styles.meta} numberOfLines={1}>
+              {item.categoryLabel} · {formatDateLabel(row.occurred_on)}
+            </Text>
+            <View style={styles.chips}>
+              {row.shared ? (
+                <View style={styles.chip}>
+                  <Text style={styles.chipText}>Shared {row.shared_participant?.toUpperCase() ?? ''}</Text>
+                </View>
+              ) : null}
+              {row.is_shared_topup ? (
+                <View style={styles.chip}>
+                  <Text style={styles.chipText}>Top-up</Text>
+                </View>
+              ) : null}
+              {row.is_salary ? (
+                <View style={[styles.chip, styles.chipAccent]}>
+                  <Text style={styles.chipText}>Salary</Text>
+                </View>
+              ) : null}
+            </View>
           </View>
         </View>
-      </View>
-    </Pressable>
+      </Pressable>
+    </MotionView>
   );
 }
 
@@ -104,10 +109,11 @@ export const TransactionList = memo(function TransactionList({
         </View>
       ) : (
         <ScrollView horizontal={false} scrollEnabled={false} contentContainerStyle={styles.list}>
-          {items.map((item) => (
+          {items.map((item, index) => (
             <TransactionRowCard
               key={item.row.id}
               item={item}
+              index={index}
               onEdit={onEdit}
               onDuplicate={onDuplicate}
               onDelete={onDelete}

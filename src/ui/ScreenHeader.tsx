@@ -1,8 +1,9 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useNavigation, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing, typography } from './tokens';
+import { MotionView } from './MotionView';
 
 type Action = {
   icon: string;
@@ -13,21 +14,36 @@ export function ScreenHeader({
   title,
   subtitle,
   back,
+  onBack,
   actions,
 }: {
   title: string;
   subtitle?: string;
   back?: boolean;
+  onBack?: () => void;
   actions?: readonly Action[];
 }) {
   const router = useRouter();
+  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+
+  const handleBack = (): void => {
+    if (onBack) {
+      onBack();
+      return;
+    }
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+    router.replace('/');
+  };
 
   return (
     <View style={[styles.wrap, { paddingTop: Math.max(insets.top, spacing.md) }]}>
-      <View style={styles.leading}>
+      <MotionView style={styles.leading} direction="left" distance={150} delayMs={30}>
         {back ? (
-          <Pressable onPress={() => router.back()} hitSlop={12} style={styles.back}>
+          <Pressable onPress={handleBack} hitSlop={12} style={styles.back}>
             <MaterialCommunityIcons name="chevron-left" size={22} color={colors.text} />
           </Pressable>
         ) : null}
@@ -35,12 +51,21 @@ export function ScreenHeader({
           <Text style={styles.title}>{title}</Text>
           {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
         </View>
-      </View>
+      </MotionView>
       <View style={styles.actions}>
         {actions?.map((action, index) => (
-          <Pressable key={`${action.icon}-${index}`} onPress={action.onPress} hitSlop={12} style={styles.iconButton}>
-            <MaterialCommunityIcons name={action.icon as never} size={20} color={colors.text} />
-          </Pressable>
+          <MotionView
+            key={`${action.icon}-${index}`}
+            index={index}
+            direction="right"
+            distance={110}
+            delayMs={90}
+            style={styles.iconMotion}
+          >
+            <Pressable onPress={action.onPress} hitSlop={12} style={styles.iconButton}>
+              <MaterialCommunityIcons name={action.icon as never} size={20} color={colors.text} />
+            </Pressable>
+          </MotionView>
         ))}
       </View>
     </View>
@@ -61,5 +86,6 @@ const styles = StyleSheet.create({
   title: { ...typography.h2, color: colors.text },
   subtitle: { ...typography.label, color: colors.textMuted, marginTop: 2 },
   actions: { flexDirection: 'row', gap: spacing.sm, paddingTop: 2 },
+  iconMotion: { alignSelf: 'flex-start' },
   iconButton: { padding: 4 },
 });
