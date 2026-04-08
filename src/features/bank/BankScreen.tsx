@@ -16,6 +16,7 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { categoryColorOptions, categoryIconOptions } from '@/features/categories/presentation';
 import { useOverview } from '@/features/overview/useOverview';
 import type { LoanEventKind, LoanRow } from '@/features/loans/types';
+import type { ReceivableEventKind, ReceivableRow } from '@/features/receivables/types';
 import type { SavingsAction, SavingsAccountRow } from '@/features/savings/types';
 import { formatDateLabel, formatMinor } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
@@ -53,6 +54,20 @@ type LoanEventDraft = {
   amount: string;
 };
 
+type ReceivableDraft = {
+  id?: string;
+  name: string;
+  principal: string;
+  remaining: string;
+};
+
+type ReceivableEventDraft = {
+  receivableId: string;
+  receivableName: string;
+  kind: ReceivableEventKind;
+  amount: string;
+};
+
 const todayIso = (): string => new Date().toISOString().slice(0, 10);
 
 const parseMinor = (raw: string): number | null => {
@@ -69,10 +84,13 @@ export default function BankScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [expandedSavingsId, setExpandedSavingsId] = useState<string | null>(null);
   const [expandedLoanId, setExpandedLoanId] = useState<string | null>(null);
+  const [expandedReceivableId, setExpandedReceivableId] = useState<string | null>(null);
   const [accountDraft, setAccountDraft] = useState<SavingsAccountDraft | null>(null);
   const [savingsDraft, setSavingsDraft] = useState<SavingsActionDraft | null>(null);
   const [loanDraft, setLoanDraft] = useState<LoanDraft | null>(null);
   const [loanEventDraft, setLoanEventDraft] = useState<LoanEventDraft | null>(null);
+  const [receivableDraft, setReceivableDraft] = useState<ReceivableDraft | null>(null);
+  const [receivableEventDraft, setReceivableEventDraft] = useState<ReceivableEventDraft | null>(null);
   const [saving, setSaving] = useState(false);
 
   const savingsWithHistory = useMemo(
@@ -104,8 +122,23 @@ export default function BankScreen() {
     [data.loanEvents, data.loans],
   );
 
+  const receivablesWithHistory = useMemo(
+    () =>
+      data.receivables.map((receivable) => ({
+        receivable,
+        events: data.receivableEvents
+          .filter((event) => event.receivable_id === receivable.id)
+          .sort((a, b) => {
+            if (a.occurred_on === b.occurred_on) return b.created_at.localeCompare(a.created_at);
+            return b.occurred_on.localeCompare(a.occurred_on);
+          }),
+      })),
+    [data.receivableEvents, data.receivables],
+  );
+
   const totalSavingsMinor = savingsWithHistory.reduce((sum, item) => sum + item.totalMinor, 0);
   const totalLoanRemainingMinor = data.openLoans.reduce((sum, loan) => sum + loan.remaining_minor, 0);
+  const totalReceivableRemainingMinor = data.openReceivables.reduce((sum, receivable) => sum + receivable.remaining_minor, 0);
 
   const onRefresh = async (): Promise<void> => {
     setRefreshing(true);
@@ -129,6 +162,14 @@ export default function BankScreen() {
     if (!error) {
       await data.reload();
       setExpandedLoanId(null);
+    }
+  };
+
+  const removeReceivable = async (receivableId: string): Promise<void> => {
+    const { error } = await supabase.from('receivables').delete().eq('id', receivableId);
+    if (!error) {
+      await data.reload();
+      setExpandedReceivableId(null);
     }
   };
 
@@ -295,6 +336,104 @@ export default function BankScreen() {
     }
   };
 
+  const saveReceivable = async (): Promise<void> => {
+    if (!receivableDraft || !data.userId || receivableDraft.name.trim().length === 0) return;
+    const principalMinor = parseMinor(receivableDraft.principal);
+    const remainingMinor = parseMinor(receivableDraft.remaining);
+    if (principalMinor === null || remainingMinor === null || remainingMinor > principalMinor) return;
+
+    setSaving(true);
+    try {
+      if (receivableDraft.id) {
+        const { error } = await supabase
+          .from('receivables')
+          .update({
+            name: receivableDraft.name.trim(),
+            principal_minor: principalMinor,
+            remaining_minor: remainingMinor,
+            status: remainingMinor === 0 ? 'closed' : 'open',
+          })
+          .eq('id', receivableDraft.id);
+        if (!error) {
+          await data.reload();
+          setReceivableDraft(null);
+        }
+        return;
+      }
+
+      const { data: inserted, error } = await supabase
+        .from('receivables')
+        .insert({
+          user_id: data.userId,
+          name: receivableDraft.name.trim(),
+          principal_minor: principalMinor,
+          remaining_minor: remainingMinor,
+          status: remainingMinor === 0 ? 'closed' : 'open',
+        })
+        .select('id')
+        .single();
+      if (!error && inserted) {
+        await supabase.from('receivable_events').insert({
+          receivable_id: inserted.id,
+          user_id: data.userId,
+          kind: 'lent',
+          amount_minor: principalMinor,
+          occurred_on: todayIso(),
+        });
+        await data.reload();
+        setReceivableDraft(null);
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveReceivableEvent = async (): Promise<void> => {
+    if (!receivableEventDraft || !data.userId) return;
+    const amountMinor = parseMinor(receivableEventDraft.amount);
+    if (amountMinor === null || amountMinor <= 0) return;
+
+    const currentReceivable = data.receivables.find((receivable) => receivable.id === receivableEventDraft.receivableId);
+    if (!currentReceivable) return;
+
+    const nextPrincipal =
+      receivableEventDraft.kind === 'lent'
+        ? currentReceivable.principal_minor + amountMinor
+        : currentReceivable.principal_minor;
+    const nextRemaining =
+      receivableEventDraft.kind === 'lent'
+        ? currentReceivable.remaining_minor + amountMinor
+        : Math.max(0, currentReceivable.remaining_minor - amountMinor);
+
+    setSaving(true);
+    try {
+      const { error: eventError } = await supabase.from('receivable_events').insert({
+        receivable_id: currentReceivable.id,
+        user_id: data.userId,
+        kind: receivableEventDraft.kind,
+        amount_minor: amountMinor,
+        occurred_on: todayIso(),
+      });
+      if (eventError) return;
+
+      const { error: updateError } = await supabase
+        .from('receivables')
+        .update({
+          principal_minor: nextPrincipal,
+          remaining_minor: nextRemaining,
+          status: nextRemaining === 0 ? 'closed' : 'open',
+        })
+        .eq('id', currentReceivable.id);
+      if (!updateError) {
+        await data.reload();
+        setReceivableEventDraft(null);
+        setExpandedReceivableId(currentReceivable.id);
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <ScrollView
@@ -308,17 +447,33 @@ export default function BankScreen() {
           actions={[{ icon: 'logout', onPress: () => void signOut() }]}
         />
 
+        <View style={styles.bankSummaryCard}>
+          <Text style={styles.heroLabel}>Bank balance</Text>
+          <Text style={styles.bankSummaryAmount}>{formatMinor(data.bankBalanceMinor)}</Text>
+          <Text style={styles.heroMeta}>
+            Savings {formatMinor(totalSavingsMinor)} · Loans {formatMinor(totalLoanRemainingMinor)}
+          </Text>
+        </View>
+
         <View style={styles.heroRow}>
           <View style={styles.heroCard}>
             <Text style={styles.heroLabel}>Savings total</Text>
-            <Text style={styles.heroAmount}>{formatMinor(totalSavingsMinor)}</Text>
+            <Text style={[styles.heroAmount, styles.savingsHeroAmount]}>{formatMinor(totalSavingsMinor)}</Text>
             <Text style={styles.heroMeta}>{savingsWithHistory.length} accounts</Text>
           </View>
           <View style={styles.heroCard}>
             <Text style={styles.heroLabel}>Open loans</Text>
-            <Text style={styles.heroAmount}>{formatMinor(totalLoanRemainingMinor)}</Text>
+            <Text style={[styles.heroAmount, styles.loanHeroAmount]}>{formatMinor(totalLoanRemainingMinor)}</Text>
             <Text style={styles.heroMeta}>{data.openLoans.length} active</Text>
           </View>
+        </View>
+
+        <View style={styles.owedSummaryCard}>
+          <Text style={styles.owedSummaryLabel}>Owed to you</Text>
+          <Text style={styles.owedSummaryAmount}>{formatMinor(totalReceivableRemainingMinor)}</Text>
+          <Text style={styles.heroMeta}>
+            Tracked separately. Not counted in your balances until it is actually returned.
+          </Text>
         </View>
 
         <View style={styles.section}>
@@ -559,6 +714,129 @@ export default function BankScreen() {
             })
           )}
         </View>
+
+        <View style={styles.section}>
+          <View style={styles.sectionHead}>
+            <Text style={styles.sectionTitle}>Owed to you</Text>
+            <Pressable
+              style={({ pressed }) => [styles.inlineButton, pressed && styles.rowPressed]}
+              onPress={() =>
+                setReceivableDraft({
+                  name: '',
+                  principal: '',
+                  remaining: '',
+                })
+              }
+            >
+              <Text style={styles.inlineButtonText}>New item</Text>
+            </Pressable>
+          </View>
+
+          {receivablesWithHistory.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyText}>Track money people owe you without treating it as cash-on-hand.</Text>
+            </View>
+          ) : (
+            receivablesWithHistory.map(({ receivable, events }) => {
+              const ratio = receivable.principal_minor === 0 ? 1 : 1 - receivable.remaining_minor / receivable.principal_minor;
+              const lastRepayment = events.find((event) => event.kind === 'repaid');
+              const expanded = expandedReceivableId === receivable.id;
+              return (
+                <Pressable
+                  key={receivable.id}
+                  style={({ pressed }) => [styles.itemCard, styles.receivableCard, pressed && styles.rowPressed]}
+                  onPress={() => setExpandedReceivableId((current) => (current === receivable.id ? null : receivable.id))}
+                  onLongPress={() =>
+                    Alert.alert(receivable.name, undefined, [
+                      {
+                        text: 'Edit',
+                        onPress: () =>
+                          setReceivableDraft({
+                            id: receivable.id,
+                            name: receivable.name,
+                            principal: (receivable.principal_minor / 100).toFixed(2),
+                            remaining: (receivable.remaining_minor / 100).toFixed(2),
+                          }),
+                      },
+                      {
+                        text: 'Delete',
+                        style: 'destructive',
+                        onPress: () => {
+                          void removeReceivable(receivable.id);
+                        },
+                      },
+                      { text: 'Cancel', style: 'cancel' },
+                    ])
+                  }
+                >
+                  <View style={styles.itemHead}>
+                    <View style={[styles.iconWrap, { backgroundColor: 'rgba(245,185,66,0.18)' }]}>
+                      <MaterialCommunityIcons name="cash-refund" size={22} color={colors.accentAlt} />
+                    </View>
+                    <View style={styles.itemCopy}>
+                      <Text style={styles.itemTitle}>{receivable.name}</Text>
+                      <Text style={styles.itemMeta}>
+                        {lastRepayment ? `Last return ${formatDateLabel(lastRepayment.occurred_on)}` : 'Nothing returned yet'}
+                      </Text>
+                    </View>
+                    <Text style={[styles.itemAmount, styles.receivableAmount]}>{formatMinor(receivable.remaining_minor)}</Text>
+                  </View>
+                  <ProgressBar value={ratio} color={receivable.remaining_minor === 0 ? colors.success : colors.accentAlt} />
+                  <Text style={styles.itemMeta}>
+                    {receivable.remaining_minor === 0 ? 'Settled' : `Original amount ${formatMinor(receivable.principal_minor)}`}
+                  </Text>
+
+                  {expanded ? (
+                    <View style={styles.expandedBody}>
+                      <View style={styles.actionRow}>
+                        <Pressable
+                          style={({ pressed }) => [styles.actionChip, styles.actionChipAlt, pressed && styles.rowPressed]}
+                          onPress={() =>
+                            setReceivableEventDraft({
+                              receivableId: receivable.id,
+                              receivableName: receivable.name,
+                              kind: 'repaid',
+                              amount: '',
+                            })
+                          }
+                        >
+                          <Text style={styles.actionChipText}>Returned</Text>
+                        </Pressable>
+                        <Pressable
+                          style={({ pressed }) => [styles.actionChip, styles.actionChipAlt, pressed && styles.rowPressed]}
+                          onPress={() =>
+                            setReceivableEventDraft({
+                              receivableId: receivable.id,
+                              receivableName: receivable.name,
+                              kind: 'lent',
+                              amount: '',
+                            })
+                          }
+                        >
+                          <Text style={styles.actionChipText}>Lend more</Text>
+                        </Pressable>
+                      </View>
+                      <View style={styles.historyList}>
+                        {events.length === 0 ? (
+                          <Text style={styles.itemMeta}>No history yet.</Text>
+                        ) : (
+                          events.slice(0, 6).map((event) => (
+                            <View key={event.id} style={styles.historyRow}>
+                              <Text style={styles.historyText}>
+                                {event.kind} {formatMinor(event.amount_minor)}
+                              </Text>
+                              <Text style={styles.historyMeta}>{formatDateLabel(event.occurred_on)}</Text>
+                            </View>
+                          ))
+                        )}
+                      </View>
+                    </View>
+                  ) : null}
+                </Pressable>
+              );
+            })
+          )}
+        </View>
       </ScrollView>
 
       <Modal
@@ -570,6 +848,7 @@ export default function BankScreen() {
         <SafeAreaView style={styles.modalSafeArea} edges={['top', 'bottom']}>
           <ScreenHeader
             back
+            onBack={() => setAccountDraft(null)}
             title={accountDraft?.id ? 'Edit Savings' : 'New Savings'}
             actions={[{ icon: 'check', onPress: () => void saveSavingsAccount() }]}
           />
@@ -644,6 +923,7 @@ export default function BankScreen() {
         <SafeAreaView style={styles.modalSafeArea} edges={['top', 'bottom']}>
           <ScreenHeader
             back
+            onBack={() => setSavingsDraft(null)}
             title="Savings Action"
             subtitle={savingsDraft?.accountName}
             actions={[{ icon: 'check', onPress: () => void saveSavingsAction() }]}
@@ -697,6 +977,7 @@ export default function BankScreen() {
         <SafeAreaView style={styles.modalSafeArea} edges={['top', 'bottom']}>
           <ScreenHeader
             back
+            onBack={() => setLoanDraft(null)}
             title={loanDraft?.id ? 'Edit Loan' : 'New Loan'}
             actions={[{ icon: 'check', onPress: () => void saveLoan() }]}
           />
@@ -742,6 +1023,7 @@ export default function BankScreen() {
         <SafeAreaView style={styles.modalSafeArea} edges={['top', 'bottom']}>
           <ScreenHeader
             back
+            onBack={() => setLoanEventDraft(null)}
             title={loanEventDraft?.kind === 'repaid' ? 'Repayment' : 'Borrow More'}
             subtitle={loanEventDraft?.loanName}
             actions={[{ icon: 'check', onPress: () => void saveLoanEvent() }]}
@@ -759,6 +1041,80 @@ export default function BankScreen() {
           </View>
         </SafeAreaView>
       </Modal>
+
+      <Modal
+        visible={receivableDraft !== null}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setReceivableDraft(null)}
+      >
+        <SafeAreaView style={styles.modalSafeArea} edges={['top', 'bottom']}>
+          <ScreenHeader
+            back
+            onBack={() => setReceivableDraft(null)}
+            title={receivableDraft?.id ? 'Edit Owed Item' : 'New Owed Item'}
+            actions={[{ icon: 'check', onPress: () => void saveReceivable() }]}
+          />
+          <View style={styles.modalContent}>
+            <Text style={styles.label}>Name</Text>
+            <TextInput
+              value={receivableDraft?.name ?? ''}
+              onChangeText={(value) => setReceivableDraft((current) => (current ? { ...current, name: value } : current))}
+              placeholder="Anna"
+              placeholderTextColor={colors.textMuted}
+              style={styles.input}
+            />
+
+            <Text style={styles.label}>Original amount</Text>
+            <TextInput
+              value={receivableDraft?.principal ?? ''}
+              onChangeText={(value) => setReceivableDraft((current) => (current ? { ...current, principal: value } : current))}
+              keyboardType="decimal-pad"
+              placeholder="0.00"
+              placeholderTextColor={colors.textMuted}
+              style={styles.input}
+            />
+
+            <Text style={styles.label}>Still owed</Text>
+            <TextInput
+              value={receivableDraft?.remaining ?? ''}
+              onChangeText={(value) => setReceivableDraft((current) => (current ? { ...current, remaining: value } : current))}
+              keyboardType="decimal-pad"
+              placeholder="0.00"
+              placeholderTextColor={colors.textMuted}
+              style={styles.input}
+            />
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      <Modal
+        visible={receivableEventDraft !== null}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setReceivableEventDraft(null)}
+      >
+        <SafeAreaView style={styles.modalSafeArea} edges={['top', 'bottom']}>
+          <ScreenHeader
+            back
+            onBack={() => setReceivableEventDraft(null)}
+            title={receivableEventDraft?.kind === 'repaid' ? 'Money Returned' : 'Lend More'}
+            subtitle={receivableEventDraft?.receivableName}
+            actions={[{ icon: 'check', onPress: () => void saveReceivableEvent() }]}
+          />
+          <View style={styles.modalContent}>
+            <Text style={styles.label}>Amount</Text>
+            <TextInput
+              value={receivableEventDraft?.amount ?? ''}
+              onChangeText={(value) => setReceivableEventDraft((current) => (current ? { ...current, amount: value } : current))}
+              keyboardType="decimal-pad"
+              placeholder="0.00"
+              placeholderTextColor={colors.textMuted}
+              style={styles.input}
+            />
+          </View>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -767,6 +1123,23 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.bg },
   container: { flex: 1, backgroundColor: colors.bg },
   content: { paddingBottom: spacing.xxl * 3, gap: spacing.lg },
+  bankSummaryCard: {
+    marginHorizontal: spacing.lg,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    gap: spacing.xs,
+  },
+  owedSummaryCard: {
+    marginHorizontal: spacing.lg,
+    marginTop: -4,
+    backgroundColor: 'rgba(245,185,66,0.12)',
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    gap: spacing.xs,
+    borderWidth: 1,
+    borderColor: 'rgba(245,185,66,0.28)',
+  },
   heroRow: { flexDirection: 'row', gap: spacing.md, paddingHorizontal: spacing.lg },
   heroCard: {
     flex: 1,
@@ -777,6 +1150,11 @@ const styles = StyleSheet.create({
   },
   heroLabel: { ...typography.label, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
   heroAmount: { ...typography.h2, color: colors.text },
+  savingsHeroAmount: { color: colors.success },
+  loanHeroAmount: { color: colors.danger },
+  bankSummaryAmount: { ...typography.h1, color: colors.text },
+  owedSummaryLabel: { ...typography.label, color: colors.accentAlt, textTransform: 'uppercase', letterSpacing: 0.5 },
+  owedSummaryAmount: { ...typography.h2, color: colors.accentAlt },
   heroMeta: { ...typography.label, color: colors.textMuted },
   section: { paddingHorizontal: spacing.lg, gap: spacing.sm },
   sectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
@@ -800,6 +1178,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     gap: spacing.sm,
   },
+  receivableCard: {
+    borderWidth: 1,
+    borderColor: 'rgba(245,185,66,0.18)',
+  },
   itemHead: { flexDirection: 'row', gap: spacing.md, alignItems: 'center' },
   iconWrap: {
     width: 46,
@@ -812,6 +1194,7 @@ const styles = StyleSheet.create({
   itemTitle: { ...typography.body, color: colors.text, fontWeight: '600' },
   itemMeta: { ...typography.label, color: colors.textMuted },
   itemAmount: { ...typography.body, color: colors.text, fontWeight: '700' },
+  receivableAmount: { color: colors.accentAlt },
   expandedBody: { gap: spacing.sm, paddingTop: spacing.sm },
   actionRow: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
   actionChip: {
@@ -821,6 +1204,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
   },
   actionChipActive: { backgroundColor: 'rgba(124,92,255,0.18)' },
+  actionChipAlt: { backgroundColor: 'rgba(245,185,66,0.18)' },
   actionChipText: { ...typography.label, color: colors.text },
   historyList: { gap: spacing.xs },
   historyRow: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md },
