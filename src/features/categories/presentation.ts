@@ -1,0 +1,30 @@
+export const categoryColorOptions = [
+  '#34D399',
+  '#60A5FA',
+  '#F59E0B',
+  '#F472B6',
+  '#A78BFA',
+  '#FB7185',
+  '#F97316',
+  '#94A3B8',
+  '#3DD68C',
+  '#7C5CFF',
+] as const;
+
+export const categoryIconOptions = [
+  'shapes',
+  'cart-outline',
+  'silverware-fork-knife',
+  'coffee-outline',
+  'train-car',
+  'home-outline',
+  'flash-outline',
+  'heart-pulse',
+  'movie-open-outline',
+  'shopping-outline',
+  'receipt-text-outline',
+  'piggy-bank-outline',
+  'bank-outline',
+  'gamepad-variant-outline',
+  'dots-grid',
+] as const;

@@ -9,6 +9,10 @@ type State =
 
 let cache: CategoryOption[] | null = null;
 
+export const clearCategoryCache = (): void => {
+  cache = null;
+};
+
 export function useCategories(): State {
   const [state, setState] = useState<State>(
     cache ? { status: 'ready', options: cache } : { status: 'loading' },
@@ -20,7 +24,7 @@ export function useCategories(): State {
     (async () => {
       const { data, error } = await supabase
         .from('categories')
-        .select('id, user_id, parent_id, name, level, is_system')
+        .select('id, user_id, parent_id, name, level, is_system, icon, color')
         .order('level', { ascending: true })
         .order('name', { ascending: true });
 
@@ -31,20 +35,26 @@ export function useCategories(): State {
       }
 
       const rows = (data ?? []) as CategoryRow[];
-      const parents = new Map<string, string>();
+      const parents = new Map<string, CategoryRow>();
       for (const r of rows) {
-        if (r.level === 1) parents.set(r.id, r.name);
+        if (r.level === 1) parents.set(r.id, r);
       }
 
       const options: CategoryOption[] = rows
         .filter((r) => r.level === 2 && r.parent_id !== null)
         .map((r) => {
-          const parentName = parents.get(r.parent_id ?? '') ?? '';
+          const parent = parents.get(r.parent_id ?? '');
+          const parentName = parent?.name ?? '';
           return {
             id: r.id,
             name: r.name,
             parentName,
             searchKey: `${parentName} ${r.name}`.toLowerCase(),
+            parentId: r.parent_id ?? '',
+            icon: r.icon,
+            color: r.color,
+            parentColor: parent?.color ?? r.color,
+            parentIcon: parent?.icon ?? r.icon,
           };
         });
 

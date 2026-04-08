@@ -5,6 +5,8 @@ export type CategoryRow = {
   name: string;
   level: 1 | 2;
   is_system: boolean;
+  icon: string;
+  color: string;
 };
 
 export type CategoryOption = {
@@ -12,4 +14,9 @@ export type CategoryOption = {
   name: string;
   parentName: string;
   searchKey: string;
+  parentId: string;
+  icon: string;
+  color: string;
+  parentColor: string;
+  parentIcon: string;
 };
