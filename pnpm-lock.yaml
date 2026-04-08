@@ -41,6 +41,9 @@ importers:
       expo-localization:
         specifier: ~17.0.8
         version: 17.0.8(expo@54.0.33)(react@19.1.0)
+      expo-location:
+        specifier: ^55.1.7
+        version: 55.1.7(expo@54.0.33)
       expo-notifications:
         specifier: ~0.32.16
         version: 0.32.16(expo@54.0.33)(react-native@0.81.5(@babel/core@7.29.0)(@react-native-community/cli@13.6.9)(@react-native/metro-config@0.85.0(@babel/core@7.29.0))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
@@ -1952,6 +1955,11 @@ packages:
     peerDependencies:
       expo: '*'
       react: '*'
+
+  expo-location@55.1.7:
+    resolution: {integrity: sha512-E8Qib2yAHTU7WZM/Qrmfx7G/OvMAnjeIyinyKK6x/sFxm+nBu/hKwGEp2BIW9ubM1tBjaId7S0WSAaZr3OPzHg==}
+    peerDependencies:
+      expo: '*'
 
   expo-modules-autolinking@3.0.24:
     resolution: {integrity: sha512-TP+6HTwhL7orDvsz2VzauyQlXJcAWyU3ANsZ7JGL4DQu8XaZv/A41ZchbtAYLfozNA2Ya1Hzmhx65hXryBMjaQ==}
@@ -6278,6 +6286,11 @@ snapshots:
       expo: 54.0.33(@babel/core@7.29.0)(@expo/metro-runtime@6.1.2)(expo-router@6.0.23)(graphql@15.8.0)(react-native@0.81.5(@babel/core@7.29.0)(@react-native-community/cli@13.6.9)(@react-native/metro-config@0.85.0(@babel/core@7.29.0))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       react: 19.1.0
       rtl-detect: 1.1.2
+
+  expo-location@55.1.7(expo@54.0.33):
+    dependencies:
+      '@expo/image-utils': 0.8.12
+      expo: 54.0.33(@babel/core@7.29.0)(@expo/metro-runtime@6.1.2)(expo-router@6.0.23)(graphql@15.8.0)(react-native@0.81.5(@babel/core@7.29.0)(@react-native-community/cli@13.6.9)(@react-native/metro-config@0.85.0(@babel/core@7.29.0))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
 
   expo-modules-autolinking@3.0.24:
     dependencies:

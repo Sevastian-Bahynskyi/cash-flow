@@ -122,16 +122,15 @@ create policy transactions_delete_own on public.transactions
 -- ============================================================
 do $$
 declare
-  food uuid; transport uuid; housing uuid; health uuid;
-  fun uuid; shopping uuid; bills uuid; other uuid;
+  food uuid; transport uuid; household uuid; health uuid;
+  fun uuid; shopping uuid; other uuid;
 begin
   insert into public.categories (name, level, is_system) values ('Food', 1, true) returning id into food;
   insert into public.categories (name, level, is_system) values ('Transport', 1, true) returning id into transport;
-  insert into public.categories (name, level, is_system) values ('Housing', 1, true) returning id into housing;
+  insert into public.categories (name, level, is_system) values ('Household', 1, true) returning id into household;
   insert into public.categories (name, level, is_system) values ('Health', 1, true) returning id into health;
   insert into public.categories (name, level, is_system) values ('Entertainment', 1, true) returning id into fun;
   insert into public.categories (name, level, is_system) values ('Shopping', 1, true) returning id into shopping;
-  insert into public.categories (name, level, is_system) values ('Bills', 1, true) returning id into bills;
   insert into public.categories (name, level, is_system) values ('Other', 1, true) returning id into other;
 
   insert into public.categories (name, level, is_system, parent_id) values
@@ -141,16 +140,18 @@ begin
     ('Public transit', 2, true, transport),
     ('Taxi', 2, true, transport),
     ('Fuel', 2, true, transport),
-    ('Rent', 2, true, housing),
-    ('Utilities', 2, true, housing),
+    ('Rent', 2, true, household),
+    ('Utilities', 2, true, household),
+    ('Internet', 2, true, household),
+    ('Phone', 2, true, household),
+    ('Gas', 2, true, household),
+    ('Car insurance', 2, true, household),
     ('Pharmacy', 2, true, health),
     ('Doctor', 2, true, health),
     ('Movies', 2, true, fun),
     ('Games', 2, true, fun),
     ('Clothes', 2, true, shopping),
     ('Electronics', 2, true, shopping),
-    ('Internet', 2, true, bills),
-    ('Phone', 2, true, bills),
     ('Misc', 2, true, other);
 exception when unique_violation then
   -- Seed already applied.

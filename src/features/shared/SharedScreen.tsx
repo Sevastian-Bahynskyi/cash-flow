@@ -112,12 +112,23 @@ export default function SharedScreen() {
       contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.text} />}
     >
-      <ScreenHeader title="Shared" subtitle="Fairness, top-ups, and shared spend" />
+      <ScreenHeader title="Shared" subtitle="Fairness and shared spend" />
 
       <View style={styles.hero}>
         <Text style={styles.heroLabel}>Shared balance</Text>
         <Text style={styles.heroAmount}>{formatMinor(sharedBalance)}</Text>
-        <Text style={styles.heroMeta}>{selectedCycle?.label ?? 'No salary cycle selected'}</Text>
+        <View style={styles.heroStats}>
+          <View style={styles.heroStatChip}>
+            <Text style={styles.heroStatLabel}>Cycle</Text>
+            <Text style={styles.heroStatValue}>{selectedCycle?.label ?? 'Not set'}</Text>
+          </View>
+          <View style={styles.heroStatChip}>
+            <Text style={styles.heroStatLabel}>Ratio</Text>
+            <Text style={styles.heroStatValue}>
+              {formatPercent(ratio)} · {formatPercent(1 - ratio)}
+            </Text>
+          </View>
+        </View>
         <Pressable
           style={styles.heroButton}
           onPress={() =>
@@ -128,7 +139,7 @@ export default function SharedScreen() {
             })
           }
         >
-          <Text style={styles.heroButtonText}>Top up shared account</Text>
+          <Text style={styles.heroButtonText}>Top up</Text>
         </Pressable>
       </View>
 
@@ -142,9 +153,9 @@ export default function SharedScreen() {
 
       {!selectedCycle ? (
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>No salary cycle yet</Text>
+          <Text style={styles.sectionTitle}>No cycle yet</Text>
           <Text style={styles.explainer}>
-            Add a salary income first so the shared ratio and fairness model know which cycle to use.
+            Add a salary income first to activate shared fairness.
           </Text>
         </View>
       ) : null}
@@ -174,23 +185,24 @@ export default function SharedScreen() {
           <Text style={styles.metricMeta}>{formatPercent(ratio)}</Text>
         </View>
         <View style={styles.metricCard}>
-          <Text style={styles.metricLabel}>GF inferred share</Text>
+          <Text style={styles.metricLabel}>GF share</Text>
           <Text style={styles.metricAmount}>{formatMinor(sharedSpendTotal - userEffectiveShare)}</Text>
-          <Text style={styles.metricMeta}>based on current cycle</Text>
+          <Text style={styles.metricMeta}>current cycle</Text>
         </View>
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>How the ratio works</Text>
-        <Text style={styles.explainer}>
-          Your ratio updates when you add a shared top-up. Shared expenses use the current-cycle ratio only. There is no manual ratio input.
-        </Text>
+        <Text style={styles.sectionTitle}>Ratio</Text>
+        <View style={styles.ratioLegend}>
+          <Text style={styles.ratioPill}>You {formatPercent(ratio)}</Text>
+          <Text style={styles.ratioPill}>GF {formatPercent(1 - ratio)}</Text>
+        </View>
         <ProgressBar value={ratio} color={colors.accent} />
-        <Text style={styles.metricMeta}>You {formatPercent(ratio)} · GF {formatPercent(1 - ratio)}</Text>
+        <Text style={styles.metricMeta}>Updated by top-ups in the active cycle.</Text>
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Contribution timeline</Text>
+        <Text style={styles.sectionTitle}>Top-ups</Text>
         <View style={styles.timelineList}>
           {topups.length === 0 ? (
             <Text style={styles.metricMeta}>No top-ups in this cycle yet.</Text>
@@ -267,7 +279,16 @@ const styles = StyleSheet.create({
   },
   heroLabel: { ...typography.label, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
   heroAmount: { ...typography.amount, color: colors.text },
-  heroMeta: { ...typography.body, color: colors.textMuted },
+  heroStats: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap', paddingTop: spacing.xs },
+  heroStatChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceAlt,
+    gap: 2,
+  },
+  heroStatLabel: { ...typography.label, color: colors.textMuted, fontSize: 11, textTransform: 'uppercase' },
+  heroStatValue: { ...typography.label, color: colors.text, fontWeight: '600' },
   heroButton: {
     marginTop: spacing.sm,
     alignSelf: 'flex-start',
@@ -295,6 +316,15 @@ const styles = StyleSheet.create({
   errorTitle: { ...typography.body, color: colors.text, fontWeight: '700' },
   sectionTitle: { ...typography.label, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
   explainer: { ...typography.body, color: colors.text },
+  ratioLegend: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
+  ratioPill: {
+    ...typography.label,
+    color: colors.text,
+    backgroundColor: colors.surfaceAlt,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+  },
   timelineList: { gap: spacing.sm },
   timelineRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   timelineLabel: { ...typography.body, color: colors.text, flex: 1, marginRight: spacing.md },

@@ -122,9 +122,9 @@ export default function HomeScreen() {
       : selectedCycle?.label ?? 'No salary cycle';
 
   const hints = [
-    data.transactions.length === 0 ? 'Log your first transaction to turn Home into a real dashboard.' : null,
-    data.budgets.length === 0 ? 'Set one budget to unlock warning states before overspending becomes obvious.' : null,
-    data.shared.userTopupTotal === 0 ? 'Your first shared top-up unlocks the shared fairness view.' : null,
+    data.transactions.length === 0 ? 'Log your first transaction to wake up Home.' : null,
+    data.budgets.length === 0 ? 'Set one budget to unlock warning states.' : null,
+    data.shared.userTopupTotal === 0 ? 'One shared top-up unlocks the fairness view.' : null,
   ].filter((value): value is string => value !== null);
 
   const onRefresh = async (): Promise<void> => {
@@ -144,7 +144,7 @@ export default function HomeScreen() {
     >
       <ScreenHeader
         title="Home"
-        subtitle="Personal money, budgets, and recent spending"
+        subtitle="Personal flow"
         actions={[
           { icon: 'bell-outline', onPress: () => router.push('/alerts') },
           { icon: 'brain', onPress: () => router.push('/ai-rules') },
@@ -154,11 +154,20 @@ export default function HomeScreen() {
       />
 
       <LinearGradient colors={['#1F2438', '#101219', '#0B0B0F']} style={styles.hero}>
-        <Text style={styles.heroEyebrow}>Personal balance</Text>
+        <Text style={styles.heroEyebrow}>Balance</Text>
         <Text style={styles.heroAmount}>{formatMinor(data.personalMinor)}</Text>
-        <Text style={styles.heroMeta}>
-          {currentCycleLabel} · cycle spend {formatMinor(categorySpend.reduce((sum, item) => sum + item.spentMinor, 0))}
-        </Text>
+        <View style={styles.heroStats}>
+          <View style={styles.heroStatChip}>
+            <Text style={styles.heroStatLabel}>Cycle</Text>
+            <Text style={styles.heroStatValue}>{currentCycleLabel}</Text>
+          </View>
+          <View style={styles.heroStatChip}>
+            <Text style={styles.heroStatLabel}>Spend</Text>
+            <Text style={styles.heroStatValue}>
+              {formatMinor(categorySpend.reduce((sum, item) => sum + item.spentMinor, 0))}
+            </Text>
+          </View>
+        </View>
       </LinearGradient>
 
       <FilterChips value={filter} options={filterOptions} onChange={setFilter} />
@@ -167,12 +176,12 @@ export default function HomeScreen() {
         <Pressable style={styles.quickCard} onPress={() => router.push('/budgets')}>
           <MaterialCommunityIcons name="target" size={20} color={colors.accent} />
           <Text style={styles.quickTitle}>Budgets</Text>
-          <Text style={styles.quickMeta}>Manage cycle targets</Text>
+          <Text style={styles.quickMeta}>Cycle targets</Text>
         </Pressable>
         <Pressable style={styles.quickCard} onPress={() => router.push('/categories')}>
           <MaterialCommunityIcons name="shape-outline" size={20} color={colors.success} />
           <Text style={styles.quickTitle}>Categories</Text>
-          <Text style={styles.quickMeta}>Edit icons, colors, and structure</Text>
+          <Text style={styles.quickMeta}>Icons and groups</Text>
         </Pressable>
       </View>
 
@@ -296,7 +305,18 @@ const styles = StyleSheet.create({
   },
   heroEyebrow: { ...typography.label, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
   heroAmount: { ...typography.amount, color: colors.text },
-  heroMeta: { ...typography.body, color: colors.textMuted },
+  heroStats: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap', paddingTop: spacing.xs },
+  heroStatChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    gap: 2,
+  },
+  heroStatLabel: { ...typography.label, color: colors.textMuted, fontSize: 11, textTransform: 'uppercase' },
+  heroStatValue: { ...typography.label, color: colors.text, fontWeight: '600' },
   quickRow: { flexDirection: 'row', gap: spacing.md, paddingHorizontal: spacing.lg },
   quickCard: {
     flex: 1,

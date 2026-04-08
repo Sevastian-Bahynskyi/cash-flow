@@ -4,7 +4,7 @@
 -- categories: icon + color
 -- ============================================================
 alter table public.categories
-  add column if not exists icon text not null default 'shapes',
+  add column if not exists icon text not null default 'shape-outline',
   add column if not exists color text not null default '#7C5CFF';
 
 alter table public.categories disable trigger categories_protect_system_trg;
@@ -21,8 +21,11 @@ set
     when 'taxi' then 'taxi'
     when 'fuel' then 'gas-station-outline'
     when 'housing' then 'home-city-outline'
+    when 'household' then 'home-city-outline'
     when 'rent' then 'home-outline'
     when 'utilities' then 'flash-outline'
+    when 'gas' then 'meter-gas-outline'
+    when 'car insurance' then 'shield-car'
     when 'health' then 'heart-pulse'
     when 'pharmacy' then 'pill'
     when 'doctor' then 'stethoscope'
@@ -60,9 +63,12 @@ set
     when 'shopping' then '#FB7185'
     when 'clothes' then '#FB7185'
     when 'electronics' then '#FB7185'
+    when 'household' then '#F59E0B'
+    when 'gas' then '#F59E0B'
+    when 'car insurance' then '#F59E0B'
     when 'bills' then '#F97316'
-    when 'internet' then '#F97316'
-    when 'phone' then '#F97316'
+    when 'internet' then '#F59E0B'
+    when 'phone' then '#F59E0B'
     when 'other' then '#94A3B8'
     when 'misc' then '#94A3B8'
     else color

@@ -1,6 +1,7 @@
 // Salary-cycle utilities. A cycle is defined by a salary income transaction.
 // Cycle label rule: if the salary day-of-month is >= 25, label = next month;
 // otherwise label = current month. Cycles are ordered by salary date ascending.
+import { formatMonthYearLabel } from '@/lib/format';
 
 export type SalaryTxn = {
   id: string;
@@ -11,7 +12,7 @@ export type SalaryCycle = {
   id: string; // id of the salary transaction that opens the cycle
   startOn: string; // YYYY-MM-DD inclusive
   endOnExclusive: string | null; // YYYY-MM-DD exclusive, null for the active (latest) cycle
-  label: string; // YYYY-MM
+  label: string; // e.g. "May 2026"
 };
 
 const parseYmd = (ymd: string): { y: number; m: number; d: number } => {
@@ -31,9 +32,9 @@ export const labelForSalaryDate = (ymd: string): string => {
   if (d >= 25) {
     const ny = m === 12 ? y + 1 : y;
     const nm = m === 12 ? 1 : m + 1;
-    return `${ny}-${String(nm).padStart(2, '0')}`;
+    return formatMonthYearLabel(`${ny}-${String(nm).padStart(2, '0')}-01`);
   }
-  return `${y}-${String(m).padStart(2, '0')}`;
+  return formatMonthYearLabel(`${y}-${String(m).padStart(2, '0')}-01`);
 };
 
 // Build ordered cycles from salary transactions.

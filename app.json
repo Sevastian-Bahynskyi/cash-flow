@@ -11,7 +11,10 @@
     "ios": {
       "supportsTablet": false,
       "icon": "./assets/icon.png",
-      "bundleIdentifier": "com.seva.cashflow"
+      "bundleIdentifier": "com.seva.cashflow",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Cash Flow uses your location to prefill the country flag from your current location."
+      }
     },
     "android": {
       "package": "com.seva.cashflow"
@@ -21,7 +24,13 @@
       "expo-web-browser",
       "@react-native-community/datetimepicker",
       "expo-localization",
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Cash Flow uses your location to prefill the country flag from your current location."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

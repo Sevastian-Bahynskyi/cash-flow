@@ -14,6 +14,7 @@ import { buildCategoryMeta } from '@/features/categories/helpers';
 import { CategorySheet } from '@/features/categories/CategorySheet';
 import { useOverview } from '@/features/overview/useOverview';
 import { supabase } from '@/lib/supabase';
+import { formatDateLabel } from '@/lib/format';
 import { ScreenHeader } from '@/ui/ScreenHeader';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 
@@ -136,7 +137,7 @@ export default function AiRulesScreen() {
                 <View style={styles.ruleHead}>
                   <Text style={styles.rulePattern}>{rule.pattern_key}</Text>
                   <Text style={styles.ruleDate}>
-                    {new Date(rule.updated_at).toLocaleDateString()}
+                    {formatDateLabel(rule.updated_at.slice(0, 10))}
                   </Text>
                 </View>
                 <Text style={styles.ruleMeta}>

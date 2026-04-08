@@ -1,10 +1,12 @@
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from './tokens';
 
 type Props = {
   value: string;
   onChange: (next: string) => void;
+  onClose?: () => void;
 };
 
 // Append with sane rules: max 2 decimals, single dot, max 9 integer digits,
@@ -52,7 +54,7 @@ function Key({ label, onPress }: { label: string; onPress: () => void }) {
   );
 }
 
-export const NumericKeypad = memo(function NumericKeypad({ value, onChange }: Props) {
+export const NumericKeypad = memo(function NumericKeypad({ value, onChange, onClose }: Props) {
   const handle = (label: string): void => {
     if (label === '⌫') onChange(backspace(value));
     else onChange(append(value, label));
@@ -60,6 +62,18 @@ export const NumericKeypad = memo(function NumericKeypad({ value, onChange }: Pr
 
   return (
     <View style={styles.wrap}>
+      {onClose ? (
+        <Pressable
+          onPress={onClose}
+          hitSlop={6}
+          style={({ pressed }) => [styles.closeButton, pressed && styles.keyPressed]}
+          accessibilityRole="button"
+          accessibilityLabel="Hide keypad"
+        >
+          <MaterialCommunityIcons name="keyboard-close-outline" size={16} color={colors.text} />
+          <Text style={styles.closeButtonText}>Hide</Text>
+        </Pressable>
+      ) : null}
       {KEYS.map((row, ri) => (
         <View key={ri} style={styles.row}>
           {row.map((label) => (
@@ -80,7 +94,24 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
+    overflow: 'visible',
   },
+  closeButton: {
+    position: 'absolute',
+    top: -18,
+    right: spacing.md,
+    zIndex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(245,185,66,0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(245,185,66,0.32)',
+  },
+  closeButtonText: { ...typography.label, color: colors.text },
   row: { flexDirection: 'row', gap: spacing.sm },
   key: {
     flex: 1,
