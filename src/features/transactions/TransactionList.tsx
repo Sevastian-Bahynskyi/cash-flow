@@ -120,7 +120,7 @@ export const TransactionList = memo(function TransactionList({
 });
 
 const styles = StyleSheet.create({
-  wrap: { gap: spacing.sm },
+  wrap: { gap: spacing.sm, paddingHorizontal: spacing.lg },
   title: { ...typography.label, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
   list: { gap: spacing.sm },
   empty: {

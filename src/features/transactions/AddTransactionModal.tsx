@@ -9,7 +9,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import * as Haptics from 'expo-haptics';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -151,6 +151,7 @@ const buildBudgetIndicators = async (
 };
 
 export default function AddTransactionModal({ visible, onClose, onSaved, draft }: Props) {
+  const insets = useSafeAreaInsets();
   const [kind, setKind] = useState<TransactionKind>('expense');
   const [amount, setAmount] = useState('');
   const [currencyCode, setCurrencyCode] = useState('DKK');
@@ -450,8 +451,8 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={handleClose}>
-      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-        <View style={styles.header}>
+      <SafeAreaView style={styles.container} edges={['bottom']}>
+        <View style={[styles.header, { paddingTop: Math.max(insets.top, spacing.md) }]}>
           <Pressable onPress={handleClose} hitSlop={12}>
             <Text style={styles.headerAction}>Cancel</Text>
           </Pressable>
@@ -811,7 +812,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingBottom: spacing.md,
   },
   headerTitle: { ...typography.body, color: colors.text, fontWeight: '700' },
   headerAction: { ...typography.body, color: colors.textMuted },

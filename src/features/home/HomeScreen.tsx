@@ -252,7 +252,7 @@ export default function HomeScreen() {
         </View>
       ) : null}
 
-      <View style={styles.section}>
+      <View style={[styles.section, styles.sectionFlush]}>
         <TransactionList
           title="Recent personal activity"
           items={recentItems}
@@ -308,6 +308,7 @@ const styles = StyleSheet.create({
   quickTitle: { ...typography.body, color: colors.text, fontWeight: '600' },
   quickMeta: { ...typography.label, color: colors.textMuted },
   section: { paddingHorizontal: spacing.lg, gap: spacing.sm },
+  sectionFlush: { paddingHorizontal: 0 },
   sectionTitle: { ...typography.label, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
   sectionBody: { gap: spacing.sm },
   alertCard: {

@@ -128,93 +128,64 @@ export function CategorySheet({
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} />
-      <SafeAreaView style={styles.sheetWrap} edges={['bottom']}>
-        <View style={styles.handle} />
-        <View style={styles.header}>
-          <Text style={styles.title}>Pick a category</Text>
-          <Pressable onPress={onClose} hitSlop={12}>
-            <Text style={styles.close}>Close</Text>
-          </Pressable>
-        </View>
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Search categories"
-          placeholderTextColor={colors.textMuted}
-          autoCorrect={false}
-          autoCapitalize="none"
-          style={styles.search}
-        />
-        {state.status === 'loading' && (
-          <View style={styles.center}>
-            <ActivityIndicator color={colors.accent} />
+      <View style={styles.modalRoot}>
+        <Pressable style={styles.backdrop} onPress={onClose} />
+        <SafeAreaView style={styles.sheetWrap} edges={['bottom']}>
+          <View style={styles.handle} />
+          <View style={styles.header}>
+            <Text style={styles.title}>Pick a category</Text>
+            <Pressable onPress={onClose} hitSlop={12}>
+              <Text style={styles.close}>Close</Text>
+            </Pressable>
           </View>
-        )}
-        {state.status === 'error' && (
-          <View style={styles.center}>
-            <Text style={styles.error}>{state.message}</Text>
-          </View>
-        )}
-        {state.status === 'ready' ? (
-          <ScrollView style={styles.scroll} keyboardShouldPersistTaps="handled">
-            {query.trim().length > 0 ? (
-              filtered.length === 0 ? (
-                <View style={styles.center}>
-                  <Text style={styles.muted}>No matches</Text>
-                </View>
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search categories"
+            placeholderTextColor={colors.textMuted}
+            autoCorrect={false}
+            autoCapitalize="none"
+            style={styles.search}
+          />
+          {state.status === 'loading' && (
+            <View style={styles.center}>
+              <ActivityIndicator color={colors.accent} />
+            </View>
+          )}
+          {state.status === 'error' && (
+            <View style={styles.center}>
+              <Text style={styles.error}>{state.message}</Text>
+            </View>
+          )}
+          {state.status === 'ready' ? (
+            <ScrollView
+              style={styles.scroll}
+              contentContainerStyle={styles.scrollContent}
+              keyboardShouldPersistTaps="handled"
+            >
+              {query.trim().length > 0 ? (
+                filtered.length === 0 ? (
+                  <View style={styles.center}>
+                    <Text style={styles.muted}>No matches</Text>
+                  </View>
+                ) : (
+                  filtered.map((item) => (
+                    <CategoryRow
+                      key={item.id}
+                      item={item}
+                      onSelect={onSelect}
+                      onClose={onClose}
+                      selectedId={selectedId}
+                      budget={budgetStateByCategory?.[item.id]}
+                    />
+                  ))
+                )
               ) : (
-                filtered.map((item) => (
-                  <CategoryRow
-                    key={item.id}
-                    item={item}
-                    onSelect={onSelect}
-                    onClose={onClose}
-                    selectedId={selectedId}
-                    budget={budgetStateByCategory?.[item.id]}
-                  />
-                ))
-              )
-            ) : (
-              <>
-                {featured.frequent.length > 0 ? (
-                  <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Frequent</Text>
-                    {featured.frequent.map((item) => (
-                      <CategoryRow
-                        key={item.id}
-                        item={item}
-                        onSelect={onSelect}
-                        onClose={onClose}
-                        selectedId={selectedId}
-                        budget={budgetStateByCategory?.[item.id]}
-                      />
-                    ))}
-                  </View>
-                ) : null}
-
-                {featured.recent.length > 0 ? (
-                  <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Recent</Text>
-                    {featured.recent.map((item) => (
-                      <CategoryRow
-                        key={item.id}
-                        item={item}
-                        onSelect={onSelect}
-                        onClose={onClose}
-                        selectedId={selectedId}
-                        budget={budgetStateByCategory?.[item.id]}
-                      />
-                    ))}
-                  </View>
-                ) : null}
-
-                <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>All categories</Text>
-                  {grouped.map((group) => (
-                    <View key={group.parentId} style={styles.group}>
-                      <Text style={styles.groupTitle}>{group.parentName}</Text>
-                      {group.items.map((item) => (
+                <>
+                  {featured.frequent.length > 0 ? (
+                    <View style={styles.section}>
+                      <Text style={styles.sectionTitle}>Frequent</Text>
+                      {featured.frequent.map((item) => (
                         <CategoryRow
                           key={item.id}
                           item={item}
@@ -225,25 +196,66 @@ export function CategorySheet({
                         />
                       ))}
                     </View>
-                  ))}
-                </View>
-              </>
-            )}
-          </ScrollView>
-        ) : null}
-      </SafeAreaView>
+                  ) : null}
+
+                  {featured.recent.length > 0 ? (
+                    <View style={styles.section}>
+                      <Text style={styles.sectionTitle}>Recent</Text>
+                      {featured.recent.map((item) => (
+                        <CategoryRow
+                          key={item.id}
+                          item={item}
+                          onSelect={onSelect}
+                          onClose={onClose}
+                          selectedId={selectedId}
+                          budget={budgetStateByCategory?.[item.id]}
+                        />
+                      ))}
+                    </View>
+                  ) : null}
+
+                  <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>All categories</Text>
+                    {grouped.map((group) => (
+                      <View key={group.parentId} style={styles.group}>
+                        <Text style={styles.groupTitle}>{group.parentName}</Text>
+                        {group.items.map((item) => (
+                          <CategoryRow
+                            key={item.id}
+                            item={item}
+                            onSelect={onSelect}
+                            onClose={onClose}
+                            selectedId={selectedId}
+                            budget={budgetStateByCategory?.[item.id]}
+                          />
+                        ))}
+                      </View>
+                    ))}
+                  </View>
+                </>
+              )}
+            </ScrollView>
+          ) : null}
+        </SafeAreaView>
+      </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.38)' },
+  modalRoot: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.38)',
+  },
   sheetWrap: {
-    maxHeight: '82%',
+    height: '88%',
     backgroundColor: colors.bg,
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
-    marginTop: 'auto',
   },
   handle: {
     alignSelf: 'center',
@@ -272,7 +284,8 @@ const styles = StyleSheet.create({
     color: colors.text,
     ...typography.body,
   },
-  scroll: { flex: 1, paddingBottom: spacing.lg },
+  scroll: { flex: 1 },
+  scrollContent: { paddingBottom: spacing.xl },
   section: { paddingHorizontal: spacing.lg, paddingBottom: spacing.md, gap: spacing.sm },
   sectionTitle: {
     ...typography.label,

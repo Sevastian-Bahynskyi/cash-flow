@@ -33,7 +33,12 @@ export function FilterChips<T extends string>({
 }
 
 const styles = StyleSheet.create({
-  wrap: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
+  wrap: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    flexWrap: 'wrap',
+    paddingHorizontal: spacing.lg,
+  },
   chip: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,

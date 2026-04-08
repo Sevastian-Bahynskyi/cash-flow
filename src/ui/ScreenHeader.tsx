@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing, typography } from './tokens';
 
 type Action = {
@@ -20,9 +21,10 @@ export function ScreenHeader({
   actions?: readonly Action[];
 }) {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, { paddingTop: Math.max(insets.top, spacing.md) }]}>
       <View style={styles.leading}>
         {back ? (
           <Pressable onPress={() => router.back()} hitSlop={12} style={styles.back}>
@@ -48,17 +50,16 @@ export function ScreenHeader({
 const styles = StyleSheet.create({
   wrap: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
     paddingBottom: spacing.md,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: spacing.md,
   },
-  leading: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, flex: 1 },
-  back: { padding: 2 },
+  leading: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md, flex: 1 },
+  back: { padding: 2, marginTop: 1 },
   title: { ...typography.h2, color: colors.text },
   subtitle: { ...typography.label, color: colors.textMuted, marginTop: 2 },
-  actions: { flexDirection: 'row', gap: spacing.sm },
-  iconButton: { padding: 2 },
+  actions: { flexDirection: 'row', gap: spacing.sm, paddingTop: 2 },
+  iconButton: { padding: 4 },
 });

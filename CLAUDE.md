@@ -48,7 +48,7 @@
 - Use one edge function for Groq-backed category suggestions.
 - Avoid introducing RPCs, background jobs, or complex triggers unless the product truly needs them.
 - Use official Supabase docs patterns; do not invent client APIs.
-- Use the project-local `.mcp.json` server for this repo, scoped with `CASHFLOW_SUPABASE_PROJECT_REF` and `CASHFLOW_SUPABASE_ACCESS_TOKEN`.
+- Use a local, gitignored `.mcp.json` copied from `.mcp.example.json`, scoped with `CASHFLOW_SUPABASE_PROJECT_REF` and `CASHFLOW_SUPABASE_ACCESS_TOKEN`.
 
 ## When Unsure
 - Choose the simpler implementation.
