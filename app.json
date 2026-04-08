@@ -1,14 +1,16 @@
 {
   "expo": {
-    "name": "cash-flow",
+    "name": "Cash Flow",
     "slug": "cash-flow",
     "scheme": "cashflow",
+    "icon": "./assets/icon.png",
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": false,
+      "icon": "./assets/icon.png",
       "bundleIdentifier": "com.seva.cashflow"
     },
     "android": {
@@ -17,7 +19,9 @@
     "plugins": [
       "expo-router",
       "expo-web-browser",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-localization",
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true
