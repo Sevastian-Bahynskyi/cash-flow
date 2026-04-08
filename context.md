@@ -1,74 +1,289 @@
 # Context
 
-## System Philosophy
+## Product Definition
+
 This app is a behavioral awareness tool, not an accounting system.
-Its job is to reduce logging friction, enforce useful categorization, and surface spending patterns without noise.
-Every decision must preserve: speed over completeness, clarity over flexibility, predictability over automation.
+
+Its purpose is to:
+- minimize friction when logging transactions
+- enforce strong categorization
+- expose spending patterns without overwhelming the user
+
+Primary priorities:
+- speed over completeness
+- clarity over flexibility
+- predictability over automation
+
+The system must optimize for fast input and a consistent mental model, not feature richness.
+
+## Core Source of Truth
+
+Transactions are the only source of truth.
+
+The following must always be derived from transactions:
+- balances
+- salary cycles
+- shared ratios
+- analytics
+- dashboards
+
+Do not introduce duplicated balances, manual counters, or hidden state that can drift from transaction data.
 
 ## Transactions
-Intent: make logging fast enough that users do not avoid it.
-Required fields: name, amount, date, category.
-Optional fields: comment, auto country, recurring flag, shared toggle.
-Rules: amount is always positive integer minor units; category is mandatory for `expense`; income is its own transaction kind; location stores ISO country code only and never changes currency; default order in the modal is amount, category, name, then everything else.
-Constraint: saving a transaction must be possible in under 15 seconds with no secondary screens unless category search is opened.
+
+### Intent
+- Transactions must be loggable in under 15 seconds so users never avoid using the app.
+
+### Required fields
+- `name`
+- `amount`
+- `date`
+- `category_id`
+
+### Optional fields
+- `comment`
+- `country` as ISO code, auto-detected when possible
+- `is_recurring`
+- `is_shared`
+- `shared_participant` as `me | gf`
+
+### Rules
+- `amount` is always positive.
+- Income is a separate transaction type. Never represent income as a negative expense.
+- Category is required before save.
+- Editing a transaction overwrites the current row. No edit history in v1.
+- A transaction must be savable from one screen.
+
+### UX constraints
+- Happy path order is: amount -> category -> name -> save.
+- Category selection may open a bottom sheet.
+- No required secondary screens or confirmation steps.
 
 ## Categories
-Intent: categories are the main behavioral lens.
-Structure: exactly two levels, parent category plus subcategory.
-Rules: no subcategory without a parent; no nesting beyond two levels; system categories are immutable; custom categories may be added but never deeper than level two.
-Ordering: show the user’s most-used categories from the last 90 days first, tie-break alphabetically.
-Search: instant client-side search against the full prefetched category list.
-Constraint: category selection must never depend on network round-trips.
+
+### Intent
+- Categories are the main behavioral lens for the entire app.
+
+### Structure
+- Exactly two levels: category -> subcategory.
+
+### Rules
+- A subcategory cannot exist without a parent category.
+- No nesting deeper than two levels.
+- Categories are global across the app.
+- Default categories exist and cannot be deleted.
+- Users can create categories and subcategories.
+- Users can edit category color and icon.
+- Subcategories inherit color from the parent and cannot override it.
+
+### UX rules
+- Categories are sorted by usage frequency.
+- Search is always available.
+- The picker is shown in a bottom sheet with visible parent/child structure.
+
+## Currency
+
+### Intent
+- Let users log in any currency while keeping analytics consistent.
+
+### Rules
+- Users may input any supported currency.
+- The system converts the value to DKK using the rate for that day.
+- The converted DKK value is stored at creation time and never recalculated later.
+- Historical transactions remain fixed even if exchange rates change.
 
 ## Balances
-Intent: provide orientation, not ledger-grade accounting.
-Two balances exist: personal balance and shared balance.
-Personal balance = incomes - personal expenses - shared top-ups - savings adds + savings removes + loan borrowed - loan repaid.
-Shared balance = user shared top-ups - user effective share of shared expenses for the active salary cycle.
-Constraint: both balances are always derived from stored rows and deterministic formulas; there are no manual balance edits and no hidden mutations.
+
+### Intent
+- Balances provide orientation, not strict accounting.
+
+### Balance types
+- `personal_balance`
+- `shared_balance`
+
+### Rules
+- Balances are fully derived from transactions.
+- No manual balance edits are allowed.
+
+### Personal balance includes
+- income
+- expenses
+- savings movements
+- loan events
+- shared contributions
+
+### Shared balance includes
+- shared top-ups
+- shared expenses as proportional deductions
 
 ## Shared Account
-Intent: reduce fairness anxiety without requiring partner bookkeeping.
-User logs only their own shared top-ups and shared expenses.
-Partner contribution is inferred per active salary cycle as `max(shared_expense_total - user_shared_topup_total, 0)`.
-User share ratio for the cycle = `user_shared_topup_total / (user_shared_topup_total + partner_inferred_total)`; if both totals are zero, use `0.5`.
-User effective share of each shared expense is calculated from the current cycle ratio.
-Rules: ratio recalculates after every shared top-up; ratio never asks for manual input; only the user’s effective share appears in personal summaries.
-Output: a dedicated Shared Expenses screen shows raw shared spend, inferred ratio, and the user’s effective share.
+
+### Intent
+- Shared logic should feel fair without requiring partner bookkeeping.
+
+### Transaction UX
+- Transactions have a `shared account` toggle.
+- When enabled, show participant chips: `Me` and `GF`.
+
+### Contributions
+- Shared contributions are tracked through shared account top-up transactions.
+
+### Ratio calculation
+- Recalculate after every top-up.
+- Use only the current salary cycle.
+- Never allow manual ratio input.
+
+### Spending rules
+- Shared expenses reduce `shared_balance`.
+- The user pays a proportional share based on the current ratio.
+- GF spending is not entered directly.
+- GF share is inferred from total shared expenses and the user contribution pattern.
+
+### Output screen
+- Dedicated screen: `Shared Expenses`
+
+This screen shows:
+- total contributed
+- total spent
+- user share
+- GF inferred share
+- transaction history
+
+### Separation rule
+- Shared data must not pollute the personal dashboard.
 
 ## Salary Cycles
-Intent: match real budgeting behavior instead of calendar months.
-A new cycle starts on each `income` transaction marked as salary.
-If the salary date day-of-month is `25` or later, label the cycle as the next month; otherwise label the current month.
-All analytics, budgets, alerts, and shared calculations must group by salary cycle id, never by calendar month.
-Constraint: there is no automatic fallback to month-based grouping.
 
-## Budgets and Alerts
-Intent: nudge awareness, not restrict spending.
-Budgets apply per category per salary cycle.
-Thresholds: 80% = warning, 100% = critical.
-Rules: alerts are passive banners or badges only; spending is never blocked; each threshold is emitted once per category per cycle unless the budget changes.
+### Intent
+- The app must reflect real salary-based budgeting behavior, not calendar-month accounting.
+
+### Rules
+- A cycle starts when a salary transaction is created.
+- A salary created on days `26` to `31` counts toward the next month.
+- If no new salary is logged, the previous cycle continues.
+- All analytics use salary cycles.
+- Never fallback to calendar months.
+
+## Budgets And Alerts
+
+### Intent
+- Budgets should raise awareness, not restrict behavior.
+
+### Rules
+- Budgets exist per category and subcategory.
+- No rollover behavior in v1.
+
+### Thresholds
+- `80%` -> warning with yellow state
+- `100%+` -> critical with red state
+
+### Notifications
+- Show alerts in-app.
+- Send weekly summary push only.
+- Never block transaction creation.
 
 ## Savings
-Intent: make saving feel deliberate.
-Use explicit `add`, `remove`, and `set` actions with history.
-Current savings balance is derived from savings events.
-Constraint: savings changes must never be mixed into normal expense categories.
+
+### Intent
+- Savings must feel explicit and intentional.
+
+### Behavior
+- Multiple savings entries are allowed.
+- Each savings entry supports:
+  - add
+  - subtract
+  - set
+
+### UX
+- Savings are shown as progress bars.
+- Long press opens edit actions.
+
+### Rule
+- Savings reduce personal balance.
 
 ## Loans
-Intent: track obligations simply.
-Store principal and remaining amount only.
-Allow `loan_borrowed` and `loan_repaid` events; no interest, schedules, or amortization.
-A loan is closed when remaining amount reaches zero.
+
+### Intent
+- Loans should be tracked simply, without financial modeling.
+
+### Behavior
+- Multiple loans are allowed.
+- Store remaining amount only.
+- Do not model interest.
+
+### Repayment
+- Repayments are handled through transactions and category-based logic.
+
+## Bank Screen
+
+### Intent
+- The Bank screen is the central place for financial state outside day-to-day transaction logging.
+
+### Contains
+- savings
+- loans
+
+### UX
+- Items are displayed as progress bars.
+- Long press opens edit options.
+- New savings and loan items are created only from this screen.
 
 ## AI Categorization
-Intent: reduce repeated manual categorization.
-Flow: local history match first, Groq fallback second, both non-blocking.
-Input: transaction name, optional comment, and the user’s correction history.
-Rules: AI may preselect a category suggestion, but the user can always override it; the user override becomes the new training example; save must not wait on Groq.
-Technical note: call Groq only through a Supabase Edge Function to keep secrets off-device.
+
+### Intent
+- AI should reduce repetitive categorization work without becoming intrusive.
+
+### Trigger
+- Run when transaction input loses focus.
+
+### Inputs
+- `name`
+- `comment`
+- past transactions
+
+### Rules
+- AI must not block saving.
+- If the user overrides a suggestion, stop auto-categorizing that pattern.
+- Learning is simple pattern mapping, not a complex adaptive system.
 
 ## UX System
-Intent: speed and clarity dominate the entire product.
-Rules: global `+` is always reachable; add transaction uses a full-screen modal; first screen shows only the minimum fields; category picker uses a searchable bottom sheet; amount uses numeric keyboard; subtle animation only, never on the critical path.
-Constraint: the happy path for a new expense is amount -> category -> name -> save.
+
+### Intent
+- The app should feel speed-first at all times.
+
+### Global rules
+- Global `+` button is always accessible.
+- Transaction input uses a full-screen modal.
+- Initial transaction form stays minimal.
+- Category picker uses a bottom sheet with drag gesture.
+- Search sits at the top of the category picker.
+- Use a custom numeric keyboard with light gray styling and a thin neon outline.
+
+### Animation rules
+- Animations should be smooth but subtle.
+- Animations must never delay input or saving.
+
+## Dashboards
+
+### Personal dashboard
+- personal spending
+- income
+- category breakdown
+
+### Shared dashboard
+- same structure as personal dashboard
+- based only on shared data
+
+### Rule
+- Personal and shared data must remain clearly separated.
+
+## Technical Constraints
+- No offline support. Internet is required.
+- Small scale only, up to five users.
+- Prioritize simplicity over scalability.
+
+## Implementation Guardrails
+- Prefer direct, explicit logic over abstractions.
+- Avoid hidden automation that changes the user’s mental model.
+- Preserve one-screen transaction entry as the default behavior.
+- If a feature increases friction or ambiguity, reject it unless it clearly improves the core behavioral goals.
