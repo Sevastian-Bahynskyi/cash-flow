@@ -9,6 +9,8 @@ const iconForRoute = (name: string, focused: boolean): keyof typeof MaterialComm
   switch (name) {
     case 'index':
       return focused ? 'home-variant' : 'home-variant-outline';
+    case 'dashboard':
+      return focused ? 'chart-donut' : 'chart-donut-variant';
     case 'shared':
       return focused ? 'account-group' : 'account-group-outline';
     case 'bank':
@@ -60,6 +62,7 @@ export default function TabsLayout() {
         })}
       >
         <Tabs.Screen name="index" options={{ title: 'Home' }} />
+        <Tabs.Screen name="dashboard" options={{ title: 'Dashboard' }} />
         <Tabs.Screen name="shared" options={{ title: 'Shared' }} />
         <Tabs.Screen name="bank" options={{ title: 'Bank' }} />
       </Tabs>
