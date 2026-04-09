@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
+  Keyboard,
   Modal,
   Pressable,
   RefreshControl,
@@ -226,6 +227,7 @@ export default function BudgetScreen() {
                   key={category.id}
                   style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
                   onPress={() => {
+                    Keyboard.dismiss();
                     setKeypadOpen(true);
                     setDraft({
                       categoryId: category.id,
@@ -341,7 +343,10 @@ export default function BudgetScreen() {
               <View style={styles.keyboardDock}>
                 <Pressable
                   style={({ pressed }) => [styles.keyboardDockButton, pressed && styles.buttonPressed]}
-                  onPress={() => setKeypadOpen(true)}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    setKeypadOpen(true);
+                  }}
                 >
                   <MaterialCommunityIcons name="keyboard-outline" size={18} color={colors.text} />
                   <Text style={styles.keyboardDockText}>Open keypad</Text>

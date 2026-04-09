@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Keyboard,
   Modal,
   Platform,
   Pressable,
@@ -359,6 +360,16 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
       });
     }
   }, [categoryOptions.length, editing, pendingImport, visible]);
+
+  useEffect(() => {
+    const subscription = Keyboard.addListener('keyboardDidShow', () => {
+      setKeypadOpen(false);
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
   useEffect(() => {
     if (!visible) return;
@@ -964,9 +975,10 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
             <View style={styles.importStack}>
               <Pressable
                 style={({ pressed }) => [styles.importCard, (pressed || imageImportBusy) && styles.rowPressed]}
-                onPress={() => {
-                  void startImageImport();
-                }}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    void startImageImport();
+                  }}
                 disabled={imageImportBusy}
               >
                 <View style={styles.importCopy}>
@@ -982,9 +994,10 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
 
               <Pressable
                 style={({ pressed }) => [styles.importCard, (pressed || csvImportBusy) && styles.rowPressed]}
-                onPress={() => {
-                  void pickCsvImport();
-                }}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    void pickCsvImport();
+                  }}
                 disabled={csvImportBusy}
               >
                 <View style={styles.importCopy}>
@@ -1056,6 +1069,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
           <TextInput
             value={name}
             onChangeText={setName}
+            onFocus={() => setKeypadOpen(false)}
             onEndEditing={() => {
               void runCategorySuggestion({ preferRemote: true, forceApply: true });
             }}
@@ -1114,6 +1128,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
           <TextInput
             value={comment}
             onChangeText={setComment}
+            onFocus={() => setKeypadOpen(false)}
             onEndEditing={() => {
               void runCategorySuggestion({ preferRemote: true, forceApply: true });
             }}
@@ -1196,7 +1211,10 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
           <View style={styles.keyboardDock}>
             <Pressable
               style={({ pressed }) => [styles.keyboardDockButton, pressed && styles.rowPressed]}
-              onPress={() => setKeypadOpen(true)}
+              onPress={() => {
+                Keyboard.dismiss();
+                setKeypadOpen(true);
+              }}
             >
               <MaterialCommunityIcons name="keyboard-outline" size={18} color={colors.text} />
               <Text style={styles.keyboardDockText}>Open keypad</Text>

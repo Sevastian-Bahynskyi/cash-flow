@@ -177,6 +177,7 @@ This screen shows:
 ### Rules
 - A cycle starts when a salary transaction is created.
 - A salary created on days `26` to `31` counts toward the next month.
+- Monthly views use the cycle label month, not the raw transaction date. Example: a salary on `March 29` belongs to the `April` cycle and must count in April analytics.
 - If no new salary is logged, the previous cycle continues.
 - All analytics use salary cycles.
 - Never fallback to calendar months.

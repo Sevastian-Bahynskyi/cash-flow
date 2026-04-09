@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Keyboard,
   Modal,
   Platform,
   Pressable,
@@ -113,6 +114,16 @@ export function ImageImportPreviewModal({
       setDatePickerRowId(null);
     }
   }, [amountPickerRowId, categoryPickerRowId, datePickerRowId, rows]);
+
+  useEffect(() => {
+    const subscription = Keyboard.addListener('keyboardDidShow', () => {
+      setAmountPickerRowId(null);
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
   useEffect(() => {
     if (!visible) {
@@ -243,6 +254,7 @@ export function ImageImportPreviewModal({
                 <TextInput
                   value={row.name}
                   onChangeText={(value) => onChangeRow(row.id, { name: value })}
+                  onFocus={() => setAmountPickerRowId(null)}
                   placeholder="Transaction name"
                   placeholderTextColor={colors.textMuted}
                   style={styles.input}
@@ -254,6 +266,7 @@ export function ImageImportPreviewModal({
                     <Pressable
                       style={({ pressed }) => [styles.categoryButton, pressed && styles.rowPressed]}
                       onPress={() => {
+                        Keyboard.dismiss();
                         setCategoryPickerRowId(null);
                         setDatePickerRowId(null);
                         setAmountPickerRowId((current) => (current === row.id ? null : row.id));
@@ -270,7 +283,6 @@ export function ImageImportPreviewModal({
                     <NumericKeypad
                       value={row.amount}
                       onChange={(value) => onChangeRow(row.id, { amount: value })}
-                      onClose={() => setAmountPickerRowId(null)}
                     />
                   </View>
                 ) : null}
@@ -335,6 +347,7 @@ export function ImageImportPreviewModal({
                 <TextInput
                   value={row.comment}
                   onChangeText={(value) => onChangeRow(row.id, { comment: value })}
+                  onFocus={() => setAmountPickerRowId(null)}
                   placeholder="Optional"
                   placeholderTextColor={colors.textMuted}
                   style={[styles.input, styles.noteInput]}

@@ -63,16 +63,18 @@ export const NumericKeypad = memo(function NumericKeypad({ value, onChange, onCl
   return (
     <View style={styles.wrap}>
       {onClose ? (
-        <Pressable
-          onPress={onClose}
-          hitSlop={6}
-          style={({ pressed }) => [styles.closeButton, pressed && styles.keyPressed]}
-          accessibilityRole="button"
-          accessibilityLabel="Hide keypad"
-        >
-          <MaterialCommunityIcons name="keyboard-close-outline" size={16} color={colors.text} />
-          <Text style={styles.closeButtonText}>Hide</Text>
-        </Pressable>
+        <View style={styles.closeRow}>
+          <Pressable
+            onPress={onClose}
+            hitSlop={6}
+            style={({ pressed }) => [styles.closeButton, pressed && styles.keyPressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Hide keypad"
+          >
+            <MaterialCommunityIcons name="keyboard-close-outline" size={16} color={colors.text} />
+            <Text style={styles.closeButtonText}>Hide</Text>
+          </Pressable>
+        </View>
       ) : null}
       {KEYS.map((row, ri) => (
         <View key={ri} style={styles.row}>
@@ -96,11 +98,11 @@ const styles = StyleSheet.create({
     borderTopRightRadius: radius.lg,
     overflow: 'visible',
   },
+  closeRow: {
+    alignItems: 'flex-end',
+    paddingBottom: spacing.xs,
+  },
   closeButton: {
-    position: 'absolute',
-    top: -18,
-    right: spacing.md,
-    zIndex: 2,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,

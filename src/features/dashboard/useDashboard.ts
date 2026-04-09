@@ -3,6 +3,7 @@ import type { barDataItem, lineDataItem, pieDataItem } from 'react-native-gifted
 import { buildCategoryMeta } from '@/features/categories/helpers';
 import { useOverview } from '@/features/overview/useOverview';
 import type { TransactionRow } from '@/features/transactions/types';
+import type { SalaryCycle } from '@/lib/cycles';
 import { colors } from '@/ui/tokens';
 
 export type DashboardRange = 'weekly' | 'monthly' | 'yearly';
@@ -89,7 +90,47 @@ const formatWeekday = new Intl.DateTimeFormat(undefined, { weekday: 'short' });
 const formatMonthShort = new Intl.DateTimeFormat(undefined, { month: 'short' });
 const formatRangeDate = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' });
 
-const buildBucketDefinitions = (range: DashboardRange, now: Date): {
+const buildMonthlyCycleBuckets = (
+  cycle: SalaryCycle,
+  today: Date,
+): {
+  startOn: string;
+  endOn: string;
+  rangeLabel: string;
+  rangeDescription: string;
+  bucketUnitLabel: string;
+  buckets: BucketDefinition[];
+} => {
+  const start = parseIsoDate(cycle.startOn);
+  const cycleEnd = cycle.endOnExclusive ? addDays(parseIsoDate(cycle.endOnExclusive), -1) : today;
+  const effectiveEnd = cycleEnd > today ? today : cycleEnd;
+  const dayCount = Math.max(
+    1,
+    Math.floor((effectiveEnd.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)) + 1,
+  );
+  const buckets = Array.from({ length: dayCount }, (_, index) => {
+    const date = addDays(start, index);
+    const dayOfMonth = date.getDate();
+    const shouldLabel = index === 0 || index === dayCount - 1 || dayOfMonth === 1 || dayOfMonth % 5 === 0;
+
+    return {
+      key: toIsoDate(date),
+      label: `${dayOfMonth} ${formatMonthShort.format(date)}`,
+      axisLabel: shouldLabel ? String(dayOfMonth) : '',
+    };
+  });
+
+  return {
+    startOn: cycle.startOn,
+    endOn: toIsoDate(effectiveEnd),
+    rangeLabel: `${cycle.label} cycle`,
+    rangeDescription: `${formatRangeDate.format(start)} - ${formatRangeDate.format(effectiveEnd)}`,
+    bucketUnitLabel: 'Daily',
+    buckets,
+  };
+};
+
+const buildBucketDefinitions = (range: DashboardRange, now: Date, activeCycle: SalaryCycle | null): {
   startOn: string;
   endOn: string;
   rangeLabel: string;
@@ -121,27 +162,23 @@ const buildBucketDefinitions = (range: DashboardRange, now: Date): {
   }
 
   if (range === 'monthly') {
-    const start = new Date(today.getFullYear(), today.getMonth(), 1);
-    const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    const daysInMonth = end.getDate();
-    const buckets = Array.from({ length: daysInMonth }, (_, index) => {
-      const date = new Date(today.getFullYear(), today.getMonth(), index + 1);
-      const dayOfMonth = date.getDate();
-      const shouldLabel = dayOfMonth === 1 || dayOfMonth === daysInMonth || dayOfMonth % 5 === 0;
-      return {
-        key: toIsoDate(date),
-        label: `${dayOfMonth} ${formatMonthShort.format(date)}`,
-        axisLabel: shouldLabel ? String(dayOfMonth) : '',
-      };
-    });
+    if (activeCycle) {
+      return buildMonthlyCycleBuckets(activeCycle, today);
+    }
 
     return {
-      startOn: toIsoDate(start),
-      endOn: toIsoDate(end),
-      rangeLabel: 'This month',
-      rangeDescription: formatMonthShort.format(start),
+      startOn: '9999-12-31',
+      endOn: '9999-12-31',
+      rangeLabel: 'Current cycle',
+      rangeDescription: 'Add a salary transaction to start monthly analytics',
       bucketUnitLabel: 'Daily',
-      buckets,
+      buckets: [
+        {
+          key: toIsoDate(today),
+          label: `${today.getDate()} ${formatMonthShort.format(today)}`,
+          axisLabel: String(today.getDate()),
+        },
+      ],
     };
   }
 
@@ -197,7 +234,7 @@ export const useDashboard = (range: DashboardRange): ReturnType<typeof useOvervi
   const overview = useOverview();
 
   const presentation = useMemo<DashboardPresentation>(() => {
-    const descriptor = buildBucketDefinitions(range, new Date());
+    const descriptor = buildBucketDefinitions(range, new Date(), overview.activeCycle);
     const categoryMeta = buildCategoryMeta(overview.categories);
     const bucketMap = new Map<string, DashboardBucket>(
       descriptor.buckets.map((bucket) => [bucket.key, createEmptyBucket(bucket)]),
@@ -332,7 +369,7 @@ export const useDashboard = (range: DashboardRange): ReturnType<typeof useOvervi
       hasTransactionsInRange: incomeMinor > 0 || outflowMinor > 0,
       compactAxisValue,
     };
-  }, [overview.categories, overview.transactions, range]);
+  }, [overview.activeCycle, overview.categories, overview.transactions, range]);
 
   return {
     ...overview,
