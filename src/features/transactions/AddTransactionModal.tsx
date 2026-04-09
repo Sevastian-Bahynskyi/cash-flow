@@ -208,6 +208,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
   const [name, setName] = useState('');
   const [comment, setComment] = useState('');
   const [date, setDate] = useState(todayIso());
+  const [lastCreatedDate, setLastCreatedDate] = useState(todayIso());
   const [countryIso, setCountryIso] = useState('DK');
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [countryPickerOpen, setCountryPickerOpen] = useState(false);
@@ -251,6 +252,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
   const handledPendingImportId = useRef<string | null>(null);
 
   const reset = (nextDraft?: TransactionDraft | null): void => {
+    const nextDate = nextDraft?.occurred_on ?? lastCreatedDate;
     const deviceCountry = (nextDraft?.country_iso ?? getDeviceCountryIso() ?? 'DK').toUpperCase();
     const deviceCurrency = nextDraft?.currency_code ?? getDeviceCurrencyCode();
     const nextCategory =
@@ -263,7 +265,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
     setCategory(nextCategory);
     setName(nextDraft?.name ?? '');
     setComment(nextDraft?.comment ?? '');
-    setDate(nextDraft?.occurred_on ?? todayIso());
+    setDate(nextDate);
     setCountryIso(deviceCountry);
     setDatePickerOpen(false);
     setCountryPickerOpen(false);
@@ -829,6 +831,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
         return;
       }
 
+      setLastCreatedDate(date);
       setSaveState({ editing: false, title: 'Saved', lastDraft: nextDraft });
     } catch (error) {
       setValidationMessage(error instanceof Error ? error.message : 'Could not save the transaction.');
