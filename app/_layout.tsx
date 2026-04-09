@@ -7,7 +7,6 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { colors } from '@/ui/tokens';
 import { AuthProvider, useAuth } from '@/features/auth/AuthProvider';
 import { ComposerProvider } from '@/features/transactions/ComposerContext';
-import { configureNotifications } from '@/lib/notifications';
 
 function AuthGate() {
   const { session, loading } = useAuth();
@@ -61,10 +60,6 @@ function AuthGate() {
 }
 
 export default function RootLayout() {
-  useEffect(() => {
-    configureNotifications();
-  }, []);
-
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }}>
       <SafeAreaProvider>
