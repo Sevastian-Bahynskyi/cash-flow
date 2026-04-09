@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -44,6 +44,7 @@ export default function DashboardScreen() {
   const [range, setRange] = useState<DashboardRange>('monthly');
   const [refreshing, setRefreshing] = useState(false);
   const [motionRun, setMotionRun] = useState(0);
+  const [selectedExpenseIndex, setSelectedExpenseIndex] = useState(0);
   const analytics = useDashboard(range);
   const { width } = useWindowDimensions();
 
@@ -62,6 +63,15 @@ export default function DashboardScreen() {
     }
     return `Cash flow includes ${formatMinor(analytics.summary.topupMinor)} in shared top-ups.`;
   }, [analytics.summary.topupMinor]);
+
+  useEffect(() => {
+    setSelectedExpenseIndex(0);
+  }, [analytics.categoryBreakdown]);
+
+  const selectedExpenseCategory =
+    analytics.categoryBreakdown[selectedExpenseIndex] ?? analytics.categoryBreakdown[0] ?? null;
+  const pieRadius = width < 390 ? 78 : 92;
+  const pieInnerRadius = width < 390 ? 52 : 62;
 
   const onRefresh = async (): Promise<void> => {
     setRefreshing(true);
@@ -165,7 +175,7 @@ export default function DashboardScreen() {
                     </View>
                     <View style={[styles.badge, { backgroundColor: 'rgba(61,214,140,0.12)' }]}>
                       <Text style={[styles.badgeText, { color: colors.success }]}>
-                        {analytics.summary.cashFlowMinor >= 0 ? 'Positive trend' : 'Watch spend'}
+                        {analytics.summary.cashFlowMinor >= 0 ? 'Positive' : 'Caution'}
                       </Text>
                     </View>
                   </View>
@@ -276,23 +286,47 @@ export default function DashboardScreen() {
                     <Text style={styles.cardMeta}>Personal expenses only, excluding shared top-ups</Text>
 
                     {analytics.expensePieData.length > 0 ? (
-                      <PieChart
-                        data={analytics.expensePieData}
-                        donut
-                        radius={92}
-                        innerRadius={62}
-                        innerCircleColor={colors.surface}
-                        focusOnPress
-                        sectionAutoFocus
-                        isAnimated
-                        animationDuration={600}
-                        centerLabelComponent={() => (
-                          <View style={styles.pieCenter}>
-                            <Text style={styles.pieCenterAmount}>{formatMinor(analytics.summary.expenseMinor)}</Text>
-                            <Text style={styles.pieCenterLabel}>Spent</Text>
+                      <View style={styles.pieDetailRow}>
+                        <PieChart
+                          data={analytics.expensePieData}
+                          donut
+                          radius={pieRadius}
+                          innerRadius={pieInnerRadius}
+                          innerCircleColor={colors.surface}
+                          focusOnPress
+                          sectionAutoFocus
+                          selectedIndex={selectedExpenseIndex}
+                          onPress={(_item: unknown, index: number) => {
+                            setSelectedExpenseIndex(index);
+                          }}
+                          isAnimated
+                          animationDuration={600}
+                          centerLabelComponent={() => (
+                            <View style={styles.pieCenter}>
+                              <Text style={styles.pieCenterAmount}>{formatMinor(analytics.summary.expenseMinor)}</Text>
+                              <Text style={styles.pieCenterLabel}>Spent</Text>
+                            </View>
+                          )}
+                        />
+
+                        {selectedExpenseCategory ? (
+                          <View style={styles.pieSelectionCard}>
+                            <View style={styles.pieSelectionHead}>
+                              <View
+                                style={[
+                                  styles.categorySwatch,
+                                  styles.pieSelectionSwatch,
+                                  { backgroundColor: selectedExpenseCategory.color },
+                                ]}
+                              />
+                              <Text style={styles.pieSelectionLabel}>Selected</Text>
+                            </View>
+                            <Text style={styles.pieSelectionCategory}>{selectedExpenseCategory.label}</Text>
+                            <Text style={styles.pieSelectionAmount}>{formatMinor(selectedExpenseCategory.amountMinor)}</Text>
+                            <Text style={styles.pieSelectionMeta}>{formatPercent(selectedExpenseCategory.share)} of expenses</Text>
                           </View>
-                        )}
-                      />
+                        ) : null}
+                      </View>
                     ) : (
                       <View style={styles.emptyInset}>
                         <Text style={styles.emptyText}>No expense categories in this range yet.</Text>
@@ -396,17 +430,33 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
+    flexShrink: 1,
   },
-  badgeText: { ...typography.label, fontWeight: '700' },
+  badgeText: { ...typography.label, fontWeight: '700', fontSize: 11 },
   axisText: { color: colors.textMuted, fontSize: 11 },
   chartFootnote: { ...typography.label, color: colors.textMuted },
   legendRow: { flexDirection: 'row', gap: spacing.md, flexWrap: 'wrap' },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   legendDot: { width: 10, height: 10, borderRadius: radius.pill },
   legendText: { ...typography.label, color: colors.textMuted },
+  pieDetailRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
   pieCenter: { alignItems: 'center', gap: 2 },
   pieCenterAmount: { ...typography.body, color: colors.text, fontWeight: '700' },
   pieCenterLabel: { ...typography.label, color: colors.textMuted, textTransform: 'uppercase' },
+  pieSelectionCard: {
+    flex: 1,
+    minWidth: 104,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceAlt,
+    gap: spacing.xs,
+  },
+  pieSelectionHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  pieSelectionSwatch: { width: 10, height: 10 },
+  pieSelectionLabel: { ...typography.label, color: colors.textMuted, textTransform: 'uppercase' },
+  pieSelectionCategory: { ...typography.body, color: colors.text, fontWeight: '700' },
+  pieSelectionAmount: { ...typography.body, color: colors.text, fontSize: 18, fontWeight: '700' },
+  pieSelectionMeta: { ...typography.label, color: colors.textMuted },
   categoryList: { gap: spacing.sm },
   categoryRow: {
     flexDirection: 'row',
