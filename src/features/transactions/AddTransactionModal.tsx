@@ -243,7 +243,6 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
 
   const editing = Boolean(draft?.id);
   const amountDisplayState = useMemo(() => highlightedAmount(amount), [amount]);
-  const suggestionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recentTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reopenKeypadAfterDatePicker = useRef(false);
@@ -711,31 +710,6 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
     }
   };
 
-  useEffect(() => {
-    if (!visible || kind !== 'expense' || categoryOptions.length === 0) {
-      setSuggestion(null);
-      setIsSuggestingCategory(false);
-      return;
-    }
-    if (suggestionTimer.current) clearTimeout(suggestionTimer.current);
-    const trimmedName = name.trim();
-    const trimmedComment = comment.trim();
-    const lookupText = trimmedName.length >= 2 ? trimmedName : trimmedComment;
-    if (lookupText.length < 2) {
-      setSuggestion(null);
-      setIsSuggestingCategory(false);
-      return;
-    }
-
-    suggestionTimer.current = setTimeout(async () => {
-      await runCategorySuggestion();
-    }, 420);
-
-    return () => {
-      if (suggestionTimer.current) clearTimeout(suggestionTimer.current);
-    };
-  }, [categoryOptions, comment, kind, name, userTouchedCategory, visible]);
-
   const handleClose = (): void => {
     reset(null);
     onClose();
@@ -1079,7 +1053,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
           <TextInput
             value={name}
             onChangeText={setName}
-            onBlur={() => {
+            onEndEditing={() => {
               void runCategorySuggestion({ preferRemote: true, forceApply: true });
             }}
             placeholder="What was it?"
@@ -1137,7 +1111,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
           <TextInput
             value={comment}
             onChangeText={setComment}
-            onBlur={() => {
+            onEndEditing={() => {
               void runCategorySuggestion({ preferRemote: true, forceApply: true });
             }}
             placeholder="Optional"
