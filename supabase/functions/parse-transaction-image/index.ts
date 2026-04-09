@@ -74,14 +74,62 @@ const normalizeName = (value: unknown): string | null => {
   return text.length > 0 ? text : null;
 };
 
+const parseLocalizedAmount = (value: string): number | null => {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const sanitized = trimmed
+    .replace(/[\u00a0\u202f\s]/g, "")
+    .replace(/[−–—]/g, "-")
+    .replace(/[^0-9,.'-]/g, "");
+
+  if (!sanitized) return null;
+
+  const negative = sanitized.startsWith("-");
+  const unsigned = sanitized.replace(/-/g, "");
+  if (!unsigned || !/\d/.test(unsigned)) return null;
+
+  const lastDot = unsigned.lastIndexOf(".");
+  const lastComma = unsigned.lastIndexOf(",");
+  const lastSeparatorIndex = Math.max(lastDot, lastComma);
+
+  let normalized = unsigned;
+  if (lastSeparatorIndex >= 0) {
+    const decimalSeparator = unsigned[lastSeparatorIndex] ?? "";
+    const integerPart = unsigned.slice(0, lastSeparatorIndex);
+    const fractionalPart = unsigned.slice(lastSeparatorIndex + 1);
+    const separatorCount = (unsigned.match(/[.,]/g) ?? []).length;
+    const hasMultipleSeparators = separatorCount > 1;
+    const looksLikeDecimal =
+      fractionalPart.length > 0 &&
+      fractionalPart.length <= 2 &&
+      (hasMultipleSeparators || !integerPart.includes("'"));
+
+    if (looksLikeDecimal) {
+      const normalizedInteger = integerPart.replace(/[.,']/g, "");
+      normalized = `${normalizedInteger}.${fractionalPart.replace(/[.,']/g, "")}`;
+    } else {
+      normalized = unsigned.replace(/[.,']/g, "");
+    }
+  } else {
+    normalized = unsigned.replace(/'/g, "");
+  }
+
+  if (!/^\d+(\.\d+)?$/.test(normalized)) return null;
+
+  const numeric = Number(`${negative ? "-" : ""}${normalized}`);
+  if (!Number.isFinite(numeric) || numeric <= 0) return null;
+  return Math.round(numeric * 100) / 100;
+};
+
 const normalizeAmount = (value: unknown): number | null => {
   const numeric =
     typeof value === "number"
       ? value
       : typeof value === "string"
-        ? Number(value.trim().replace(",", "."))
-        : NaN;
-  if (!Number.isFinite(numeric) || numeric <= 0) return null;
+        ? parseLocalizedAmount(value)
+        : null;
+  if (numeric === null || !Number.isFinite(numeric) || numeric <= 0) return null;
   return Math.round(numeric * 100) / 100;
 };
 
@@ -194,7 +242,7 @@ Deno.serve(async (req: Request) => {
     "If the image shows a list of completed transactions, create one transaction per visible completed row.",
     "Do not create grocery line items from a single receipt unless the image clearly shows separate completed payments.",
     "Read amounts exactly as printed in the image before converting them to JSON numbers.",
-    "Do not invent decimal places. Examples: '4040' -> 4040, '4 040' -> 4040, '40.40' -> 40.40, '40,40' -> 40.40.",
+    "Support common number formats. Examples: '4040' -> 4040, '4 040' -> 4040, '4.040' -> 4040, '4,040' -> 4040, '4.040,00' -> 4040.00, '4,040.00' -> 4040.00, '4040,00' -> 4040.00, '40.40' -> 40.40, '40,40' -> 40.40.",
     "Only include cents when the image explicitly shows cents or the currency format clearly uses decimals.",
     "For single-receipt photos, prefer the final paid total (for example TOTAL, Amount paid, Card payment, Dankort, Visa, Mastercard) over subtotal, tax, discount, change, or item rows.",
     "If multiple totals are visible on a receipt, choose the amount that represents the completed payment, not the savings, fee, cashback, or running balance.",
@@ -233,6 +281,7 @@ Deno.serve(async (req: Request) => {
               [
                 'Return strict JSON only in the shape {"transactions":[{"kind":"expense","name":"string","amount":12.34,"currencyCode":"DKK","categoryId":"uuid-or-null","comment":"string-or-null","occurredOn":"YYYY-MM-DD"}]}.',
                 "Be conservative with OCR. If a number is shown without decimals, keep it as a whole-unit amount.",
+                "Preserve thousands separators correctly before converting to JSON numbers.",
               ].join(" "),
           },
           {

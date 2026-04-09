@@ -3,3 +3,6 @@ verify_jwt = false
 
 [functions.parse-transaction-image]
 verify_jwt = false
+
+[functions.parse-transaction-csv]
+verify_jwt = false
