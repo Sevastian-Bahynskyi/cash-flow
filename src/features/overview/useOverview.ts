@@ -8,6 +8,8 @@ import {
 import { bankBalance, transactionBalance, type BalanceTxn } from '@/lib/balance';
 import { computeSharedCycle, type SharedCycleResult } from '@/lib/shared';
 import { savingsTotal } from '@/lib/savings';
+import { runDetached } from '@/lib/async';
+import { getErrorMessage, reportDevError } from '@/lib/errors';
 import type { SavingsAccountRow, SavingsEventRow } from '@/features/savings/types';
 import type { LoanEventRow, LoanRow } from '@/features/loans/types';
 import type { ReceivableEventRow, ReceivableRow } from '@/features/receivables/types';
@@ -292,14 +294,15 @@ export const useOverview = (): OverviewData => {
       setBudgetAlerts(alerts);
       setCategoryLabels(Object.fromEntries(catLabels.entries()));
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load overview');
+      reportDevError('overview.load', e);
+      setError(getErrorMessage(e, 'Failed to load overview'));
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void load();
+    runDetached(load(), 'overview.load');
   }, [load]);
 
   return {

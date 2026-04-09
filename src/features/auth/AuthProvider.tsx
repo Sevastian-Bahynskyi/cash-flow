@@ -2,6 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { supabase, supabaseAuthUrl, supabaseUrl } from '@/lib/supabase';
+import { runDetached } from '@/lib/async';
+import { reportDevError } from '@/lib/errors';
 import type { Session } from '@supabase/supabase-js';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -40,11 +42,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let mounted = true;
-    void supabase.auth.getSession().then(({ data }) => {
-      if (!mounted) return;
-      setSession(data.session);
-      setLoading(false);
-    });
+
+    runDetached(
+      (async () => {
+        const { data, error } = await supabase.auth.getSession();
+        if (!mounted) return;
+        if (error) {
+          reportDevError('auth.getSession', error);
+        }
+        setSession(data.session);
+        setLoading(false);
+      })(),
+      'auth.getSession',
+      () => {
+        if (mounted) {
+          setLoading(false);
+        }
+      },
+    );
+
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
     });
@@ -67,7 +83,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         provider: 'google',
         options: { redirectTo, skipBrowserRedirect: true },
       });
-      if (error || !data.url) return;
+      if (error || !data.url) {
+        reportDevError('auth.signInWithGoogle', error ?? new Error('Supabase did not return an OAuth URL.'));
+        return;
+      }
       authUrl = data.url;
     }
 
@@ -75,12 +94,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (result.type !== 'success' || !result.url) return;
 
     const tokens = extractTokens(result.url);
-    if (!tokens) return;
-    await supabase.auth.setSession(tokens);
+    if (!tokens) {
+      reportDevError('auth.signInWithGoogle', new Error('OAuth callback did not include session tokens.'));
+      return;
+    }
+
+    const { error } = await supabase.auth.setSession(tokens);
+    if (error) {
+      reportDevError('auth.setSession', error);
+    }
   }, []);
 
   const signOut = useCallback(async (): Promise<void> => {
-    await supabase.auth.signOut();
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      reportDevError('auth.signOut', error);
+    }
   }, []);
 
   return (

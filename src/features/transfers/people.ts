@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { reportDevError } from '@/lib/errors';
 import type { TransferPersonRow } from './types';
 
 let cache: TransferPersonRow[] | null = null;
@@ -25,9 +26,7 @@ export const fetchTransferPeople = async (options?: { force?: boolean }): Promis
     .order('name', { ascending: true });
 
   if (error) {
-    if (__DEV__) {
-      console.warn('[transfer-people] Failed to load transfer people.', error.message);
-    }
+    reportDevError('transfer-people.fetch', error);
     return [];
   }
 
@@ -63,9 +62,7 @@ export const saveTransferPerson = async ({
       .eq('id', id);
 
     if (error) {
-      if (__DEV__) {
-        console.warn('[transfer-people] Failed to update person.', error.message);
-      }
+      reportDevError('transfer-people.update', error, { id });
       return { ok: false, error: 'Could not save this person right now.' };
     }
   } else {
@@ -76,9 +73,7 @@ export const saveTransferPerson = async ({
     });
 
     if (error) {
-      if (__DEV__) {
-        console.warn('[transfer-people] Failed to create person.', error.message);
-      }
+      reportDevError('transfer-people.create', error, { name: trimmedName });
       return {
         ok: false,
         error:
@@ -97,9 +92,7 @@ export const removeTransferPerson = async (id: string): Promise<{ ok: boolean; e
   const { error } = await supabase.from('transfer_people').delete().eq('id', id);
 
   if (error) {
-    if (__DEV__) {
-      console.warn('[transfer-people] Failed to delete person.', error.message);
-    }
+    reportDevError('transfer-people.delete', error, { id });
     return { ok: false, error: 'Could not delete this person right now.' };
   }
 
