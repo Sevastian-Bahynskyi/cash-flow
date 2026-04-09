@@ -217,193 +217,192 @@ export default function HomeScreen() {
           ]}
         />
 
-      <MotionView direction="left" distance={210} delayMs={90} rotateFrom={-9}>
-        <LinearGradient colors={['#1F2438', '#101219', '#0B0B0F']} style={styles.hero}>
-          <Text style={styles.heroEyebrow}>{heroEyebrow}</Text>
-          <Text style={styles.heroAmount}>{formatMinor(snapshotMinor)}</Text>
-          <View style={styles.heroStats}>
-            <MotionView direction="up" distance={90} delayMs={220}>
-              <View style={styles.heroStatChip}>
-                <Text style={styles.heroStatLabel}>Cycle</Text>
-                <Text style={styles.heroStatValue}>{currentCycleLabel}</Text>
-              </View>
-            </MotionView>
-            <MotionView direction="right" distance={120} delayMs={280}>
-              <View style={styles.heroStatChip}>
-                <Text style={styles.heroStatLabel}>Spend</Text>
-                <Text style={styles.heroStatValue}>
-                  {formatMinor(categorySpend.reduce((sum, item) => sum + item.spentMinor, 0))}
-                </Text>
-              </View>
-            </MotionView>
-          </View>
-        </LinearGradient>
-      </MotionView>
-
-      {cyclesWithTransactions.length > 0 ? (
-        <View style={styles.selectorBlock}>
-          <Text style={styles.sectionTitle}>Cycles</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.cycleCarousel}
-          >
-            {cyclesWithTransactions.map((cycle, index) => {
-              const active = filter === 'cycle' && selectedCycle?.id === cycle.id;
-              return (
-                <MotionView
-                  key={cycle.id}
-                  index={index}
-                  direction={active ? 'down' : 'up'}
-                  distance={70}
-                  delayMs={120}
-                  stepMs={55}
-                >
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.cycleChip,
-                      active && styles.cycleChipActive,
-                      pressed && styles.cycleChipPressed,
-                    ]}
-                    onPress={() => {
-                      setSelectedCycleId(cycle.id);
-                      setFilter('cycle');
-                    }}
-                  >
-                    <Text style={[styles.cycleChipText, active && styles.cycleChipTextActive]}>
-                      {cycle.label}
-                    </Text>
-                  </Pressable>
-                </MotionView>
-              );
-            })}
-          </ScrollView>
-        </View>
-      ) : null}
-
-      <View style={styles.filterRow}>
-        <Pressable
-          style={({ pressed }) => [
-            styles.filterChip,
-            filter === 'year' && styles.filterChipActive,
-            pressed && styles.cycleChipPressed,
-          ]}
-          onPress={() => setFilter('year')}
-        >
-          <Text style={[styles.filterChipText, filter === 'year' && styles.filterChipTextActive]}>
-            {yearChipLabel}
-          </Text>
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [
-            styles.filterChip,
-            filter === 'all' && styles.filterChipActive,
-            pressed && styles.cycleChipPressed,
-          ]}
-          onPress={() => setFilter('all')}
-        >
-          <Text style={[styles.filterChipText, filter === 'all' && styles.filterChipTextActive]}>
-            All time
-          </Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.quickRow}>
-        <MotionView style={styles.quickMotion} direction="left" distance={165} delayMs={170}>
-          <Pressable style={styles.quickCard} onPress={() => router.push('/budgets')}>
-            <MaterialCommunityIcons name="target" size={20} color={colors.accent} />
-            <Text style={styles.quickTitle}>Budgets</Text>
-          </Pressable>
-        </MotionView>
-        <MotionView style={styles.quickMotion} direction="right" distance={165} delayMs={230}>
-          <Pressable style={styles.quickCard} onPress={() => router.push('/categories')}>
-            <MaterialCommunityIcons name="shape-outline" size={20} color={colors.success} />
-            <Text style={styles.quickTitle}>Categories</Text>
-          </Pressable>
-        </MotionView>
-      </View>
-
-      {data.loading && data.transactions.length === 0 ? (
-        <View style={styles.section}>
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>Loading...</Text>
-          </View>
-        </View>
-      ) : null}
-
-      {data.error ? (
-        <View style={styles.section}>
-          <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Something needs a refresh</Text>
-            <Text style={styles.emptyText}>{data.error}</Text>
-          </View>
-        </View>
-      ) : null}
-
-      {filteredBudgetAlerts.length > 0 ? (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Budget pressure</Text>
-          <View style={styles.sectionBody}>
-            {filteredBudgetAlerts.map((alert, index) => {
-              const ratio = alert.spentMinor / alert.amountMinor;
-              const tone = alert.level === 'critical' ? colors.danger : '#F5B942';
-              return (
-                <MotionView key={alert.categoryId} index={index} direction="right" distance={150} delayMs={210}>
-                  <View style={styles.alertCard}>
-                    <View style={styles.alertRow}>
-                      <Text style={styles.alertTitle}>{alert.label}</Text>
-                      <Text style={[styles.alertRatio, { color: tone }]}>{formatPercent(ratio)}</Text>
-                    </View>
-                    <Text style={styles.alertMeta}>
-                      {formatMinor(alert.spentMinor)} of {formatMinor(alert.amountMinor)}
-                    </Text>
-                    <ProgressBar value={ratio} color={tone} />
-                  </View>
-                </MotionView>
-              );
-            })}
-          </View>
-        </View>
-      ) : null}
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Top categories</Text>
-        <View style={styles.sectionBody}>
-          {categorySpend.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>No spending in this range yet.</Text>
+        <MotionView direction="left" distance={210} delayMs={90} rotateFrom={-9}>
+          <LinearGradient colors={['#1F2438', '#101219', '#0B0B0F']} style={styles.hero}>
+            <Text style={styles.heroEyebrow}>{heroEyebrow}</Text>
+            <Text style={styles.heroAmount}>{formatMinor(snapshotMinor)}</Text>
+            <View style={styles.heroStats}>
+              <MotionView direction="up" distance={90} delayMs={220}>
+                <View style={styles.heroStatChip}>
+                  <Text style={styles.heroStatLabel}>Cycle</Text>
+                  <Text style={styles.heroStatValue}>{currentCycleLabel}</Text>
+                </View>
+              </MotionView>
+              <MotionView direction="right" distance={120} delayMs={280}>
+                <View style={styles.heroStatChip}>
+                  <Text style={styles.heroStatLabel}>Spend</Text>
+                  <Text style={styles.heroStatValue}>
+                    {formatMinor(categorySpend.reduce((sum, item) => sum + item.spentMinor, 0))}
+                  </Text>
+                </View>
+              </MotionView>
             </View>
-          ) : (
-            categorySpend.map((item, index) => (
-              <MotionView key={item.categoryId} index={index} direction="left" distance={145} delayMs={250}>
-                <View style={styles.categoryCard}>
-                  <View style={styles.alertRow}>
-                    <Text style={styles.categoryLabel}>{item.label}</Text>
-                    <Text style={styles.categoryAmount}>{formatMinor(item.spentMinor)}</Text>
-                  </View>
-                  <ProgressBar value={spendTotal === 0 ? 0 : item.spentMinor / spendTotal} color={item.color} />
-                </View>
-              </MotionView>
-            ))
-          )}
-        </View>
-      </View>
+          </LinearGradient>
+        </MotionView>
 
-      {hints.length > 0 ? (
+        {cyclesWithTransactions.length > 0 ? (
+          <View style={styles.selectorBlock}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.cycleCarousel}
+            >
+              {cyclesWithTransactions.map((cycle, index) => {
+                const active = filter === 'cycle' && selectedCycle?.id === cycle.id;
+                return (
+                  <MotionView
+                    key={cycle.id}
+                    index={index}
+                    direction={active ? 'down' : 'up'}
+                    distance={70}
+                    delayMs={120}
+                    stepMs={55}
+                  >
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.cycleChip,
+                        active && styles.cycleChipActive,
+                        pressed && styles.cycleChipPressed,
+                      ]}
+                      onPress={() => {
+                        setSelectedCycleId(cycle.id);
+                        setFilter('cycle');
+                      }}
+                    >
+                      <Text style={[styles.cycleChipText, active && styles.cycleChipTextActive]}>
+                        {cycle.label}
+                      </Text>
+                    </Pressable>
+                  </MotionView>
+                );
+              })}
+            </ScrollView>
+          </View>
+        ) : null}
+
+        <View style={styles.filterRow}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.filterChip,
+              filter === 'year' && styles.filterChipActive,
+              pressed && styles.cycleChipPressed,
+            ]}
+            onPress={() => setFilter('year')}
+          >
+            <Text style={[styles.filterChipText, filter === 'year' && styles.filterChipTextActive]}>
+              {yearChipLabel}
+            </Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.filterChip,
+              filter === 'all' && styles.filterChipActive,
+              pressed && styles.cycleChipPressed,
+            ]}
+            onPress={() => setFilter('all')}
+          >
+            <Text style={[styles.filterChipText, filter === 'all' && styles.filterChipTextActive]}>
+              All time
+            </Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.quickRow}>
+          <MotionView style={styles.quickMotion} direction="left" distance={165} delayMs={170}>
+            <Pressable style={styles.quickCard} onPress={() => router.push('/budgets')}>
+              <MaterialCommunityIcons name="target" size={20} color={colors.accent} />
+              <Text style={styles.quickTitle}>Budgets</Text>
+            </Pressable>
+          </MotionView>
+          <MotionView style={styles.quickMotion} direction="right" distance={165} delayMs={230}>
+            <Pressable style={styles.quickCard} onPress={() => router.push('/categories')}>
+              <MaterialCommunityIcons name="shape-outline" size={20} color={colors.success} />
+              <Text style={styles.quickTitle}>Categories</Text>
+            </Pressable>
+          </MotionView>
+        </View>
+
+        {data.loading && data.transactions.length === 0 ? (
+          <View style={styles.section}>
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyText}>Loading...</Text>
+            </View>
+          </View>
+        ) : null}
+
+        {data.error ? (
+          <View style={styles.section}>
+            <View style={styles.errorCard}>
+              <Text style={styles.errorTitle}>Something needs a refresh</Text>
+              <Text style={styles.emptyText}>{data.error}</Text>
+            </View>
+          </View>
+        ) : null}
+
+        {filteredBudgetAlerts.length > 0 ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Budget pressure</Text>
+            <View style={styles.sectionBody}>
+              {filteredBudgetAlerts.map((alert, index) => {
+                const ratio = alert.spentMinor / alert.amountMinor;
+                const tone = alert.level === 'critical' ? colors.danger : '#F5B942';
+                return (
+                  <MotionView key={alert.categoryId} index={index} direction="right" distance={150} delayMs={210}>
+                    <View style={styles.alertCard}>
+                      <View style={styles.alertRow}>
+                        <Text style={styles.alertTitle}>{alert.label}</Text>
+                        <Text style={[styles.alertRatio, { color: tone }]}>{formatPercent(ratio)}</Text>
+                      </View>
+                      <Text style={styles.alertMeta}>
+                        {formatMinor(alert.spentMinor)} of {formatMinor(alert.amountMinor)}
+                      </Text>
+                      <ProgressBar value={ratio} color={tone} />
+                    </View>
+                  </MotionView>
+                );
+              })}
+            </View>
+          </View>
+        ) : null}
+
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Helpful nudges</Text>
+          <Text style={styles.sectionTitle}>Top categories</Text>
           <View style={styles.sectionBody}>
-            {hints.map((hint, index) => (
-              <MotionView key={hint} index={index} direction="down" distance={120} delayMs={290}>
-                <View style={styles.hintCard}>
-                  <MaterialCommunityIcons name="lightbulb-outline" size={18} color={colors.accent} />
-                  <Text style={styles.hintText}>{hint}</Text>
-                </View>
-              </MotionView>
-            ))}
+            {categorySpend.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Text style={styles.emptyText}>No spending in this range yet.</Text>
+              </View>
+            ) : (
+              categorySpend.map((item, index) => (
+                <MotionView key={item.categoryId} index={index} direction="left" distance={145} delayMs={250}>
+                  <View style={styles.categoryCard}>
+                    <View style={styles.alertRow}>
+                      <Text style={styles.categoryLabel}>{item.label}</Text>
+                      <Text style={styles.categoryAmount}>{formatMinor(item.spentMinor)}</Text>
+                    </View>
+                    <ProgressBar value={spendTotal === 0 ? 0 : item.spentMinor / spendTotal} color={item.color} />
+                  </View>
+                </MotionView>
+              ))
+            )}
           </View>
         </View>
-      ) : null}
+
+        {hints.length > 0 ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Helpful nudges</Text>
+            <View style={styles.sectionBody}>
+              {hints.map((hint, index) => (
+                <MotionView key={hint} index={index} direction="down" distance={120} delayMs={290}>
+                  <View style={styles.hintCard}>
+                    <MaterialCommunityIcons name="lightbulb-outline" size={18} color={colors.accent} />
+                    <Text style={styles.hintText}>{hint}</Text>
+                  </View>
+                </MotionView>
+              ))}
+            </View>
+          </View>
+        ) : null}
 
         <View style={[styles.section, styles.sectionFlush]}>
           <TransactionList

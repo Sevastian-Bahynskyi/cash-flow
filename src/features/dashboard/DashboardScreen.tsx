@@ -3,20 +3,23 @@ import { RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions
 import { useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { BarChart, LineChart, PieChart } from 'react-native-gifted-charts';
+import { BarChart, LineChart } from 'react-native-gifted-charts';
 import { MotionScope } from '@/ui/MotionScope';
 import { MotionView } from '@/ui/MotionView';
 import { FilterChips } from '@/ui/FilterChips';
 import { ScreenHeader } from '@/ui/ScreenHeader';
+import { CategoryIcon } from '@/ui/CategoryIcon';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 import { formatMinor, formatPercent } from '@/lib/format';
 import { type DashboardRange, useDashboard } from './useDashboard';
+import { ExpenseRingChart } from './ExpenseRingChart';
 
 const rangeOptions = [
   { label: 'Weekly', value: 'weekly' },
   { label: 'Monthly', value: 'monthly' },
   { label: 'Yearly', value: 'yearly' },
 ] as const satisfies readonly { label: string; value: DashboardRange }[];
+
 
 function MetricCard({
   icon,
@@ -45,6 +48,7 @@ export default function DashboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [motionRun, setMotionRun] = useState(0);
   const [selectedExpenseIndex, setSelectedExpenseIndex] = useState(0);
+  const [pieInteracting, setPieInteracting] = useState(false);
   const analytics = useDashboard(range);
   const { width } = useWindowDimensions();
 
@@ -66,12 +70,12 @@ export default function DashboardScreen() {
 
   useEffect(() => {
     setSelectedExpenseIndex(0);
+    setPieInteracting(false);
   }, [analytics.categoryBreakdown]);
 
   const selectedExpenseCategory =
     analytics.categoryBreakdown[selectedExpenseIndex] ?? analytics.categoryBreakdown[0] ?? null;
-  const pieRadius = width < 390 ? 78 : 92;
-  const pieInnerRadius = width < 390 ? 52 : 62;
+  const pieSize = width < 390 ? 176 : 204;
 
   const onRefresh = async (): Promise<void> => {
     setRefreshing(true);
@@ -87,6 +91,7 @@ export default function DashboardScreen() {
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
+        scrollEnabled={!pieInteracting}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.text} />}
       >
         <ScreenHeader title="Dashboard" subtitle="Weekly, monthly, yearly flow" />
@@ -285,40 +290,26 @@ export default function DashboardScreen() {
                     <Text style={styles.cardTitle}>Expense split</Text>
                     <Text style={styles.cardMeta}>Personal expenses only, excluding shared top-ups</Text>
 
-                    {analytics.expensePieData.length > 0 ? (
+                    {analytics.categoryBreakdown.length > 0 ? (
                       <View style={styles.pieDetailRow}>
-                        <PieChart
-                          data={analytics.expensePieData}
-                          donut
-                          radius={pieRadius}
-                          innerRadius={pieInnerRadius}
-                          innerCircleColor={colors.surface}
-                          focusOnPress
-                          sectionAutoFocus
+                        <ExpenseRingChart
+                          categories={analytics.categoryBreakdown}
                           selectedIndex={selectedExpenseIndex}
-                          onPress={(_item: unknown, index: number) => {
-                            setSelectedExpenseIndex(index);
-                          }}
-                          isAnimated
-                          animationDuration={600}
-                          centerLabelComponent={() => (
-                            <View style={styles.pieCenter}>
-                              <Text style={styles.pieCenterAmount}>{formatMinor(analytics.summary.expenseMinor)}</Text>
-                              <Text style={styles.pieCenterLabel}>Spent</Text>
-                            </View>
-                          )}
+                          onSelect={setSelectedExpenseIndex}
+                          size={pieSize}
+                          onInteractionChange={setPieInteracting}
                         />
 
                         {selectedExpenseCategory ? (
                           <View style={styles.pieSelectionCard}>
                             <View style={styles.pieSelectionHead}>
-                              <View
-                                style={[
-                                  styles.categorySwatch,
-                                  styles.pieSelectionSwatch,
-                                  { backgroundColor: selectedExpenseCategory.color },
-                                ]}
-                              />
+                              <View style={[styles.categoryIconWrap, styles.pieSelectionIconWrap, { backgroundColor: `${selectedExpenseCategory.color}22` }]}>
+                                <CategoryIcon
+                                  name={selectedExpenseCategory.icon}
+                                  size={16}
+                                  color={selectedExpenseCategory.color}
+                                />
+                              </View>
                               <Text style={styles.pieSelectionLabel}>Selected</Text>
                             </View>
                             <Text style={styles.pieSelectionCategory}>{selectedExpenseCategory.label}</Text>
@@ -345,7 +336,9 @@ export default function DashboardScreen() {
                         {analytics.categoryBreakdown.map((category, index) => (
                           <View key={category.categoryId} style={styles.categoryRow}>
                             <View style={styles.categoryLead}>
-                              <View style={[styles.categorySwatch, { backgroundColor: category.color }]} />
+                              <View style={[styles.categoryIconWrap, { backgroundColor: `${category.color}22` }]}>
+                                <CategoryIcon name={category.icon} size={18} color={category.color} />
+                              </View>
                               <View style={styles.categoryCopy}>
                                 <Text style={styles.categoryLabel} numberOfLines={1}>
                                   {index + 1}. {category.label}
@@ -439,20 +432,17 @@ const styles = StyleSheet.create({
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   legendDot: { width: 10, height: 10, borderRadius: radius.pill },
   legendText: { ...typography.label, color: colors.textMuted },
-  pieDetailRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
-  pieCenter: { alignItems: 'center', gap: 2 },
-  pieCenterAmount: { ...typography.body, color: colors.text, fontWeight: '700' },
-  pieCenterLabel: { ...typography.label, color: colors.textMuted, textTransform: 'uppercase' },
+  pieDetailRow: { flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', gap: spacing.xs },
   pieSelectionCard: {
     flex: 1,
-    minWidth: 104,
+    minWidth: '100%',
     padding: spacing.md,
     borderRadius: radius.md,
     backgroundColor: colors.surfaceAlt,
     gap: spacing.xs,
   },
   pieSelectionHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  pieSelectionSwatch: { width: 10, height: 10 },
+  pieSelectionIconWrap: { width: 28, height: 28 },
   pieSelectionLabel: { ...typography.label, color: colors.textMuted, textTransform: 'uppercase' },
   pieSelectionCategory: { ...typography.body, color: colors.text, fontWeight: '700' },
   pieSelectionAmount: { ...typography.body, color: colors.text, fontSize: 18, fontWeight: '700' },
@@ -466,7 +456,14 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   categoryLead: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center', flex: 1 },
-  categorySwatch: { width: 12, height: 12, borderRadius: radius.pill },
+  categoryIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
   categoryCopy: { flex: 1, gap: 2 },
   categoryLabel: { ...typography.body, color: colors.text, flexShrink: 1 },
   categoryShare: { ...typography.label, color: colors.textMuted },

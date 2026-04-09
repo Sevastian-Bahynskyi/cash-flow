@@ -32,5 +32,5 @@ export const typography = {
   h2: { fontSize: 22, fontWeight: '600' as const },
   body: { fontSize: 16, fontWeight: '400' as const },
   label: { fontSize: 13, fontWeight: '500' as const },
-  amount: { fontSize: 48, fontWeight: '700' as const },
+  amount: { fontSize: 42, fontWeight: '700' as const },
 } as const;

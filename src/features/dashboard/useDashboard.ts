@@ -26,6 +26,7 @@ export type DashboardCategoryBreakdown = {
   categoryId: string;
   label: string;
   color: string;
+  icon: string;
   amountMinor: number;
   share: number;
 };
@@ -289,6 +290,7 @@ export const useDashboard = (range: DashboardRange): ReturnType<typeof useOvervi
           categoryId,
           label: meta?.label ?? 'Category',
           color: meta?.color ?? pieFallbackColors[index % pieFallbackColors.length] ?? colors.accent,
+          icon: meta?.icon ?? 'shape-outline',
           amountMinor,
           share: expenseMinor === 0 ? 0 : amountMinor / expenseMinor,
         } satisfies DashboardCategoryBreakdown;
