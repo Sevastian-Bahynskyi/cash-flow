@@ -12,8 +12,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
+import { CategoryIcon } from '@/ui/CategoryIcon';
 import { useCategories } from './useCategories';
 import type { CategoryOption } from './types';
+import type { TransactionKind } from '@/features/transactions/types';
+import { isIncomeCategoryOption } from './rules';
 
 type BudgetIndicator = {
   tone: 'neutral' | 'warning' | 'critical';
@@ -24,6 +27,7 @@ type Props = {
   visible: boolean;
   onClose: () => void;
   onSelect: (option: CategoryOption) => void;
+  kind?: TransactionKind;
   frequentIds?: readonly string[];
   recentIds?: readonly string[];
   selectedId?: string | null;
@@ -60,7 +64,7 @@ function CategoryRow({
       }}
     >
       <View style={[styles.rowIconWrap, { backgroundColor: `${item.parentColor}22` }]}>
-        <MaterialCommunityIcons name={item.icon as never} size={18} color={item.parentColor} />
+        <CategoryIcon name={item.icon} size={18} color={item.parentColor} />
       </View>
       <View style={styles.rowCopy}>
         <Text style={styles.rowParent}>{item.parentName}</Text>
@@ -80,6 +84,7 @@ export function CategorySheet({
   visible,
   onClose,
   onSelect,
+  kind = 'expense',
   frequentIds,
   recentIds,
   selectedId,
@@ -90,14 +95,18 @@ export function CategorySheet({
 
   const filtered = useMemo<CategoryOption[]>(() => {
     if (state.status !== 'ready') return [];
+    const visibleOptions =
+      kind === 'expense' ? state.options.filter((option) => !isIncomeCategoryOption(option)) : state.options;
     const q = query.trim().toLowerCase();
-    if (q.length === 0) return state.options;
-    return state.options.filter((option) => option.searchKey.includes(q));
-  }, [query, state]);
+    if (q.length === 0) return visibleOptions;
+    return visibleOptions.filter((option) => option.searchKey.includes(q));
+  }, [kind, query, state]);
 
   const featured = useMemo(() => {
     if (state.status !== 'ready') return { frequent: [], recent: [] } as const;
-    const optionsById = new Map(state.options.map((option) => [option.id, option]));
+    const visibleOptions =
+      kind === 'expense' ? state.options.filter((option) => !isIncomeCategoryOption(option)) : state.options;
+    const optionsById = new Map(visibleOptions.map((option) => [option.id, option]));
     const frequent = (frequentIds ?? [])
       .map((id) => optionsById.get(id))
       .filter((value): value is CategoryOption => Boolean(value));
@@ -108,12 +117,14 @@ export function CategorySheet({
           value !== undefined && !frequent.some((item) => item.id === value.id),
       );
     return { frequent, recent } as const;
-  }, [frequentIds, recentIds, state]);
+  }, [frequentIds, kind, recentIds, state]);
 
   const grouped = useMemo(() => {
     if (state.status !== 'ready') return [] as { parentId: string; parentName: string; items: CategoryOption[] }[];
     const groups = new Map<string, { parentId: string; parentName: string; items: CategoryOption[] }>();
-    for (const option of state.options) {
+    const visibleOptions =
+      kind === 'expense' ? state.options.filter((option) => !isIncomeCategoryOption(option)) : state.options;
+    for (const option of visibleOptions) {
       const existing = groups.get(option.parentId);
       if (existing) existing.items.push(option);
       else groups.set(option.parentId, { parentId: option.parentId, parentName: option.parentName, items: [option] });
@@ -124,7 +135,7 @@ export function CategorySheet({
         ...group,
         items: group.items.sort((a, b) => a.name.localeCompare(b.name)),
       }));
-  }, [state]);
+  }, [kind, state]);
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>

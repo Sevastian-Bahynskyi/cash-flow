@@ -56,6 +56,8 @@ Do not introduce duplicated balances, manual counters, or hidden state that can 
 - `amount` is always positive.
 - Income is a separate transaction type. Never represent income as a negative expense.
 - Category is required before save.
+- Income uses categories too.
+- Selecting `Income · Salary` marks the transaction as salary and starts a new cycle.
 - Editing a transaction overwrites the current row. No edit history in v1.
 - A transaction must be savable from one screen.
 
@@ -144,6 +146,7 @@ Do not introduce duplicated balances, manual counters, or hidden state that can 
 
 ### Contributions
 - Shared contributions are tracked through shared account top-up transactions.
+- MobilePay transfers can reuse the same saved people list on both expense and income flows.
 
 ### Ratio calculation
 - Recalculate after every top-up.

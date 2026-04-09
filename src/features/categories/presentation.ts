@@ -1,4 +1,5 @@
 export const categoryColorOptions = [
+  '#22C55E',
   '#34D399',
   '#60A5FA',
   '#F59E0B',
@@ -11,7 +12,7 @@ export const categoryColorOptions = [
   '#7C5CFF',
 ] as const;
 
-export const categoryIconOptions = [
+export const bankIconOptions = [
   'shape-outline',
   'cart-outline',
   'storefront-outline',
@@ -50,4 +51,34 @@ export const categoryIconOptions = [
   'bank-outline',
   'gamepad-variant-outline',
   'dots-grid',
+] as const;
+
+export const categoryIconOptions = [
+  ...bankIconOptions,
+  'music-note-outline',
+  'cash-plus',
+  'cash-refund',
+  'swap-horizontal',
+  'briefcase-outline',
+  'chart-line',
+  'account-cash-outline',
+  'brand:mobilepay',
+  'brand:spotify',
+  'brand:apple-music',
+  'brand:youtube-music',
+  'brand:youtube',
+  'brand:netflix',
+  'brand:steam',
+  'brand:playstation',
+  'brand:paypal',
+  'brand:google-pay',
+  'brand:apple-pay',
+  'brand:uber',
+  'brand:airbnb',
+  'brand:booking',
+  'brand:ikea',
+  'brand:reddit',
+  'brand:tiktok',
+  'brand:visa',
+  'brand:mastercard',
 ] as const;

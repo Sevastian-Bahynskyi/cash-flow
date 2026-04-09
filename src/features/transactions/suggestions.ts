@@ -37,27 +37,59 @@ const txSelect =
 const normalizeCategoryName = (value: string): string =>
   value.trim().toLowerCase().replace(/\s+/g, '');
 
+const personNameStopWords = new Set([
+  'mobilepay',
+  'mp',
+  'til',
+  'fra',
+  'to',
+  'from',
+  'betaling',
+  'payment',
+  'overfoersel',
+  'overforsel',
+  'transfer',
+  'received',
+  'sent',
+  'modtaget',
+  'sendt',
+]);
+
+const extractPersonLikeName = (value: string): string | null => {
+  const normalized = normalizeTransferPersonName(value);
+  if (!normalized) return null;
+
+  const filteredParts = normalized
+    .split(' ')
+    .filter((part) => part.length > 1 && !personNameStopWords.has(part));
+
+  if (filteredParts.length < 2 || filteredParts.length > 3) return null;
+  if (filteredParts.some((part) => /\d/.test(part))) return null;
+  if (!filteredParts.every((part) => /^[a-z\u00c0-\u024f'-]+$/i.test(part))) return null;
+
+  return filteredParts.join(' ');
+};
+
 const detectTransferPersonCategory = async (
   name: string,
-  comment: string | null,
-  candidates: { id: string; parent: string; name: string }[],
+  candidates: { id: string; parent: string; name: string; icon?: string }[],
 ): Promise<string | null> => {
   const mobilePayCategory = candidates.find(
     (candidate) =>
-      normalizeCategoryName(candidate.parent) === 'transfers' &&
-      normalizeCategoryName(candidate.name) === 'mobilepay',
+      (normalizeCategoryName(candidate.parent) === 'transfers' &&
+        normalizeCategoryName(candidate.name) === 'mobilepay') ||
+      candidate.icon === 'brand:mobilepay',
   );
   if (!mobilePayCategory) return null;
 
   const people = await fetchTransferPeople();
   if (people.length === 0) return null;
 
-  const normalizedText = normalizeTransferPersonName([name, comment ?? ''].filter(Boolean).join(' '));
-  if (!normalizedText) return null;
+  const personLikeName = extractPersonLikeName(name);
+  if (!personLikeName) return null;
 
-  const paddedText = ` ${normalizedText} `;
-  const match = people.find((person) => paddedText.includes(` ${person.normalized_name} `));
-  return match?.normalized_name ? mobilePayCategory.id : null;
+  const match = people.find((person) => person.normalized_name === personLikeName);
+  return match ? mobilePayCategory.id : null;
 };
 
 export const fetchAiRule = async (patternKey: string): Promise<AiRuleRow | null> => {
@@ -217,7 +249,7 @@ export const fetchRecentCategoryIds = async (): Promise<string[]> => {
 export const remoteSuggestCategory = async (
   name: string,
   comment: string | null,
-  candidates: { id: string; parent: string; name: string }[],
+  candidates: { id: string; parent: string; name: string; icon?: string }[],
   historyRows: SuggestionHistoryRow[],
 ): Promise<{ categoryId: string; confidence: number } | null> => {
   try {
@@ -312,7 +344,7 @@ export const fetchFrequentCategoryIds = async (): Promise<string[]> => {
 export const resolveSuggestedCategory = async (
   name: string,
   comment: string | null,
-  candidates: { id: string; parent: string; name: string }[],
+  candidates: { id: string; parent: string; name: string; icon?: string }[],
   options?: { preferRemote?: boolean },
 ): Promise<SuggestedCategoryResult | null> => {
   const patternKey = normalizePattern(name);
@@ -329,7 +361,7 @@ export const resolveSuggestedCategory = async (
     };
   }
 
-  const transferCategoryId = await detectTransferPersonCategory(name, comment, candidates);
+  const transferCategoryId = await detectTransferPersonCategory(name, candidates);
   if (transferCategoryId) {
     return {
       categoryId: transferCategoryId,

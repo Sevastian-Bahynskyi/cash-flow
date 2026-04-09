@@ -1,10 +1,10 @@
 import { memo } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 import { formatDateLabel, formatMinor } from '@/lib/format';
 import type { TransactionRow } from './types';
 import { MotionView } from '@/ui/MotionView';
+import { CategoryIcon } from '@/ui/CategoryIcon';
 
 type TransactionListItem = {
   row: TransactionRow;
@@ -55,7 +55,7 @@ function TransactionRowCard({
     <MotionView index={index} direction="right" distance={155} delayMs={160} stepMs={65}>
       <Pressable style={({ pressed }) => [styles.row, pressed && styles.rowPressed]} onPress={() => onEdit(row)} onLongPress={openActions}>
         <View style={[styles.iconWrap, { backgroundColor: `${item.categoryColor}22` }]}>
-          <MaterialCommunityIcons name={item.categoryIcon as never} size={20} color={item.categoryColor} />
+          <CategoryIcon name={item.categoryIcon} size={20} color={item.categoryColor} />
         </View>
         <View style={styles.rowBody}>
           <View style={styles.rowTop}>
@@ -77,11 +77,6 @@ function TransactionRowCard({
               {row.is_shared_topup ? (
                 <View style={styles.chip}>
                   <Text style={styles.chipText}>Top-up</Text>
-                </View>
-              ) : null}
-              {row.is_salary ? (
-                <View style={[styles.chip, styles.chipAccent]}>
-                  <Text style={styles.chipText}>Salary</Text>
                 </View>
               ) : null}
             </View>
@@ -163,9 +158,6 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: radius.pill,
     backgroundColor: colors.surfaceAlt,
-  },
-  chipAccent: {
-    backgroundColor: 'rgba(124,92,255,0.18)',
   },
   chipText: { ...typography.label, color: colors.textMuted },
 });

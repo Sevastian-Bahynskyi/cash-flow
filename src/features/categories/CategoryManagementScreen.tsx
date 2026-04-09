@@ -26,6 +26,7 @@ import { useOverview } from '@/features/overview/useOverview';
 import { buildBudgetStateByCategory } from '@/features/budgets/helpers';
 import { supabase } from '@/lib/supabase';
 import { ScreenHeader } from '@/ui/ScreenHeader';
+import { CategoryIcon } from '@/ui/CategoryIcon';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 
 type CategoryDraft = {
@@ -373,7 +374,7 @@ export default function CategoryManagementScreen() {
             <View key={parent.id} style={styles.parentCard}>
               <View style={styles.parentHead}>
                 <View style={[styles.parentIconWrap, { backgroundColor: `${parent.color}22` }]}>
-                  <MaterialCommunityIcons name={parent.icon as never} size={22} color={parent.color} />
+                  <CategoryIcon name={parent.icon} size={22} color={parent.color} />
                 </View>
                 <View style={styles.parentCopy}>
                   <Text style={styles.parentName}>{parent.name}</Text>
@@ -430,9 +431,9 @@ export default function CategoryManagementScreen() {
                         openEdit(child);
                       }}
                     >
-                      <View style={[styles.childIconWrap, { backgroundColor: `${parent.color}22` }]}>
-                        <MaterialCommunityIcons name={child.icon as never} size={18} color={parent.color} />
-                      </View>
+                    <View style={[styles.childIconWrap, { backgroundColor: `${parent.color}22` }]}>
+                      <CategoryIcon name={child.icon} size={18} color={parent.color} />
+                    </View>
                       <View style={styles.childCopy}>
                         <Text style={styles.childName}>{child.name}</Text>
                         <Text style={styles.childMeta}>
@@ -561,11 +562,7 @@ export default function CategoryManagementScreen() {
                     ]}
                     onPress={() => setDraft((current) => (current ? { ...current, icon } : current))}
                   >
-                    <MaterialCommunityIcons
-                      name={icon as never}
-                      size={20}
-                      color={active ? colors.text : colors.textMuted}
-                    />
+                    <CategoryIcon name={icon} size={20} color={active ? colors.text : colors.textMuted} />
                   </Pressable>
                 );
               })}

@@ -15,10 +15,12 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useOverview } from '@/features/overview/useOverview';
 import { buildCategoryMeta } from '@/features/categories/helpers';
 import { buildBudgetStateByCategory } from '@/features/budgets/helpers';
+import { findIncomeParentIds, isIncomeCategoryRow } from '@/features/categories/rules';
 import { supabase } from '@/lib/supabase';
 import { formatMinor, formatPercent } from '@/lib/format';
 import { ProgressBar } from '@/ui/ProgressBar';
 import { ScreenHeader } from '@/ui/ScreenHeader';
+import { CategoryIcon } from '@/ui/CategoryIcon';
 import { NumericKeypad } from '@/ui/NumericKeypad';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 
@@ -79,10 +81,12 @@ export default function BudgetScreen() {
     [data.activeCycle, data.budgets, data.categories, data.transactions],
   );
   const amountDisplayState = useMemo(() => highlightedAmount(draft?.amount ?? ''), [draft?.amount]);
+  const incomeParentIds = useMemo(() => findIncomeParentIds(data.categories), [data.categories]);
 
   const rows = useMemo(() => {
     const budgetByCategoryId = new Map(data.budgets.map((budget) => [budget.category_id, budget]));
     return data.categories
+      .filter((category) => !isIncomeCategoryRow(category, incomeParentIds))
       .map((category) => ({
         category,
         label: categoryMeta[category.id]?.label ?? category.name,
@@ -97,7 +101,7 @@ export default function BudgetScreen() {
         if (a.category.level !== b.category.level) return a.category.level - b.category.level;
         return a.label.localeCompare(b.label);
       });
-  }, [budgetStates, categoryMeta, data.budgets, data.categories]);
+  }, [budgetStates, categoryMeta, data.budgets, data.categories, incomeParentIds]);
 
   const filteredRows = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -239,7 +243,7 @@ export default function BudgetScreen() {
                   }}
                 >
                   <View style={[styles.iconWrap, { backgroundColor: `${tone}22` }]}>
-                    <MaterialCommunityIcons name={icon as never} size={20} color={tone} />
+                    <CategoryIcon name={icon} size={20} color={tone} />
                   </View>
                   <View style={styles.rowBody}>
                     <View style={styles.rowHead}>

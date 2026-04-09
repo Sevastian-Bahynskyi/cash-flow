@@ -8,7 +8,6 @@ import { useOverview, type BudgetAlert } from '@/features/overview/useOverview';
 import { useComposer } from '@/features/transactions/ComposerContext';
 import { TransactionList } from '@/features/transactions/TransactionList';
 import { buildCategoryMeta } from '@/features/categories/helpers';
-import { FilterChips } from '@/ui/FilterChips';
 import { MotionScope } from '@/ui/MotionScope';
 import { MotionView } from '@/ui/MotionView';
 import { ProgressBar } from '@/ui/ProgressBar';
@@ -16,17 +15,11 @@ import { ScreenHeader } from '@/ui/ScreenHeader';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 import { transactionBalance } from '@/lib/balance';
 import { formatMinor, formatPercent } from '@/lib/format';
-import type { SalaryCycle } from '@/lib/cycles';
+import { buildSalaryCycles, findCycleFor, type SalaryCycle } from '@/lib/cycles';
 import type { TransactionRow } from '@/features/transactions/types';
 import { supabase } from '@/lib/supabase';
 
-type RangeFilter = 'current' | 'previous' | 'all';
-
-const filterOptions = [
-  { label: 'Current cycle', value: 'current' },
-  { label: 'Previous', value: 'previous' },
-  { label: 'All time', value: 'all' },
-] as const satisfies readonly { label: string; value: RangeFilter }[];
+type RangeFilter = 'cycle' | 'year' | 'all';
 
 const cycleMatch = (row: TransactionRow, cycle: SalaryCycle | null): boolean => {
   if (!cycle) return false;
@@ -39,9 +32,11 @@ export default function HomeScreen() {
   const router = useRouter();
   const data = useOverview();
   const composer = useComposer();
-  const [filter, setFilter] = useState<RangeFilter>('current');
+  const [filter, setFilter] = useState<RangeFilter>('cycle');
+  const [selectedCycleId, setSelectedCycleId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [motionRun, setMotionRun] = useState(0);
+  const currentYear = new Date().getFullYear();
 
   useEffect(() => {
     if (composer.refreshKey > 0) void data.reload();
@@ -55,12 +50,55 @@ export default function HomeScreen() {
     }, []),
   );
 
-  const selectedCycle = filter === 'current' ? data.activeCycle : filter === 'previous' ? data.previousCycle : null;
+  const cycles = useMemo(
+    () => buildSalaryCycles(data.transactions.filter((row) => row.is_salary)),
+    [data.transactions],
+  );
+  const cyclesWithTransactions = useMemo(
+    () =>
+      [...cycles]
+        .filter((cycle) => data.transactions.some((row) => cycleMatch(row, cycle)))
+        .reverse(),
+    [cycles, data.transactions],
+  );
+
+  useEffect(() => {
+    if (cyclesWithTransactions.length === 0) {
+      setSelectedCycleId(null);
+      return;
+    }
+
+    setSelectedCycleId((current) => {
+      if (current && cyclesWithTransactions.some((cycle) => cycle.id === current)) return current;
+      return data.activeCycle?.id ?? cyclesWithTransactions[0]?.id ?? null;
+    });
+  }, [cyclesWithTransactions, data.activeCycle?.id]);
+
+  const selectedCycle =
+    cyclesWithTransactions.find((cycle) => cycle.id === selectedCycleId) ??
+    (() => {
+      const activeCycle = data.activeCycle;
+      if (activeCycle && cyclesWithTransactions.some((cycle) => cycle.id === activeCycle.id)) {
+        return activeCycle;
+      }
+      return cyclesWithTransactions[0] ?? null;
+    })();
   const categoryMeta = useMemo(() => buildCategoryMeta(data.categories), [data.categories]);
+  const currentYearCycles = useMemo(
+    () => cycles.filter((cycle) => cycle.label.endsWith(String(currentYear))),
+    [currentYear, cycles],
+  );
   const rangeTransactions = useMemo(() => {
+    if (filter === 'year') {
+      return data.transactions.filter((row) => {
+        const cycle = findCycleFor(cycles, row.occurred_on);
+        if (cycle) return cycle.label.endsWith(String(currentYear));
+        return row.occurred_on.startsWith(`${currentYear}-`);
+      });
+    }
     if (filter === 'all') return data.transactions;
     return data.transactions.filter((row) => cycleMatch(row, selectedCycle));
-  }, [data.transactions, filter, selectedCycle]);
+  }, [currentYear, cycles, data.transactions, filter, selectedCycle]);
   const snapshotMinor = useMemo(() => transactionBalance(rangeTransactions), [rangeTransactions]);
 
   const personalTransactions = useMemo(() => {
@@ -98,7 +136,7 @@ export default function HomeScreen() {
   const spendTotal = categorySpend.reduce((sum, item) => sum + item.spentMinor, 0);
 
   const filteredBudgetAlerts: BudgetAlert[] = useMemo(() => {
-    if (filter === 'all') return [];
+    if (filter !== 'cycle') return [];
     const targetCycle = selectedCycle;
     if (!targetCycle) return [];
     const totals = new Map<string, number>();
@@ -133,7 +171,18 @@ export default function HomeScreen() {
   const currentCycleLabel =
     filter === 'all'
       ? 'All time'
-      : selectedCycle?.label ?? 'No salary cycle';
+      : filter === 'year'
+        ? `${currentYear}`
+        : selectedCycle?.label ?? 'No salary cycle';
+
+  const heroEyebrow =
+    filter === 'all'
+      ? 'All-time balance'
+      : filter === 'year'
+        ? 'Current year balance'
+        : 'Cycle balance';
+
+  const yearChipLabel = currentYearCycles.length > 0 ? `Current year` : `Current year`;
 
   const hints = [
     data.transactions.length === 0 ? 'Log your first transaction to wake up Home.' : null,
@@ -170,7 +219,7 @@ export default function HomeScreen() {
 
       <MotionView direction="left" distance={210} delayMs={90} rotateFrom={-9}>
         <LinearGradient colors={['#1F2438', '#101219', '#0B0B0F']} style={styles.hero}>
-          <Text style={styles.heroEyebrow}>{filter === 'all' ? 'All-time balance' : 'Cycle balance'}</Text>
+          <Text style={styles.heroEyebrow}>{heroEyebrow}</Text>
           <Text style={styles.heroAmount}>{formatMinor(snapshotMinor)}</Text>
           <View style={styles.heroStats}>
             <MotionView direction="up" distance={90} delayMs={220}>
@@ -191,7 +240,73 @@ export default function HomeScreen() {
         </LinearGradient>
       </MotionView>
 
-      <FilterChips value={filter} options={filterOptions} onChange={setFilter} />
+      {cyclesWithTransactions.length > 0 ? (
+        <View style={styles.selectorBlock}>
+          <Text style={styles.sectionTitle}>Cycles</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.cycleCarousel}
+          >
+            {cyclesWithTransactions.map((cycle, index) => {
+              const active = filter === 'cycle' && selectedCycle?.id === cycle.id;
+              return (
+                <MotionView
+                  key={cycle.id}
+                  index={index}
+                  direction={active ? 'down' : 'up'}
+                  distance={70}
+                  delayMs={120}
+                  stepMs={55}
+                >
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.cycleChip,
+                      active && styles.cycleChipActive,
+                      pressed && styles.cycleChipPressed,
+                    ]}
+                    onPress={() => {
+                      setSelectedCycleId(cycle.id);
+                      setFilter('cycle');
+                    }}
+                  >
+                    <Text style={[styles.cycleChipText, active && styles.cycleChipTextActive]}>
+                      {cycle.label}
+                    </Text>
+                  </Pressable>
+                </MotionView>
+              );
+            })}
+          </ScrollView>
+        </View>
+      ) : null}
+
+      <View style={styles.filterRow}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.filterChip,
+            filter === 'year' && styles.filterChipActive,
+            pressed && styles.cycleChipPressed,
+          ]}
+          onPress={() => setFilter('year')}
+        >
+          <Text style={[styles.filterChipText, filter === 'year' && styles.filterChipTextActive]}>
+            {yearChipLabel}
+          </Text>
+        </Pressable>
+        <Pressable
+          style={({ pressed }) => [
+            styles.filterChip,
+            filter === 'all' && styles.filterChipActive,
+            pressed && styles.cycleChipPressed,
+          ]}
+          onPress={() => setFilter('all')}
+        >
+          <Text style={[styles.filterChipText, filter === 'all' && styles.filterChipTextActive]}>
+            All time
+          </Text>
+        </Pressable>
+      </View>
 
       <View style={styles.quickRow}>
         <MotionView style={styles.quickMotion} direction="left" distance={165} delayMs={170}>
@@ -347,6 +462,43 @@ const styles = StyleSheet.create({
   },
   heroStatLabel: { ...typography.label, color: colors.textMuted, fontSize: 11, textTransform: 'uppercase' },
   heroStatValue: { ...typography.label, color: colors.text, fontWeight: '600' },
+  selectorBlock: { gap: spacing.sm },
+  cycleCarousel: { paddingHorizontal: spacing.lg, gap: spacing.sm },
+  cycleChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  cycleChipActive: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  cycleChipPressed: { opacity: 0.85 },
+  cycleChipText: { ...typography.label, color: colors.textMuted },
+  cycleChipTextActive: { color: colors.text },
+  filterRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    flexWrap: 'wrap',
+  },
+  filterChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  filterChipActive: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  filterChipText: { ...typography.label, color: colors.textMuted },
+  filterChipTextActive: { color: colors.text },
   quickRow: { flexDirection: 'row', gap: spacing.md, paddingHorizontal: spacing.lg },
   quickMotion: { flex: 1 },
   quickCard: {

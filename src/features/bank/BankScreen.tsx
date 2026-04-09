@@ -14,7 +14,7 @@ import { useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '@/features/auth/AuthProvider';
-import { categoryColorOptions, categoryIconOptions } from '@/features/categories/presentation';
+import { bankIconOptions, categoryColorOptions } from '@/features/categories/presentation';
 import { useOverview } from '@/features/overview/useOverview';
 import type { LoanEventKind, LoanRow } from '@/features/loans/types';
 import type { ReceivableEventKind, ReceivableRow } from '@/features/receivables/types';
@@ -900,7 +900,7 @@ export default function BankScreen() {
 
             <Text style={styles.label}>Icon</Text>
             <View style={styles.optionRow}>
-              {categoryIconOptions.map((icon) => {
+              {bankIconOptions.map((icon) => {
                 const active = accountDraft?.icon === icon;
                 return (
                   <Pressable

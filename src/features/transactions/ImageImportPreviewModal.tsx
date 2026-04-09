@@ -18,6 +18,7 @@ import { CategorySheet } from '@/features/categories/CategorySheet';
 import { NumericKeypad } from '@/ui/NumericKeypad';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 import type { CategoryOption } from '@/features/categories/types';
+import { isIncomeCategoryOption } from '@/features/categories/rules';
 import { currencyOptions } from '@/lib/currency';
 import { resolveSuggestedCategory } from './suggestions';
 import type { ImportedTransactionDraft } from './imageImport';
@@ -93,6 +94,7 @@ export function ImageImportPreviewModal({
         id: option.id,
         parent: option.parentName,
         name: option.name,
+        icon: option.icon,
       })),
     [categoryOptions],
   );
@@ -211,9 +213,7 @@ export function ImageImportPreviewModal({
             const category = row.categoryId ? categoriesById[row.categoryId] : null;
             const categoryLabel = category
               ? `${category.parentName} · ${category.name}`
-              : row.kind === 'expense'
-                ? 'Pick a category'
-                : 'No category needed';
+              : 'Pick a category';
 
             return (
               <View key={row.id} style={styles.card}>
@@ -238,7 +238,10 @@ export function ImageImportPreviewModal({
                         onPress={() =>
                           onChangeRow(row.id, {
                             kind: option,
-                            categoryId: option === 'income' ? null : row.categoryId,
+                            categoryId:
+                              option === 'expense' && category && isIncomeCategoryOption(category)
+                                ? null
+                                : row.categoryId,
                           })
                         }
                       >
@@ -326,22 +329,18 @@ export function ImageImportPreviewModal({
                   <MaterialCommunityIcons name="calendar-month-outline" size={18} color={colors.textMuted} />
                 </Pressable>
 
-                {row.kind === 'expense' ? (
-                  <>
-                    <Text style={styles.label}>Category</Text>
-                    <Pressable
-                      style={({ pressed }) => [styles.categoryButton, pressed && styles.rowPressed]}
-                      onPress={() => {
-                        setAmountPickerRowId(null);
-                        setDatePickerRowId(null);
-                        setCategoryPickerRowId(row.id);
-                      }}
-                    >
-                      <Text style={[styles.categoryText, !category && styles.placeholder]}>{categoryLabel}</Text>
-                      <MaterialCommunityIcons name="chevron-right" size={18} color={colors.textMuted} />
-                    </Pressable>
-                  </>
-                ) : null}
+                <Text style={styles.label}>Category</Text>
+                <Pressable
+                  style={({ pressed }) => [styles.categoryButton, pressed && styles.rowPressed]}
+                  onPress={() => {
+                    setAmountPickerRowId(null);
+                    setDatePickerRowId(null);
+                    setCategoryPickerRowId(row.id);
+                  }}
+                >
+                  <Text style={[styles.categoryText, !category && styles.placeholder]}>{categoryLabel}</Text>
+                  <MaterialCommunityIcons name="chevron-right" size={18} color={colors.textMuted} />
+                </Pressable>
 
                 <Text style={styles.label}>Note</Text>
                 <TextInput
@@ -375,6 +374,7 @@ export function ImageImportPreviewModal({
         <CategorySheet
           visible={categoryPickerRowId !== null}
           onClose={() => setCategoryPickerRowId(null)}
+          kind={categoryPickerRowId ? rows.find((row) => row.id === categoryPickerRowId)?.kind ?? 'expense' : 'expense'}
           onSelect={(option) => {
             if (!categoryPickerRowId) return;
             onChangeRow(categoryPickerRowId, { categoryId: option.id });
