@@ -1,4 +1,4 @@
-import type { CategoryRow } from './types';
+import type { CategoryOverrideRow, CategoryRow } from './types';
 
 export type CategoryMeta = {
   label: string;
@@ -32,4 +32,23 @@ export const buildCategoryMeta = (
     }
   }
   return out;
+};
+
+export const applyCategoryOverrides = (
+  categories: readonly CategoryRow[],
+  overrides: readonly CategoryOverrideRow[],
+): CategoryRow[] => {
+  if (overrides.length === 0) return [...categories];
+
+  const overridesByCategoryId = new Map(overrides.map((override) => [override.category_id, override]));
+  return categories.map((category) => {
+    const override = overridesByCategoryId.get(category.id);
+    if (!override) return category;
+
+    return {
+      ...category,
+      name: override.name?.trim() ? override.name : category.name,
+      icon: override.icon?.trim() ? override.icon : category.icon,
+    };
+  });
 };

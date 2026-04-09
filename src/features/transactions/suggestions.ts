@@ -1,11 +1,12 @@
 import { supabase, supabaseFunctionsUrl, supabasePublishableKey } from '@/lib/supabase';
 import { normalizePattern } from '@/lib/currency';
+import { fetchTransferPeople, normalizeTransferPersonName } from '@/features/transfers/people';
 import type { TransactionRow } from './types';
 
 export type SuggestedCategoryResult = {
   categoryId: string;
   confidence: number;
-  source: 'memory' | 'history' | 'ai';
+  source: 'memory' | 'people' | 'history' | 'ai';
   patternKey: string;
 };
 
@@ -32,6 +33,32 @@ type SuggestFunctionResponse = {
 
 const txSelect =
   'id, user_id, kind, amount_minor, occurred_on, name, comment, category_id, country_iso, recurring, shared, shared_participant, is_shared_topup, is_salary, currency_code, original_amount_minor, converted_amount_minor, fx_rate, created_at, updated_at';
+
+const normalizeCategoryName = (value: string): string =>
+  value.trim().toLowerCase().replace(/\s+/g, '');
+
+const detectTransferPersonCategory = async (
+  name: string,
+  comment: string | null,
+  candidates: { id: string; parent: string; name: string }[],
+): Promise<string | null> => {
+  const mobilePayCategory = candidates.find(
+    (candidate) =>
+      normalizeCategoryName(candidate.parent) === 'transfers' &&
+      normalizeCategoryName(candidate.name) === 'mobilepay',
+  );
+  if (!mobilePayCategory) return null;
+
+  const people = await fetchTransferPeople();
+  if (people.length === 0) return null;
+
+  const normalizedText = normalizeTransferPersonName([name, comment ?? ''].filter(Boolean).join(' '));
+  if (!normalizedText) return null;
+
+  const paddedText = ` ${normalizedText} `;
+  const match = people.find((person) => paddedText.includes(` ${person.normalized_name} `));
+  return match?.normalized_name ? mobilePayCategory.id : null;
+};
 
 export const fetchAiRule = async (patternKey: string): Promise<AiRuleRow | null> => {
   const { data, error } = await supabase
@@ -298,6 +325,16 @@ export const resolveSuggestedCategory = async (
       categoryId: rule.category_id,
       confidence: 1,
       source: 'memory',
+      patternKey,
+    };
+  }
+
+  const transferCategoryId = await detectTransferPersonCategory(name, comment, candidates);
+  if (transferCategoryId) {
+    return {
+      categoryId: transferCategoryId,
+      confidence: 0.98,
+      source: 'people',
       patternKey,
     };
   }

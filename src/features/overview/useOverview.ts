@@ -11,7 +11,8 @@ import { savingsTotal } from '@/lib/savings';
 import type { SavingsAccountRow, SavingsEventRow } from '@/features/savings/types';
 import type { LoanEventRow, LoanRow } from '@/features/loans/types';
 import type { ReceivableEventRow, ReceivableRow } from '@/features/receivables/types';
-import type { CategoryRow } from '@/features/categories/types';
+import { applyCategoryOverrides } from '@/features/categories/helpers';
+import type { CategoryOverrideRow, CategoryRow } from '@/features/categories/types';
 import type { TransactionRow } from '@/features/transactions/types';
 
 type TxnRow = BalanceTxn & TransactionRow;
@@ -116,7 +117,7 @@ export const useOverview = (): OverviewData => {
       }
       setUserId(userData.user.id);
 
-      const [txnsRes, savingsAccountsRes, savingsRes, loansRes, loanEventsRes, receivablesRes, receivableEventsRes, budgetsRes, catsRes] = await Promise.all([
+      const [txnsRes, savingsAccountsRes, savingsRes, loansRes, loanEventsRes, receivablesRes, receivableEventsRes, budgetsRes, catsRes, categoryOverridesRes] = await Promise.all([
         supabase
           .from('transactions')
           .select(
@@ -152,6 +153,9 @@ export const useOverview = (): OverviewData => {
         supabase
           .from('categories')
           .select('id, user_id, parent_id, name, level, is_system, icon, color'),
+        supabase
+          .from('category_overrides')
+          .select('id, user_id, category_id, name, icon, updated_at'),
       ]);
 
       if (txnsRes.error) throw txnsRes.error;
@@ -163,6 +167,7 @@ export const useOverview = (): OverviewData => {
       if (receivableEventsRes.error) throw receivableEventsRes.error;
       if (budgetsRes.error) throw budgetsRes.error;
       if (catsRes.error) throw catsRes.error;
+      if (categoryOverridesRes.error) throw categoryOverridesRes.error;
 
       const txns = (txnsRes.data ?? []) as TxnRow[];
       const savingsAccountsRows = (savingsAccountsRes.data ?? []) as SavingsAccountRow[];
@@ -172,7 +177,10 @@ export const useOverview = (): OverviewData => {
       const receivables = (receivablesRes.data ?? []) as ReceivableRow[];
       const receivableEventsRows = (receivableEventsRes.data ?? []) as ReceivableEventRow[];
       const budgets = (budgetsRes.data ?? []) as BudgetRow[];
-      const cats = (catsRes.data ?? []) as CategoryRow[];
+      const cats = applyCategoryOverrides(
+        (catsRes.data ?? []) as CategoryRow[],
+        (categoryOverridesRes.data ?? []) as CategoryOverrideRow[],
+      );
 
       const catLabels = new Map<string, string>();
       const parents = new Map<string, string>();

@@ -9,6 +9,15 @@ export type CategoryRow = {
   color: string;
 };
 
+export type CategoryOverrideRow = {
+  id: string;
+  user_id: string;
+  category_id: string;
+  name: string | null;
+  icon: string | null;
+  updated_at: string;
+};
+
 export type CategoryOption = {
   id: string;
   name: string;

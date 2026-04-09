@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Modal,
@@ -15,6 +15,12 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { clearCategoryCache } from '@/features/categories/useCategories';
 import type { CategoryRow } from '@/features/categories/types';
 import { categoryColorOptions, categoryIconOptions } from '@/features/categories/presentation';
+import {
+  fetchTransferPeople,
+  removeTransferPerson,
+  saveTransferPerson,
+} from '@/features/transfers/people';
+import type { TransferPersonRow } from '@/features/transfers/types';
 import { useOverview } from '@/features/overview/useOverview';
 import { buildBudgetStateByCategory } from '@/features/budgets/helpers';
 import { supabase } from '@/lib/supabase';
@@ -30,6 +36,13 @@ type CategoryDraft = {
   color: string;
   level: 1 | 2;
   readOnly: boolean;
+  canDelete: boolean;
+  saveMode: 'category' | 'override';
+};
+
+type TransferPersonDraft = {
+  id?: string;
+  name: string;
 };
 
 const toneForBudget = (tone: 'neutral' | 'warning' | 'critical' | null): string => {
@@ -43,6 +56,11 @@ export default function CategoryManagementScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [draft, setDraft] = useState<CategoryDraft | null>(null);
   const [saving, setSaving] = useState(false);
+  const [transferPeople, setTransferPeople] = useState<TransferPersonRow[]>([]);
+  const [transferPeopleLoading, setTransferPeopleLoading] = useState(true);
+  const [transferPersonDraft, setTransferPersonDraft] = useState<TransferPersonDraft | null>(null);
+  const [transferPeopleSaving, setTransferPeopleSaving] = useState(false);
+  const [transferPeopleError, setTransferPeopleError] = useState<string | null>(null);
 
   const budgetStates = useMemo(
     () => buildBudgetStateByCategory(data.categories, data.budgets, data.transactions, data.activeCycle),
@@ -63,14 +81,36 @@ export default function CategoryManagementScreen() {
     [data.categories],
   );
 
+  const transfersParentId = useMemo(
+    () =>
+      data.categories.find(
+        (category) => category.level === 1 && category.name.trim().toLowerCase() === 'transfers',
+      )?.id ?? null,
+    [data.categories],
+  );
+
+  const loadTransferPeople = async (force = false): Promise<void> => {
+    setTransferPeopleLoading(true);
+    try {
+      const rows = await fetchTransferPeople({ force });
+      setTransferPeople(rows);
+    } finally {
+      setTransferPeopleLoading(false);
+    }
+  };
+
   const onRefresh = async (): Promise<void> => {
     setRefreshing(true);
     try {
-      await data.reload();
+      await Promise.all([data.reload(), loadTransferPeople(true)]);
     } finally {
       setRefreshing(false);
     }
   };
+
+  useEffect(() => {
+    void loadTransferPeople();
+  }, []);
 
   const openCreateParent = (): void => {
     setDraft({
@@ -81,6 +121,8 @@ export default function CategoryManagementScreen() {
       color: '#7C5CFF',
       level: 1,
       readOnly: false,
+      canDelete: false,
+      saveMode: 'category',
     });
   };
 
@@ -93,10 +135,13 @@ export default function CategoryManagementScreen() {
       color: parent.color,
       level: 2,
       readOnly: false,
+      canDelete: false,
+      saveMode: 'category',
     });
   };
 
   const openEdit = (category: CategoryRow): void => {
+    const isSystemSubcategory = category.is_system && category.level === 2;
     setDraft({
       mode: 'edit',
       categoryId: category.id,
@@ -105,7 +150,9 @@ export default function CategoryManagementScreen() {
       icon: category.icon,
       color: category.color,
       level: category.level,
-      readOnly: category.is_system,
+      readOnly: category.is_system && category.level === 1,
+      canDelete: !category.is_system,
+      saveMode: isSystemSubcategory ? 'override' : 'category',
     });
   };
 
@@ -115,6 +162,24 @@ export default function CategoryManagementScreen() {
     setSaving(true);
     try {
       if (draft.mode === 'edit' && draft.categoryId) {
+        if (draft.saveMode === 'override') {
+          const { error } = await supabase.from('category_overrides').upsert(
+            {
+              user_id: data.userId,
+              category_id: draft.categoryId,
+              name: draft.name.trim(),
+              icon: draft.icon,
+            },
+            { onConflict: 'user_id,category_id' },
+          );
+          if (!error) {
+            clearCategoryCache();
+            await data.reload();
+            setDraft(null);
+          }
+          return;
+        }
+
         const payload =
           draft.level === 1
             ? { name: draft.name.trim(), icon: draft.icon, color: draft.color }
@@ -149,7 +214,7 @@ export default function CategoryManagementScreen() {
   };
 
   const deleteCategory = async (): Promise<void> => {
-    if (!draft?.categoryId || draft.readOnly) return;
+    if (!draft?.categoryId || draft.readOnly || !draft.canDelete) return;
     setSaving(true);
     try {
       const { error } = await supabase.from('categories').delete().eq('id', draft.categoryId);
@@ -160,6 +225,44 @@ export default function CategoryManagementScreen() {
       }
     } finally {
       setSaving(false);
+    }
+  };
+
+  const saveTransferPersonDraft = async (): Promise<void> => {
+    if (!transferPersonDraft) return;
+
+    setTransferPeopleSaving(true);
+    setTransferPeopleError(null);
+    try {
+      const result = await saveTransferPerson(transferPersonDraft);
+      if (!result.ok) {
+        setTransferPeopleError(result.error);
+        return;
+      }
+
+      await loadTransferPeople(true);
+      setTransferPersonDraft(null);
+    } finally {
+      setTransferPeopleSaving(false);
+    }
+  };
+
+  const deleteTransferPerson = async (): Promise<void> => {
+    if (!transferPersonDraft?.id) return;
+
+    setTransferPeopleSaving(true);
+    setTransferPeopleError(null);
+    try {
+      const result = await removeTransferPerson(transferPersonDraft.id);
+      if (!result.ok) {
+        setTransferPeopleError(result.error);
+        return;
+      }
+
+      await loadTransferPeople(true);
+      setTransferPersonDraft(null);
+    } finally {
+      setTransferPeopleSaving(false);
     }
   };
 
@@ -266,6 +369,50 @@ export default function CategoryManagementScreen() {
                   </Pressable>
                 ))}
               </View>
+
+              {parent.id === transfersParentId ? (
+                <View style={styles.transferPeopleCard}>
+                  <View style={styles.transferPeopleHead}>
+                    <View style={styles.transferPeopleCopy}>
+                      <Text style={styles.transferPeopleTitle}>People</Text>
+                      <Text style={styles.transferPeopleMeta}>
+                        When one of these names appears, auto-categorization defaults to Transfers · MobilePay.
+                      </Text>
+                    </View>
+                    <Pressable
+                      style={({ pressed }) => [styles.smallButton, pressed && styles.buttonPressed]}
+                      onPress={() => {
+                        setTransferPeopleError(null);
+                        setTransferPersonDraft({ name: '' });
+                      }}
+                    >
+                      <Text style={styles.smallButtonText}>Add person</Text>
+                    </Pressable>
+                  </View>
+
+                  {transferPeopleLoading ? (
+                    <Text style={styles.transferPeopleEmpty}>Loading...</Text>
+                  ) : transferPeople.length === 0 ? (
+                    <Text style={styles.transferPeopleEmpty}>No people added yet.</Text>
+                  ) : (
+                    <View style={styles.transferPeopleList}>
+                      {transferPeople.map((person) => (
+                        <Pressable
+                          key={person.id}
+                          style={({ pressed }) => [styles.transferPersonRow, pressed && styles.rowPressed]}
+                          onPress={() => {
+                            setTransferPeopleError(null);
+                            setTransferPersonDraft({ id: person.id, name: person.name });
+                          }}
+                        >
+                          <Text style={styles.transferPersonName}>{person.name}</Text>
+                          <MaterialCommunityIcons name="pencil-outline" size={18} color={colors.textMuted} />
+                        </Pressable>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              ) : null}
             </View>
           ))}
         </View>
@@ -359,7 +506,7 @@ export default function CategoryManagementScreen() {
               </View>
             )}
 
-            {!draft?.readOnly && draft?.mode === 'edit' ? (
+            {!draft?.readOnly && draft?.mode === 'edit' && draft.canDelete ? (
               <Pressable
                 style={({ pressed }) => [styles.destructiveButton, pressed && styles.buttonPressed]}
                 onPress={() => {
@@ -367,6 +514,63 @@ export default function CategoryManagementScreen() {
                 }}
               >
                 <Text style={styles.destructiveButtonText}>{saving ? 'Working...' : 'Delete category'}</Text>
+              </Pressable>
+            ) : null}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      <Modal
+        visible={transferPersonDraft !== null}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setTransferPersonDraft(null)}
+      >
+        <SafeAreaView style={styles.modalSafeArea} edges={['top', 'bottom']}>
+          <ScreenHeader
+            back
+            onBack={() => setTransferPersonDraft(null)}
+            title={transferPersonDraft?.id ? 'Edit Person' : 'Add Person'}
+            subtitle="Transfers · MobilePay"
+            actions={[
+              {
+                icon: 'check',
+                onPress: () => {
+                  void saveTransferPersonDraft();
+                },
+                disabled: transferPeopleSaving,
+              },
+            ]}
+          />
+          <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalContent}>
+            <Text style={styles.label}>Name</Text>
+            <TextInput
+              value={transferPersonDraft?.name ?? ''}
+              onChangeText={(value) => {
+                setTransferPeopleError(null);
+                setTransferPersonDraft((current) => (current ? { ...current, name: value } : current));
+              }}
+              placeholder="Person name"
+              placeholderTextColor={colors.textMuted}
+              style={styles.input}
+            />
+
+            <Text style={styles.transferPeopleHint}>
+              If this name shows up in the transaction name or note, the app will default the category to Transfers · MobilePay.
+            </Text>
+
+            {transferPeopleError ? <Text style={styles.transferPeopleError}>{transferPeopleError}</Text> : null}
+
+            {transferPersonDraft?.id ? (
+              <Pressable
+                style={({ pressed }) => [styles.destructiveButton, pressed && styles.buttonPressed]}
+                onPress={() => {
+                  void deleteTransferPerson();
+                }}
+              >
+                <Text style={styles.destructiveButtonText}>
+                  {transferPeopleSaving ? 'Working...' : 'Delete person'}
+                </Text>
               </Pressable>
             ) : null}
           </ScrollView>
@@ -424,6 +628,31 @@ const styles = StyleSheet.create({
   },
   smallButtonText: { ...typography.label, color: colors.text },
   childList: { gap: spacing.sm },
+  transferPeopleCard: {
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceAlt,
+  },
+  transferPeopleHead: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.md },
+  transferPeopleCopy: { flex: 1, gap: 4 },
+  transferPeopleTitle: { ...typography.body, color: colors.text, fontWeight: '700' },
+  transferPeopleMeta: { ...typography.label, color: colors.textMuted },
+  transferPeopleList: { gap: spacing.sm },
+  transferPersonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+  },
+  transferPersonName: { ...typography.body, color: colors.text, fontWeight: '600' },
+  transferPeopleEmpty: { ...typography.body, color: colors.textMuted },
+  transferPeopleHint: { ...typography.body, color: colors.textMuted },
+  transferPeopleError: { ...typography.label, color: colors.danger },
   childRow: {
     flexDirection: 'row',
     alignItems: 'center',

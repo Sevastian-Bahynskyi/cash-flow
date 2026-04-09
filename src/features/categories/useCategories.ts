@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import type { CategoryOption, CategoryRow } from './types';
+import { applyCategoryOverrides } from './helpers';
+import type { CategoryOption, CategoryOverrideRow, CategoryRow } from './types';
 
 type State =
   | { status: 'loading' }
@@ -22,19 +23,27 @@ export function useCategories(): State {
     if (cache) return;
     let cancelled = false;
     (async () => {
-      const { data, error } = await supabase
-        .from('categories')
-        .select('id, user_id, parent_id, name, level, is_system, icon, color')
-        .order('level', { ascending: true })
-        .order('name', { ascending: true });
+      const [categoriesRes, overridesRes] = await Promise.all([
+        supabase
+          .from('categories')
+          .select('id, user_id, parent_id, name, level, is_system, icon, color')
+          .order('level', { ascending: true })
+          .order('name', { ascending: true }),
+        supabase
+          .from('category_overrides')
+          .select('id, user_id, category_id, name, icon, updated_at'),
+      ]);
 
       if (cancelled) return;
-      if (error) {
+      if (categoriesRes.error || overridesRes.error) {
         setState({ status: 'error', message: 'Could not load categories.' });
         return;
       }
 
-      const rows = (data ?? []) as CategoryRow[];
+      const rows = applyCategoryOverrides(
+        (categoriesRes.data ?? []) as CategoryRow[],
+        (overridesRes.data ?? []) as CategoryOverrideRow[],
+      );
       const parents = new Map<string, CategoryRow>();
       for (const r of rows) {
         if (r.level === 1) parents.set(r.id, r);
