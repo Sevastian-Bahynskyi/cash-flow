@@ -7,6 +7,10 @@
     "start:clear": "expo start --clear",
     "ios": "expo run:ios",
     "android": "expo run:android",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "lint:changed": "node ./scripts/lint-changed.cjs",
+    "scan:smells": "node ./scripts/scan-smells.cjs",
     "typecheck": "tsc --noEmit",
     "postinstall": "patch-package"
   },
@@ -15,6 +19,7 @@
     "@expo/vector-icons": "^15.1.1",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/datetimepicker": "8.4.4",
+    "@shopify/react-native-skia": "^2.6.2",
     "@supabase/supabase-js": "^2.102.1",
     "babel-preset-expo": "~54.0.10",
     "expo": "~54.0.0",
@@ -43,8 +48,12 @@
     "simple-icons": "^16.15.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.4",
     "@types/react": "~19.1.17",
+    "eslint": "^9.39.4",
+    "eslint-config-expo": "^55.0.0",
     "typescript": "~5.9.3",
+    "typescript-eslint": "^8.58.1",
     "xcode": "3.0.1"
   },
   "private": true

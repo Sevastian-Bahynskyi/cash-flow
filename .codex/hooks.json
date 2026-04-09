@@ -1,0 +1,27 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/user-prompt-submit.cjs\"",
+            "statusMessage": "Injecting modernization policy"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/stop-validate.cjs\"",
+            "timeout": 120,
+            "statusMessage": "Running staged validation"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "ignored_files": [
+    "src/features/dashboard/DashboardScreen.tsx",
+    "src/features/dashboard/ExpenseRingChart.tsx",
+    "src/features/dashboard/useDashboard.ts",
+    "src/features/home/HomeScreen.tsx",
+    "src/features/transactions/AddTransactionModal.tsx",
+    "src/features/transactions/ImageImportPreviewModal.tsx",
+    "src/features/transactions/imageImport.ts",
+    "supabase/functions/parse-transaction-csv/index.ts",
+    "supabase/functions/parse-transaction-image/index.ts"
+  ]
+}
