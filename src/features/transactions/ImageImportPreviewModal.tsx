@@ -19,9 +19,16 @@ import { NumericKeypad } from '@/ui/NumericKeypad';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 import type { CategoryOption } from '@/features/categories/types';
 import { isIncomeCategoryOption } from '@/features/categories/rules';
-import { currencyOptions } from '@/lib/currency';
+import { formatDateLabel } from '@/lib/format';
 import { resolveSuggestedCategory } from './suggestions';
-import type { ImportedTransactionDraft } from './imageImport';
+import type { ImportedTransactionDraft, SkippedImportedTransaction } from './imageImport';
+import {
+  TransactionCurrencySelector,
+  TransactionFieldLabel,
+  TransactionKindSelector,
+  TransactionPickerField,
+  TransactionTextField,
+} from './TransactionFormFields';
 import type { TransactionKind } from './types';
 
 type BudgetIndicator = {
@@ -32,6 +39,7 @@ type BudgetIndicator = {
 type Props = {
   visible: boolean;
   rows: ImportedTransactionDraft[];
+  skippedDuplicates?: SkippedImportedTransaction[];
   saving: boolean;
   errorMessage: string | null;
   categoriesById: Record<string, CategoryOption>;
@@ -70,6 +78,7 @@ const formatAmountDisplay = (raw: string): string => {
 export function ImageImportPreviewModal({
   visible,
   rows,
+  skippedDuplicates = [],
   saving,
   errorMessage,
   categoriesById,
@@ -100,6 +109,7 @@ export function ImageImportPreviewModal({
   );
   const activeDateRow = datePickerRowId ? rows.find((row) => row.id === datePickerRowId) ?? null : null;
   const activeDateValue = activeDateRow ? parseIsoDate(activeDateRow.occurredOn) : new Date();
+  const visibleSkippedDuplicates = skippedDuplicates.slice(0, 4);
 
   useEffect(() => {
     rowsRef.current = rows;
@@ -201,6 +211,26 @@ export function ImageImportPreviewModal({
         <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
 
+          {skippedDuplicates.length > 0 ? (
+            <View style={styles.duplicateNotice}>
+              <Text style={styles.duplicateTitle}>
+                Skipped {skippedDuplicates.length} duplicate{skippedDuplicates.length === 1 ? '' : 's'}
+              </Text>
+              {visibleSkippedDuplicates.map((row) => (
+                <Text key={row.id} style={styles.duplicateItem}>
+                  {row.name} · {row.occurredOn} · {row.currencyCode} {row.amount}
+                  {row.reason === 'existing' ? ' · already exists' : ' · repeated in import'}
+                </Text>
+              ))}
+              {skippedDuplicates.length > visibleSkippedDuplicates.length ? (
+                <Text style={styles.duplicateMeta}>
+                  +{skippedDuplicates.length - visibleSkippedDuplicates.length} more duplicate
+                  {skippedDuplicates.length - visibleSkippedDuplicates.length === 1 ? '' : 's'}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
+
           {rows.length === 0 ? (
             <View style={styles.emptyState}>
               <MaterialCommunityIcons name="image-off-outline" size={28} color={colors.textMuted} />
@@ -224,60 +254,44 @@ export function ImageImportPreviewModal({
                   </Pressable>
                 </View>
 
-                <View style={styles.kindRow}>
-                  {kindOptions.map((option) => {
-                    const active = row.kind === option;
-                    return (
-                      <Pressable
-                        key={option}
-                        style={({ pressed }) => [
-                          styles.kindChip,
-                          active && styles.kindChipActive,
-                          pressed && styles.rowPressed,
-                        ]}
-                        onPress={() =>
-                          onChangeRow(row.id, {
-                            kind: option,
-                            categoryId:
-                              option === 'expense' && category && isIncomeCategoryOption(category)
-                                ? null
-                                : row.categoryId,
-                          })
-                        }
-                      >
-                        <Text style={[styles.kindChipText, active && styles.kindChipTextActive]}>
-                          {option === 'expense' ? 'Expense' : 'Income'}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
+                <TransactionKindSelector
+                  value={row.kind}
+                  variant="card"
+                  onChange={(option) =>
+                    onChangeRow(row.id, {
+                      kind: option,
+                      categoryId:
+                        option === 'expense' && category && isIncomeCategoryOption(category)
+                          ? null
+                          : row.categoryId,
+                    })
+                  }
+                />
 
-                <Text style={styles.label}>Name</Text>
-                <TextInput
+                <TransactionFieldLabel>Name</TransactionFieldLabel>
+                <TransactionTextField
                   value={row.name}
                   onChangeText={(value) => onChangeRow(row.id, { name: value })}
                   onFocus={() => setAmountPickerRowId(null)}
                   placeholder="Transaction name"
-                  placeholderTextColor={colors.textMuted}
-                  style={styles.input}
+                  variant="card"
                 />
 
                 <View style={styles.inlineRow}>
                   <View style={styles.inlineField}>
-                    <Text style={styles.label}>Amount</Text>
-                    <Pressable
-                      style={({ pressed }) => [styles.categoryButton, pressed && styles.rowPressed]}
+                    <TransactionFieldLabel>Amount</TransactionFieldLabel>
+                    <TransactionPickerField
+                      text={formatAmountDisplay(row.amount)}
+                      variant="card"
+                      leadingMaterialIcon="cash"
+                      trailing={<MaterialCommunityIcons name="keyboard-outline" size={18} color={colors.textMuted} />}
                       onPress={() => {
                         Keyboard.dismiss();
                         setCategoryPickerRowId(null);
                         setDatePickerRowId(null);
                         setAmountPickerRowId((current) => (current === row.id ? null : row.id));
                       }}
-                    >
-                      <Text style={styles.categoryText}>{formatAmountDisplay(row.amount)}</Text>
-                      <MaterialCommunityIcons name="keyboard-outline" size={18} color={colors.textMuted} />
-                    </Pressable>
+                    />
                   </View>
                 </View>
 
@@ -290,66 +304,49 @@ export function ImageImportPreviewModal({
                   </View>
                 ) : null}
 
-                <Text style={styles.label}>Currency</Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.currencyRow}
-                >
-                  {currencyOptions.map((currency) => {
-                    const active = row.currencyCode === currency.code;
-                    return (
-                      <Pressable
-                        key={`${row.id}-${currency.code}`}
-                        style={({ pressed }) => [
-                          styles.currencyChip,
-                          active && styles.currencyChipActive,
-                          pressed && styles.rowPressed,
-                        ]}
-                        onPress={() => onChangeRow(row.id, { currencyCode: currency.code })}
-                      >
-                        <Text style={[styles.currencyChipText, active && styles.currencyChipTextActive]}>
-                          {currency.label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
+                <TransactionFieldLabel>Currency</TransactionFieldLabel>
+                <TransactionCurrencySelector
+                  value={row.currencyCode}
+                  variant="card"
+                  onChange={(value) => onChangeRow(row.id, { currencyCode: value })}
+                />
 
-                <Text style={styles.label}>Date</Text>
-                <Pressable
-                  style={({ pressed }) => [styles.categoryButton, pressed && styles.rowPressed]}
+                <TransactionFieldLabel>Date</TransactionFieldLabel>
+                <TransactionPickerField
+                  text={formatDateLabel(row.occurredOn)}
+                  variant="card"
+                  leadingMaterialIcon="calendar-month-outline"
+                  trailing={<MaterialCommunityIcons name="calendar-month-outline" size={18} color={colors.textMuted} />}
                   onPress={() => {
                     setAmountPickerRowId(null);
                     setCategoryPickerRowId(null);
                     setDatePickerRowId(row.id);
                   }}
-                >
-                  <Text style={styles.categoryText}>{row.occurredOn}</Text>
-                  <MaterialCommunityIcons name="calendar-month-outline" size={18} color={colors.textMuted} />
-                </Pressable>
+                />
 
-                <Text style={styles.label}>Category</Text>
-                <Pressable
-                  style={({ pressed }) => [styles.categoryButton, pressed && styles.rowPressed]}
+                <TransactionFieldLabel>Category</TransactionFieldLabel>
+                <TransactionPickerField
+                  text={category ? categoryLabel : ''}
+                  placeholder="Pick a category"
+                  variant="card"
+                  leadingCategoryIcon={category?.icon ?? 'shape-outline'}
+                  leadingIconColor={category?.parentColor ?? colors.textMuted}
+                  leadingIconBackgroundColor={category ? `${category.parentColor}22` : colors.surfaceAlt}
                   onPress={() => {
                     setAmountPickerRowId(null);
                     setDatePickerRowId(null);
                     setCategoryPickerRowId(row.id);
                   }}
-                >
-                  <Text style={[styles.categoryText, !category && styles.placeholder]}>{categoryLabel}</Text>
-                  <MaterialCommunityIcons name="chevron-right" size={18} color={colors.textMuted} />
-                </Pressable>
+                />
 
-                <Text style={styles.label}>Note</Text>
-                <TextInput
+                <TransactionFieldLabel>Note</TransactionFieldLabel>
+                <TransactionTextField
                   value={row.comment}
                   onChangeText={(value) => onChangeRow(row.id, { comment: value })}
                   onFocus={() => setAmountPickerRowId(null)}
                   placeholder="Optional"
-                  placeholderTextColor={colors.textMuted}
-                  style={[styles.input, styles.noteInput]}
+                  variant="card"
+                  style={styles.noteInput}
                   multiline
                 />
               </View>
@@ -422,6 +419,18 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl * 2, gap: spacing.md },
   error: { ...typography.body, color: colors.danger },
+  duplicateNotice: {
+    borderRadius: radius.lg,
+    backgroundColor: 'rgba(245,185,66,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(245,185,66,0.28)',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    gap: spacing.xs,
+  },
+  duplicateTitle: { ...typography.body, color: colors.text, fontWeight: '700' },
+  duplicateItem: { ...typography.label, color: colors.text },
+  duplicateMeta: { ...typography.label, color: colors.textMuted },
   emptyState: {
     borderRadius: radius.lg,
     backgroundColor: colors.surface,

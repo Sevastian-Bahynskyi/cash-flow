@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
+  LayoutAnimation,
   Modal,
   Platform,
   Pressable,
@@ -9,6 +10,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  UIManager,
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -37,15 +39,26 @@ import {
   upsertAiRule,
   type SuggestedCategoryResult,
 } from './suggestions';
-import { currencyOptions, convertToDkk } from '@/lib/currency';
+import { convertToDkk } from '@/lib/currency';
 import { getDeviceCountryIso, getDeviceCurrencyCode, getLiveCountryIso } from '@/lib/device';
 import { formatCountryFlag, formatDateLabel, formatMinor, normalizeCountryIso } from '@/lib/format';
 import { activeCycle, buildSalaryCycles } from '@/lib/cycles';
 import { fetchTransferPeople, normalizeTransferPersonName } from '@/features/transfers/people';
 import type { TransferPersonRow } from '@/features/transfers/types';
 import { ImageImportPreviewModal } from './ImageImportPreviewModal';
-import { CategoryIcon } from '@/ui/CategoryIcon';
-import { importTransactionsFromCsv, importTransactionsFromImage, type ImportedTransactionDraft } from './imageImport';
+import {
+  TransactionCurrencySelector,
+  TransactionFieldLabel,
+  TransactionKindSelector,
+  TransactionPickerField,
+  TransactionTextField,
+} from './TransactionFormFields';
+import {
+  importTransactionsFromCsv,
+  importTransactionsFromImage,
+  type ImportedTransactionDraft,
+  type SkippedImportedTransaction,
+} from './imageImport';
 import { isCsvImportFile, readCsvImportText, type CsvImportFile, type PendingImport } from './importFiles';
 import type { TransactionDraft, TransactionInsert, TransactionKind, TransactionRow } from './types';
 
@@ -122,6 +135,27 @@ const parseAmountMinor = (raw: string): number | null => {
   const value = Number(normalized);
   if (!Number.isFinite(value) || value <= 0) return null;
   return Math.round(value * 100);
+};
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+const animateKeypadLayout = (): void => {
+  LayoutAnimation.configureNext({
+    duration: 220,
+    create: {
+      type: LayoutAnimation.Types.easeInEaseOut,
+      property: LayoutAnimation.Properties.opacity,
+    },
+    update: {
+      type: LayoutAnimation.Types.easeInEaseOut,
+    },
+    delete: {
+      type: LayoutAnimation.Types.easeInEaseOut,
+      property: LayoutAnimation.Properties.opacity,
+    },
+  });
 };
 
 const minorToInput = (minor: number | undefined): string =>
@@ -244,6 +278,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
   const [csvImportBusy, setCsvImportBusy] = useState(false);
   const [imageImportSaving, setImageImportSaving] = useState(false);
   const [imageImportError, setImageImportError] = useState<string | null>(null);
+  const [imageImportSkippedDuplicates, setImageImportSkippedDuplicates] = useState<SkippedImportedTransaction[]>([]);
   const [transferPeople, setTransferPeople] = useState<TransferPersonRow[]>([]);
   const categoriesState = useCategories();
 
@@ -267,6 +302,27 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
   const autoAppliedCategoryId = useRef<string | null>(null);
   const suggestionRunId = useRef(0);
   const handledPendingImportId = useRef<string | null>(null);
+
+  const openKeypad = (): void => {
+    if (keypadOpen) return;
+    Keyboard.dismiss();
+    animateKeypadLayout();
+    setKeypadOpen(true);
+  };
+
+  const closeKeypad = (): void => {
+    if (!keypadOpen) return;
+    animateKeypadLayout();
+    setKeypadOpen(false);
+  };
+
+  const toggleKeypad = (): void => {
+    if (keypadOpen) {
+      closeKeypad();
+      return;
+    }
+    openKeypad();
+  };
 
   const reset = (nextDraft?: TransactionDraft | null): void => {
     const nextDate = nextDraft?.occurred_on ?? lastCreatedDate;
@@ -306,6 +362,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
     setCsvImportBusy(false);
     setImageImportSaving(false);
     setImageImportError(null);
+    setImageImportSkippedDuplicates([]);
     autoAppliedCategoryId.current = null;
   };
 
@@ -391,7 +448,11 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
 
   useEffect(() => {
     const subscription = Keyboard.addListener('keyboardDidShow', () => {
-      setKeypadOpen(false);
+      setKeypadOpen((current) => {
+        if (!current) return current;
+        animateKeypadLayout();
+        return false;
+      });
     });
 
     return () => {
@@ -557,6 +618,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
 
     setImageImportBusy(true);
     setImageImportError(null);
+    setImageImportSkippedDuplicates([]);
     setValidationMessage(null);
 
     try {
@@ -590,7 +652,8 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
       }
 
       setImageImportDrafts(imported.drafts);
-      setImageImportVisible(true);
+      setImageImportSkippedDuplicates(imported.skippedDuplicates);
+      setImageImportVisible(imported.drafts.length > 0 || imported.skippedDuplicates.length > 0);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
       setValidationMessage(error instanceof Error ? error.message : 'Could not import transactions from this image.');
@@ -605,6 +668,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
 
     setCsvImportBusy(true);
     setImageImportError(null);
+    setImageImportSkippedDuplicates([]);
     setValidationMessage(null);
 
     try {
@@ -617,15 +681,28 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
       });
 
       if (imported.error) {
+        console.error('[csv-import] CSV analysis returned an error.', {
+          fileName: file.fileName,
+          mimeType: file.mimeType,
+          fileUri: file.fileUri,
+          error: imported.error,
+        });
         setValidationMessage(imported.error);
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         return;
       }
 
       setImageImportDrafts(imported.drafts);
-      setImageImportVisible(true);
+      setImageImportSkippedDuplicates(imported.skippedDuplicates);
+      setImageImportVisible(imported.drafts.length > 0 || imported.skippedDuplicates.length > 0);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
+      console.error('[csv-import] CSV import crashed before completing.', {
+        fileName: file.fileName,
+        mimeType: file.mimeType,
+        fileUri: file.fileUri,
+        error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+      });
       setValidationMessage(error instanceof Error ? error.message : 'Could not import transactions from this CSV.');
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
@@ -763,14 +840,14 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
   const closeDatePicker = (): void => {
     setDatePickerOpen(false);
     if (reopenKeypadAfterDatePicker.current) {
-      setKeypadOpen(true);
+      openKeypad();
       reopenKeypadAfterDatePicker.current = false;
     }
   };
 
   const openDatePicker = (): void => {
     reopenKeypadAfterDatePicker.current = keypadOpen;
-    if (keypadOpen) setKeypadOpen(false);
+    closeKeypad();
     setDatePickerOpen(true);
   };
 
@@ -939,66 +1016,55 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
         </View>
 
         <View style={styles.amountHero}>
-          <View style={styles.kindRow}>
-            <Pressable
-              style={[styles.kindChip, kind === 'expense' && styles.kindChipActive]}
-              onPress={() => {
+          <TransactionKindSelector
+            value={kind}
+            onChange={(value) => {
+              if (value === 'expense') {
                 setKind('expense');
                 if (category && isIncomeCategoryOption(category)) {
                   autoAppliedCategoryId.current = null;
                   setCategory(null);
                   setUserTouchedCategory(false);
                 }
-              }}
-            >
-              <Text style={[styles.kindChipText, kind === 'expense' && styles.kindChipTextActive]}>Expense</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.kindChip, kind === 'income' && styles.kindChipActive]}
-              onPress={() => {
-                setKind('income');
-                setShared(false);
-                setIsSharedTopup(false);
-              }}
-            >
-              <Text style={[styles.kindChipText, kind === 'income' && styles.kindChipTextActive]}>Income</Text>
-            </Pressable>
-          </View>
-          <Text style={styles.amountValue}>
-            {amountDisplayState.display.split('').map((char, index) => (
-              <Text
-                key={`${char}-${index}`}
-                style={index === amountDisplayState.activeIndex ? styles.amountValueActive : undefined}
-              >
-                {char}
-              </Text>
-            ))}
-          </Text>
-          <Text style={styles.amountMeta}>
-            {currencyCode === 'DKK'
-              ? 'In DKK'
-              : `Saved in DKK · entered in ${currencyCode}`}
-          </Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.currencyRow}>
-            {currencyOptions.map((currency) => {
-              const active = currency.code === currencyCode;
-              return (
-                <Pressable
-                  key={currency.code}
-                  style={({ pressed }) => [
-                    styles.currencyChip,
-                    active && styles.currencyChipActive,
-                    pressed && styles.rowPressed,
-                  ]}
-                  onPress={() => setCurrencyCode(currency.code)}
+                return;
+              }
+
+              setKind('income');
+              setShared(false);
+              setIsSharedTopup(false);
+            }}
+          />
+          <Pressable
+            style={({ pressed }) => [styles.amountFieldButton, pressed && styles.rowPressed]}
+            onPress={toggleKeypad}
+          >
+            <Text style={styles.amountValue}>
+              {amountDisplayState.display.split('').map((char, index) => (
+                <Text
+                  key={`${char}-${index}`}
+                  style={index === amountDisplayState.activeIndex ? styles.amountValueActive : undefined}
                 >
-                  <Text style={[styles.currencyChipText, active && styles.currencyChipTextActive]}>
-                    {currency.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
+                  {char}
+                </Text>
+              ))}
+            </Text>
+            <View style={styles.amountMetaRow}>
+              <Text style={styles.amountMeta}>
+                {currencyCode === 'DKK'
+                  ? 'In DKK'
+                  : `Saved in DKK · entered in ${currencyCode}`}
+              </Text>
+              <View style={styles.amountToggleBadge}>
+                <MaterialCommunityIcons
+                  name={keypadOpen ? 'keyboard-close-outline' : 'keyboard-outline'}
+                  size={16}
+                  color={colors.text}
+                />
+                <Text style={styles.amountToggleText}>{keypadOpen ? 'Hide keypad' : 'Show keypad'}</Text>
+              </View>
+            </View>
+          </Pressable>
+          <TransactionCurrencySelector value={currencyCode} onChange={setCurrencyCode} />
         </View>
 
         <ScrollView
@@ -1006,82 +1072,37 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
           contentContainerStyle={styles.fieldsContent}
           keyboardShouldPersistTaps="handled"
         >
-          {!editing ? (
-            <View style={styles.importStack}>
-              <Pressable
-                style={({ pressed }) => [styles.importCard, (pressed || imageImportBusy) && styles.rowPressed]}
-                  onPress={() => {
-                    Keyboard.dismiss();
-                    void startImageImport();
-                  }}
-                disabled={imageImportBusy}
-              >
-                <View style={styles.importCopy}>
-                  <Text style={styles.importTitle}>{imageImportBusy ? 'Analyzing image...' : 'Import from image'}</Text>
-                  <Text style={styles.importMeta}>Create multiple transactions from a screenshot or receipt.</Text>
-                </View>
-                {imageImportBusy ? (
-                  <ActivityIndicator size="small" color={colors.text} />
-                ) : (
-                  <MaterialCommunityIcons name="image-plus" size={22} color={colors.text} />
-                )}
-              </Pressable>
+          <TransactionFieldLabel>Name</TransactionFieldLabel>
+          <TransactionTextField
+            value={name}
+            onChangeText={setName}
+            onFocus={closeKeypad}
+            onEndEditing={() => {
+              void runCategorySuggestion({ preferRemote: true, forceApply: true });
+            }}
+            placeholder="What was it?"
+            returnKeyType="done"
+          />
 
-              <Pressable
-                style={({ pressed }) => [styles.importCard, (pressed || csvImportBusy) && styles.rowPressed]}
-                  onPress={() => {
-                    Keyboard.dismiss();
-                    void pickCsvImport();
-                  }}
-                disabled={csvImportBusy}
-              >
-                <View style={styles.importCopy}>
-                  <Text style={styles.importTitle}>{csvImportBusy ? 'Analyzing CSV...' : 'Import bank CSV'}</Text>
-                  <Text style={styles.importMeta}>Pick a statement file and review the AI-parsed transactions.</Text>
-                </View>
-                {csvImportBusy ? (
-                  <ActivityIndicator size="small" color={colors.text} />
-                ) : (
-                  <MaterialCommunityIcons name="file-delimited-outline" size={22} color={colors.text} />
-                )}
-              </Pressable>
-            </View>
-          ) : null}
 
-          <Text style={styles.label}>Category</Text>
-          <Pressable
-            style={styles.fieldCard}
+          <TransactionFieldLabel>Category</TransactionFieldLabel>
+          <TransactionPickerField
+            text={category ? visibleCategoryLabel : ''}
+            placeholder="Pick a category"
             onPress={() => {
               autoAppliedCategoryId.current = null;
               setUserTouchedCategory(true);
               setPickerOpen(true);
             }}
-          >
-            <View style={styles.fieldLeading}>
-              <View
-                style={[
-                  styles.categoryIconWrap,
-                  {
-                    backgroundColor: category ? `${category.parentColor}22` : colors.surfaceAlt,
-                  },
-                ]}
-              >
-                <CategoryIcon
-                  name={category?.icon ?? 'shape-outline'}
-                  size={18}
-                  color={category?.parentColor ?? colors.textMuted}
-                />
-              </View>
-              <Text style={[styles.fieldText, !category && styles.placeholder]}>{visibleCategoryLabel}</Text>
-            </View>
-            <View style={styles.fieldTrailing}>
-              {kind === 'expense' && isSuggestingCategory ? (
+            leadingCategoryIcon={category?.icon ?? 'shape-outline'}
+            leadingIconColor={category?.parentColor ?? colors.textMuted}
+            leadingIconBackgroundColor={category ? `${category.parentColor}22` : colors.surfaceAlt}
+            trailing={
+              kind === 'expense' && isSuggestingCategory ? (
                 <ActivityIndicator size="small" color={colors.textMuted} />
-              ) : (
-                <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textMuted} />
-              )}
-            </View>
-          </Pressable>
+              ) : undefined
+            }
+          />
 
           {kind === 'income' && selectedIsSalary ? (
             <Text style={styles.inlineHint}>This will start a new cycle.</Text>
@@ -1116,19 +1137,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
             </View>
           ) : null}
 
-          <Text style={styles.label}>Name</Text>
-          <TextInput
-            value={name}
-            onChangeText={setName}
-            onFocus={() => setKeypadOpen(false)}
-            onEndEditing={() => {
-              void runCategorySuggestion({ preferRemote: true, forceApply: true });
-            }}
-            placeholder="What was it?"
-            placeholderTextColor={colors.textMuted}
-            style={styles.input}
-            returnKeyType="done"
-          />
+
 
           {recentSuggestions.length > 0 ? (
             <View style={styles.recentList}>
@@ -1152,20 +1161,18 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
             </View>
           ) : null}
 
-          <Text style={styles.label}>Details</Text>
+          <TransactionFieldLabel>Details</TransactionFieldLabel>
           <View style={styles.detailRow}>
+            <View style={styles.detailCardDate}>
+              <TransactionPickerField
+                text={formatDateLabel(date)}
+                onPress={openDatePicker}
+                leadingMaterialIcon="calendar-month-outline"
+                trailing={<MaterialCommunityIcons name="chevron-down" size={18} color={colors.textMuted} />}
+              />
+            </View>
             <Pressable
-              style={[styles.fieldCard, styles.detailCard]}
-              onPress={openDatePicker}
-            >
-              <View style={styles.detailValueRow}>
-                <MaterialCommunityIcons name="calendar-month-outline" size={18} color={colors.textMuted} />
-                <Text style={styles.fieldText}>{formatDateLabel(date)}</Text>
-              </View>
-              <MaterialCommunityIcons name="chevron-down" size={18} color={colors.textMuted} />
-            </Pressable>
-            <Pressable
-              style={[styles.fieldCard, styles.detailCard]}
+              style={[styles.fieldCard, styles.detailCardCountry]}
               onPress={() => setCountryPickerOpen(true)}
             >
               <View style={styles.detailValueRow}>
@@ -1175,17 +1182,17 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
             </Pressable>
           </View>
 
-          <Text style={styles.label}>Note</Text>
-          <TextInput
+          <TransactionFieldLabel>Note</TransactionFieldLabel>
+          <TransactionTextField
             value={comment}
             onChangeText={setComment}
-            onFocus={() => setKeypadOpen(false)}
+            onFocus={closeKeypad}
             onEndEditing={() => {
               void runCategorySuggestion({ preferRemote: true, forceApply: true });
             }}
             placeholder="Optional"
-            placeholderTextColor={colors.textMuted}
             style={styles.input}
+            multiline
           />
 
           <Text style={styles.label}>Options</Text>
@@ -1225,6 +1232,48 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
               </>
             ) : null}
           </View>
+          {!editing ? (
+            <View style={styles.importStack}>
+              <Text style={[styles.label, { color: colors.accentAlt }]}>Import</Text>
+              <Pressable
+                style={({ pressed }) => [styles.importCard, (pressed || imageImportBusy) && styles.rowPressed]}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  void startImageImport();
+                }}
+                disabled={imageImportBusy}
+              >
+                <View style={styles.importCopy}>
+                  <Text style={styles.importTitle}>{imageImportBusy ? 'Analyzing image...' : 'Import from image'}</Text>
+                  <Text style={styles.importMeta}>Create multiple transactions from a screenshot or receipt.</Text>
+                </View>
+                {imageImportBusy ? (
+                  <ActivityIndicator size="small" color={colors.text} />
+                ) : (
+                  <MaterialCommunityIcons name="image-plus" size={22} color={colors.text} />
+                )}
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [styles.importCard, (pressed || csvImportBusy) && styles.rowPressed]}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  void pickCsvImport();
+                }}
+                disabled={csvImportBusy}
+              >
+                <View style={styles.importCopy}>
+                  <Text style={styles.importTitle}>{csvImportBusy ? 'Analyzing CSV...' : 'Import bank CSV'}</Text>
+                  <Text style={styles.importMeta}>Pick a statement file and review the AI-parsed transactions.</Text>
+                </View>
+                {csvImportBusy ? (
+                  <ActivityIndicator size="small" color={colors.text} />
+                ) : (
+                  <MaterialCommunityIcons name="file-delimited-outline" size={22} color={colors.text} />
+                )}
+              </Pressable>
+            </View>
+          ) : null}
 
           {kind === 'expense' && shared && !isSharedTopup ? (
             <>
@@ -1274,15 +1323,23 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
         </ScrollView>
 
         {keypadOpen ? (
-          <NumericKeypad value={amount} onChange={setAmount} onClose={() => setKeypadOpen(false)} />
+          <View style={styles.keypadPanel}>
+            <View pointerEvents="box-none" style={styles.keypadHideWrap}>
+              <Pressable
+                style={({ pressed }) => [styles.keypadHideButton, pressed && styles.rowPressed]}
+                onPress={closeKeypad}
+              >
+                <MaterialCommunityIcons name="keyboard-close-outline" size={16} color={colors.text} />
+                <Text style={styles.keypadHideText}>Hide</Text>
+              </Pressable>
+            </View>
+            <NumericKeypad value={amount} onChange={setAmount} />
+          </View>
         ) : (
           <View style={styles.keyboardDock}>
             <Pressable
               style={({ pressed }) => [styles.keyboardDockButton, pressed && styles.rowPressed]}
-              onPress={() => {
-                Keyboard.dismiss();
-                setKeypadOpen(true);
-              }}
+              onPress={openKeypad}
             >
               <MaterialCommunityIcons name="keyboard-outline" size={18} color={colors.text} />
               <Text style={styles.keyboardDockText}>Open keypad</Text>
@@ -1374,6 +1431,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
         <ImageImportPreviewModal
           visible={imageImportVisible}
           rows={imageImportDrafts}
+          skippedDuplicates={imageImportSkippedDuplicates}
           saving={imageImportSaving}
           errorMessage={imageImportError}
           categoriesById={Object.fromEntries(categoryOptions.map((option) => [option.id, option]))}
@@ -1384,6 +1442,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
           onClose={() => {
             setImageImportVisible(false);
             setImageImportError(null);
+            setImageImportSkippedDuplicates([]);
           }}
           onSave={() => {
             void saveImportedTransactions();
@@ -1474,9 +1533,32 @@ const styles = StyleSheet.create({
   kindChipActive: { backgroundColor: colors.accent },
   kindChipText: { ...typography.label, color: colors.textMuted },
   kindChipTextActive: { color: colors.text },
+  amountFieldButton: {
+    gap: spacing.xs,
+    alignSelf: 'stretch',
+  },
   amountValue: { ...typography.amount, color: colors.text },
   amountValueActive: { color: colors.accentAlt },
   amountMeta: { ...typography.label, color: colors.textMuted },
+  amountMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    flexWrap: 'wrap',
+  },
+  amountToggleBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  amountToggleText: { ...typography.label, color: colors.text, fontWeight: '600' },
   currencyRow: { gap: spacing.sm, paddingTop: spacing.xs },
   currencyChip: {
     paddingHorizontal: spacing.md,
@@ -1582,7 +1664,8 @@ const styles = StyleSheet.create({
   recentTitle: { ...typography.body, color: colors.text, fontWeight: '600' },
   recentMeta: { ...typography.label, color: colors.textMuted },
   detailRow: { flexDirection: 'row', gap: spacing.sm },
-  detailCard: { flex: 1 },
+  detailCardDate: { flex: 2 },
+  detailCardCountry: { flex: 1 },
   toggleChip: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
@@ -1619,6 +1702,28 @@ const styles = StyleSheet.create({
   },
   datePickerTitle: { ...typography.body, color: colors.text, fontWeight: '700' },
   datePickerDone: { ...typography.body, color: colors.accentAlt, fontWeight: '700' },
+  keypadPanel: {
+    position: 'relative',
+    overflow: 'visible',
+  },
+  keypadHideWrap: {
+    position: 'absolute',
+    top: -(spacing.xl + spacing.lg),
+    right: spacing.xl,
+    zIndex: 1,
+  },
+  keypadHideButton: {
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(245,185,66,0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(245,185,66,0.32)',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  keypadHideText: { ...typography.label, color: colors.text, fontWeight: '600' },
   keyboardDock: {
     backgroundColor: colors.surface,
     borderTopLeftRadius: radius.lg,

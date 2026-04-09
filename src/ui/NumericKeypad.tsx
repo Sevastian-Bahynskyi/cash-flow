@@ -89,7 +89,7 @@ export const NumericKeypad = memo(function NumericKeypad({ value, onChange, onCl
 
 const styles = StyleSheet.create({
   wrap: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.danger,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
     paddingBottom: spacing.md,
@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
   },
   closeRow: {
     alignItems: 'flex-end',
-    paddingBottom: spacing.xs,
+    paddingBottom: spacing.xs
   },
   closeButton: {
     flexDirection: 'row',
