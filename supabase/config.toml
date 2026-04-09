@@ -1,2 +1,5 @@
 [functions.suggest-category]
 verify_jwt = false
+
+[functions.parse-transaction-image]
+verify_jwt = false

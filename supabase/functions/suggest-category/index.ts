@@ -29,6 +29,14 @@ type ErrorBody = SuggestResult & {
   error?: string;
 };
 
+type GroqResponsePayload = {
+  choices?: {
+    message?: {
+      content?: string;
+    };
+  }[];
+};
+
 const json = (body: SuggestResult, init?: ResponseInit): Response =>
   new Response(JSON.stringify(body), {
     ...init,
@@ -47,6 +55,81 @@ const errorJson = (message: string, status: number): Response =>
   });
 
 const clamp = (value: number): number => Math.max(0, Math.min(1, value));
+
+const wait = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+const invokeGroq = async ({
+  key,
+  prompt,
+}: {
+  key: string;
+  prompt: string;
+}): Promise<{ text: string | null; degraded: boolean }> => {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const timeoutMs = attempt === 0 ? 3500 : 5000;
+
+    try {
+      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${key}`,
+        },
+        body: JSON.stringify({
+          model: "llama-3.1-8b-instant",
+          temperature: 0,
+          max_tokens: 120,
+          messages: [
+            {
+              role: "system",
+              content:
+                'Return strict JSON only in the shape {"categoryId":"uuid-or-null","confidence":0.0}.',
+            },
+            { role: "user", content: prompt },
+          ],
+        }),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+
+      if (!response.ok) {
+        const responseText = await response.text().catch(() => "");
+        console.error("[suggest-category] Groq request failed.", {
+          attempt: attempt + 1,
+          status: response.status,
+          statusText: response.statusText,
+          body: responseText.slice(0, 400),
+        });
+
+        if (attempt === 0 && response.status >= 500) {
+          await wait(120);
+          continue;
+        }
+
+        return { text: null, degraded: true };
+      }
+
+      const payload = (await response.json()) as GroqResponsePayload;
+      return {
+        text: payload?.choices?.[0]?.message?.content ?? "",
+        degraded: false,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("[suggest-category] Unexpected Groq error.", {
+        attempt: attempt + 1,
+        message,
+      });
+
+      if (attempt === 0) {
+        await wait(120);
+        continue;
+      }
+    }
+  }
+
+  return { text: null, degraded: true };
+};
 
 const parseResult = (text: string, candidates: { id: string }[]): SuggestResult => {
   const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -167,39 +250,12 @@ Deno.serve(async (req: Request) => {
       hasComment: comment.length > 0,
       nameLength: name.length,
     });
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${key}`,
-      },
-      body: JSON.stringify({
-        model: "llama-3.1-8b-instant",
-        temperature: 0,
-        max_tokens: 120,
-        messages: [
-          {
-            role: "system",
-            content:
-              'Return strict JSON only in the shape {"categoryId":"uuid-or-null","confidence":0.0}.',
-          },
-          { role: "user", content: prompt },
-        ],
-      }),
-    });
-
-    if (!response.ok) {
-      const responseText = await response.text().catch(() => "");
-      console.error("[suggest-category] Groq request failed.", {
-        status: response.status,
-        statusText: response.statusText,
-        body: responseText.slice(0, 400),
-      });
-      return errorJson("AI provider request failed", 502);
+    const { text, degraded } = await invokeGroq({ key, prompt });
+    if (degraded || text === null) {
+      console.warn("[suggest-category] Falling back to empty suggestion after provider failure.");
+      return json({ categoryId: null, confidence: 0 });
     }
 
-    const payload = await response.json();
-    const text: string = payload?.choices?.[0]?.message?.content ?? "";
     console.info("[suggest-category] Groq returned a response.", {
       hasContent: text.length > 0,
     });
