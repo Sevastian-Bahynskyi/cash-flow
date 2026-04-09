@@ -1,6 +1,7 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 import AddTransactionModal from '@/features/transactions/AddTransactionModal';
 import type { CategoryOption } from '@/features/categories/types';
+import type { CsvImportFile, PendingImport } from './importFiles';
 import type { TransactionDraft, TransactionRow } from './types';
 
 type ComposerDraft = TransactionDraft & {
@@ -9,6 +10,7 @@ type ComposerDraft = TransactionDraft & {
 
 type ComposerContextValue = {
   openCreate: (draft?: ComposerDraft) => void;
+  openCsvImport: (file: CsvImportFile) => void;
   openEdit: (row: TransactionRow, category?: CategoryOption | null) => void;
   close: () => void;
   bumpRefresh: () => void;
@@ -20,12 +22,23 @@ const Ctx = createContext<ComposerContextValue | null>(null);
 export function ComposerProvider({ children }: { children: ReactNode }) {
   const [visible, setVisible] = useState(false);
   const [draft, setDraft] = useState<ComposerDraft | null>(null);
+  const [pendingImport, setPendingImport] = useState<PendingImport | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
   const value = useMemo<ComposerContextValue>(
     () => ({
       openCreate(nextDraft) {
         setDraft(nextDraft ?? null);
+        setPendingImport(null);
+        setVisible(true);
+      },
+      openCsvImport(file) {
+        setDraft(null);
+        setPendingImport({
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          kind: 'csv',
+          ...file,
+        });
         setVisible(true);
       },
       openEdit(row, category) {
@@ -47,11 +60,13 @@ export function ComposerProvider({ children }: { children: ReactNode }) {
           is_shared_topup: row.is_shared_topup,
           country_iso: row.country_iso,
         });
+        setPendingImport(null);
         setVisible(true);
       },
       close() {
         setVisible(false);
         setDraft(null);
+        setPendingImport(null);
       },
       bumpRefresh() {
         setRefreshKey((current) => current + 1);
@@ -69,6 +84,7 @@ export function ComposerProvider({ children }: { children: ReactNode }) {
         onClose={value.close}
         onSaved={value.bumpRefresh}
         draft={draft}
+        pendingImport={pendingImport}
       />
     </Ctx.Provider>
   );

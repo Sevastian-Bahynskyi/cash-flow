@@ -8,6 +8,7 @@ import { MotionView } from './MotionView';
 type Action = {
   icon: string;
   onPress: () => void;
+  disabled?: boolean;
 };
 
 export function ScreenHeader({
@@ -62,7 +63,12 @@ export function ScreenHeader({
             delayMs={90}
             style={styles.iconMotion}
           >
-            <Pressable onPress={action.onPress} hitSlop={12} style={styles.iconButton}>
+            <Pressable
+              onPress={action.onPress}
+              disabled={action.disabled}
+              hitSlop={12}
+              style={[styles.iconButton, action.disabled && styles.iconButtonDisabled]}
+            >
               <MaterialCommunityIcons name={action.icon as never} size={20} color={colors.text} />
             </Pressable>
           </MotionView>
@@ -88,4 +94,5 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', gap: spacing.sm, paddingTop: 2 },
   iconMotion: { alignSelf: 'flex-start' },
   iconButton: { padding: 4 },
+  iconButtonDisabled: { opacity: 0.4 },
 });

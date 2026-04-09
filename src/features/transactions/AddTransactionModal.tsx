@@ -13,6 +13,8 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import * as Haptics from 'expo-haptics';
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 import { NumericKeypad } from '@/ui/NumericKeypad';
@@ -32,6 +34,9 @@ import { currencyOptions, convertToDkk } from '@/lib/currency';
 import { getDeviceCountryIso, getDeviceCurrencyCode, getLiveCountryIso } from '@/lib/device';
 import { formatCountryFlag, formatDateLabel, formatMinor, normalizeCountryIso } from '@/lib/format';
 import { activeCycle, buildSalaryCycles } from '@/lib/cycles';
+import { ImageImportPreviewModal } from './ImageImportPreviewModal';
+import { importTransactionsFromCsv, importTransactionsFromImage, type ImportedTransactionDraft } from './imageImport';
+import { isCsvImportFile, readCsvImportText, type CsvImportFile, type PendingImport } from './importFiles';
 import type { TransactionDraft, TransactionInsert, TransactionKind, TransactionRow } from './types';
 
 type Props = {
@@ -39,6 +44,7 @@ type Props = {
   onClose: () => void;
   onSaved: () => void;
   draft?: (TransactionDraft & { category?: CategoryOption | null }) | null;
+  pendingImport?: PendingImport | null;
 };
 
 type SuggestionState = SuggestedCategoryResult & {
@@ -193,7 +199,7 @@ const buildBudgetIndicators = async (
   return out;
 };
 
-export default function AddTransactionModal({ visible, onClose, onSaved, draft }: Props) {
+export default function AddTransactionModal({ visible, onClose, onSaved, draft, pendingImport }: Props) {
   const insets = useSafeAreaInsets();
   const [kind, setKind] = useState<TransactionKind>('expense');
   const [amount, setAmount] = useState('');
@@ -222,6 +228,12 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
   const [isSuggestingCategory, setIsSuggestingCategory] = useState(false);
   const [recentSuggestions, setRecentSuggestions] = useState<TransactionRow[]>([]);
   const [saveState, setSaveState] = useState<SaveState | null>(null);
+  const [imageImportDrafts, setImageImportDrafts] = useState<ImportedTransactionDraft[]>([]);
+  const [imageImportVisible, setImageImportVisible] = useState(false);
+  const [imageImportBusy, setImageImportBusy] = useState(false);
+  const [csvImportBusy, setCsvImportBusy] = useState(false);
+  const [imageImportSaving, setImageImportSaving] = useState(false);
+  const [imageImportError, setImageImportError] = useState<string | null>(null);
   const categoriesState = useCategories();
 
   const categoryOptions = useMemo(
@@ -237,6 +249,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
   const reopenKeypadAfterDatePicker = useRef(false);
   const autoAppliedCategoryId = useRef<string | null>(null);
   const suggestionRunId = useRef(0);
+  const handledPendingImportId = useRef<string | null>(null);
 
   const reset = (nextDraft?: TransactionDraft | null): void => {
     const deviceCountry = (nextDraft?.country_iso ?? getDeviceCountryIso() ?? 'DK').toUpperCase();
@@ -268,6 +281,12 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
     setIsSuggestingCategory(false);
     setRecentSuggestions([]);
     setSaveState(null);
+    setImageImportDrafts([]);
+    setImageImportVisible(false);
+    setImageImportBusy(false);
+    setCsvImportBusy(false);
+    setImageImportSaving(false);
+    setImageImportError(null);
     autoAppliedCategoryId.current = null;
   };
 
@@ -278,6 +297,11 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
       if (closeTimer.current) clearTimeout(closeTimer.current);
     };
   }, [visible, draft]);
+
+  useEffect(() => {
+    if (visible) return;
+    handledPendingImportId.current = null;
+  }, [visible]);
 
   useEffect(() => {
     if (!visible || draft?.country_iso) return;
@@ -319,6 +343,21 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
       setBudgetStateByCategory(indicators);
     });
   }, [categoryOptions, visible]);
+
+  useEffect(() => {
+    if (!visible || !pendingImport || editing || categoryOptions.length === 0) return;
+    if (handledPendingImportId.current === pendingImport.id) return;
+
+    handledPendingImportId.current = pendingImport.id;
+
+    if (pendingImport.kind === 'csv') {
+      void analyzeCsvImport({
+        fileUri: pendingImport.fileUri,
+        fileName: pendingImport.fileName,
+        mimeType: pendingImport.mimeType,
+      });
+    }
+  }, [categoryOptions.length, editing, pendingImport, visible]);
 
   useEffect(() => {
     if (!visible) return;
@@ -450,6 +489,226 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
     }
     setSuggestion(null);
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  const updateImageImportDraft = (
+    id: string,
+    patch: Partial<ImportedTransactionDraft>,
+  ): void => {
+    setImageImportDrafts((current) =>
+      current.map((draftRow) => (draftRow.id === id ? { ...draftRow, ...patch } : draftRow)),
+    );
+  };
+
+  const categoryCandidates = useMemo(
+    () =>
+      categoryOptions.map((option) => ({
+        id: option.id,
+        parent: option.parentName,
+        name: option.name,
+      })),
+    [categoryOptions],
+  );
+
+  const startImageImport = async (): Promise<void> => {
+    if (editing || imageImportBusy || categoryOptions.length === 0) return;
+
+    setImageImportBusy(true);
+    setImageImportError(null);
+    setValidationMessage(null);
+
+    try {
+      // Use the platform picker directly instead of requesting full library access up front.
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: false,
+        quality: 0.55,
+        base64: true,
+      });
+      if (result.canceled || result.assets.length === 0) return;
+
+      const asset = result.assets[0];
+      if (!asset?.base64) {
+        setValidationMessage('Could not read this image. Please try another one.');
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        return;
+      }
+
+      const imageDataUrl = `data:${asset.mimeType ?? 'image/jpeg'};base64,${asset.base64}`;
+      const imported = await importTransactionsFromImage({
+        imageDataUrl,
+        categories: categoryCandidates,
+        fallbackDate: date,
+      });
+
+      if (imported.error) {
+        setValidationMessage(imported.error);
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        return;
+      }
+
+      setImageImportDrafts(imported.drafts);
+      setImageImportVisible(true);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      setValidationMessage(error instanceof Error ? error.message : 'Could not import transactions from this image.');
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setImageImportBusy(false);
+    }
+  };
+
+  const analyzeCsvImport = async (file: CsvImportFile): Promise<void> => {
+    if (editing || csvImportBusy || categoryOptions.length === 0) return;
+
+    setCsvImportBusy(true);
+    setImageImportError(null);
+    setValidationMessage(null);
+
+    try {
+      const csvText = await readCsvImportText(file.fileUri);
+      const imported = await importTransactionsFromCsv({
+        csvText,
+        fileName: file.fileName,
+        categories: categoryCandidates,
+        fallbackDate: date,
+      });
+
+      if (imported.error) {
+        setValidationMessage(imported.error);
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        return;
+      }
+
+      setImageImportDrafts(imported.drafts);
+      setImageImportVisible(true);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      setValidationMessage(error instanceof Error ? error.message : 'Could not import transactions from this CSV.');
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setCsvImportBusy(false);
+    }
+  };
+
+  const pickCsvImport = async (): Promise<void> => {
+    if (editing || csvImportBusy) return;
+
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: [
+          'text/csv',
+          'application/csv',
+          'text/comma-separated-values',
+          'application/vnd.ms-excel',
+          'text/plain',
+        ],
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+
+      if (result.canceled || !result.assets?.[0]) return;
+      const asset = result.assets[0];
+      const file = {
+        fileUri: asset.uri,
+        fileName: asset.name ?? null,
+        mimeType: asset.mimeType ?? null,
+      } satisfies CsvImportFile;
+
+      if (!isCsvImportFile(file)) {
+        setValidationMessage('Please pick a CSV bank statement file.');
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        return;
+      }
+
+      await analyzeCsvImport(file);
+    } catch (error) {
+      setValidationMessage(error instanceof Error ? error.message : 'Could not open this CSV file.');
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+  };
+
+  const saveImportedTransactions = async (): Promise<void> => {
+    if (imageImportDrafts.length === 0) {
+      setImageImportError('No imported transactions to save.');
+      return;
+    }
+
+    setImageImportSaving(true);
+    setImageImportError(null);
+    try {
+      const { data: userData, error: userErr } = await supabase.auth.getUser();
+      if (userErr || !userData.user) {
+        setImageImportError('You need to be signed in to save imported transactions.');
+        return;
+      }
+
+      const payloads: TransactionInsert[] = [];
+      for (const row of imageImportDrafts) {
+        const normalizedName = row.name.trim();
+        if (normalizedName.length === 0) {
+          setImageImportError('Each imported transaction needs a name.');
+          return;
+        }
+
+        const originalAmountMinor = parseAmountMinor(row.amount);
+        if (originalAmountMinor === null) {
+          setImageImportError('Each imported transaction needs a valid amount.');
+          return;
+        }
+
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(row.occurredOn.trim())) {
+          setImageImportError('Each imported transaction needs a valid date in YYYY-MM-DD format.');
+          return;
+        }
+
+        if (row.kind === 'expense' && !row.categoryId) {
+          setImageImportError('Each imported expense needs a category before saving.');
+          return;
+        }
+
+        const conversion =
+          row.currencyCode === 'DKK'
+            ? { convertedMinor: originalAmountMinor, rate: 1 }
+            : await convertToDkk(originalAmountMinor, row.currencyCode, row.occurredOn.trim());
+
+        payloads.push({
+          user_id: userData.user.id,
+          kind: row.kind,
+          amount_minor: conversion.convertedMinor,
+          occurred_on: row.occurredOn.trim(),
+          name: normalizedName,
+          comment: row.comment.trim().length > 0 ? row.comment.trim() : null,
+          category_id: row.kind === 'expense' ? row.categoryId : null,
+          country_iso: normalizeCountryIso(countryIso),
+          recurring: false,
+          shared: false,
+          shared_participant: null,
+          is_salary: false,
+          is_shared_topup: false,
+          currency_code: row.currencyCode,
+          original_amount_minor: originalAmountMinor,
+          converted_amount_minor: conversion.convertedMinor,
+          fx_rate: conversion.rate,
+        });
+      }
+
+      const { error } = await supabase.from('transactions').insert(payloads);
+      if (error) {
+        setImageImportError('Could not save imported transactions right now.');
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        return;
+      }
+
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      onSaved();
+      handleClose();
+    } catch (error) {
+      setImageImportError(error instanceof Error ? error.message : 'Could not save imported transactions right now.');
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setImageImportSaving(false);
+    }
   };
 
   useEffect(() => {
@@ -724,6 +983,46 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
           contentContainerStyle={styles.fieldsContent}
           keyboardShouldPersistTaps="handled"
         >
+          {!editing ? (
+            <View style={styles.importStack}>
+              <Pressable
+                style={({ pressed }) => [styles.importCard, (pressed || imageImportBusy) && styles.rowPressed]}
+                onPress={() => {
+                  void startImageImport();
+                }}
+                disabled={imageImportBusy}
+              >
+                <View style={styles.importCopy}>
+                  <Text style={styles.importTitle}>{imageImportBusy ? 'Analyzing image...' : 'Import from image'}</Text>
+                  <Text style={styles.importMeta}>Create multiple transactions from a screenshot or receipt.</Text>
+                </View>
+                {imageImportBusy ? (
+                  <ActivityIndicator size="small" color={colors.text} />
+                ) : (
+                  <MaterialCommunityIcons name="image-plus" size={22} color={colors.text} />
+                )}
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [styles.importCard, (pressed || csvImportBusy) && styles.rowPressed]}
+                onPress={() => {
+                  void pickCsvImport();
+                }}
+                disabled={csvImportBusy}
+              >
+                <View style={styles.importCopy}>
+                  <Text style={styles.importTitle}>{csvImportBusy ? 'Analyzing CSV...' : 'Import bank CSV'}</Text>
+                  <Text style={styles.importMeta}>Pick a statement file and review the AI-parsed transactions.</Text>
+                </View>
+                {csvImportBusy ? (
+                  <ActivityIndicator size="small" color={colors.text} />
+                ) : (
+                  <MaterialCommunityIcons name="file-delimited-outline" size={22} color={colors.text} />
+                )}
+              </Pressable>
+            </View>
+          ) : null}
+
           {kind === 'expense' ? (
             <>
               <Text style={styles.label}>Category</Text>
@@ -1008,6 +1307,29 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft }
           budgetStateByCategory={budgetStateByCategory}
         />
 
+        <ImageImportPreviewModal
+          visible={imageImportVisible}
+          rows={imageImportDrafts}
+          saving={imageImportSaving}
+          errorMessage={imageImportError}
+          categoriesById={Object.fromEntries(categoryOptions.map((option) => [option.id, option]))}
+          categoryOptions={categoryOptions}
+          frequentIds={frequentIds}
+          recentIds={recentCategoryIds}
+          budgetStateByCategory={budgetStateByCategory}
+          onClose={() => {
+            setImageImportVisible(false);
+            setImageImportError(null);
+          }}
+          onSave={() => {
+            void saveImportedTransactions();
+          }}
+          onChangeRow={updateImageImportDraft}
+          onRemoveRow={(id) => {
+            setImageImportDrafts((current) => current.filter((row) => row.id !== id));
+          }}
+        />
+
         {saveState ? (
           <View style={styles.successOverlay}>
             <View style={styles.successCard}>
@@ -1108,6 +1430,20 @@ const styles = StyleSheet.create({
   currencyChipTextActive: { color: colors.text },
   fields: { flex: 1 },
   fieldsContent: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg, gap: spacing.sm },
+  importStack: { gap: spacing.sm },
+  importCard: {
+    borderRadius: radius.lg,
+    backgroundColor: colors.surfaceAlt,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  importCopy: { flex: 1, gap: 4 },
+  importTitle: { ...typography.body, color: colors.text, fontWeight: '700' },
+  importMeta: { ...typography.label, color: colors.textMuted },
   label: {
     ...typography.label,
     color: colors.textMuted,
