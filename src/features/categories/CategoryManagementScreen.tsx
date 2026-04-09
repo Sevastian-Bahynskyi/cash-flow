@@ -10,6 +10,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { clearCategoryCache } from '@/features/categories/useCategories';
@@ -50,6 +51,15 @@ const toneForBudget = (tone: 'neutral' | 'warning' | 'critical' | null): string 
   if (tone === 'warning') return '#F5B942';
   return colors.textMuted;
 };
+
+function SwipeDeleteAction({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable style={({ pressed }) => [styles.swipeDeleteAction, pressed && styles.buttonPressed]} onPress={onPress}>
+      <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.text} />
+      <Text style={styles.swipeDeleteText}>{label}</Text>
+    </Pressable>
+  );
+}
 
 export default function CategoryManagementScreen() {
   const data = useOverview();
@@ -172,11 +182,14 @@ export default function CategoryManagementScreen() {
             },
             { onConflict: 'user_id,category_id' },
           );
-          if (!error) {
-            clearCategoryCache();
-            await data.reload();
-            setDraft(null);
+          if (error) {
+            Alert.alert('Could not save category', error.message);
+            return;
           }
+
+          clearCategoryCache();
+          await data.reload();
+          setDraft(null);
           return;
         }
 
@@ -185,11 +198,14 @@ export default function CategoryManagementScreen() {
             ? { name: draft.name.trim(), icon: draft.icon, color: draft.color }
             : { name: draft.name.trim(), icon: draft.icon };
         const { error } = await supabase.from('categories').update(payload).eq('id', draft.categoryId);
-        if (!error) {
-          clearCategoryCache();
-          await data.reload();
-          setDraft(null);
+        if (error) {
+          Alert.alert('Could not save category', error.message);
+          return;
         }
+
+        clearCategoryCache();
+        await data.reload();
+        setDraft(null);
         return;
       }
 
@@ -203,11 +219,14 @@ export default function CategoryManagementScreen() {
         color: draft.level === 1 ? draft.color : draft.color,
       };
       const { error } = await supabase.from('categories').insert(payload);
-      if (!error) {
-        clearCategoryCache();
-        await data.reload();
-        setDraft(null);
+      if (error) {
+        Alert.alert('Could not create category', error.message);
+        return;
       }
+
+      clearCategoryCache();
+      await data.reload();
+      setDraft(null);
     } finally {
       setSaving(false);
     }
@@ -218,14 +237,46 @@ export default function CategoryManagementScreen() {
     setSaving(true);
     try {
       const { error } = await supabase.from('categories').delete().eq('id', draft.categoryId);
-      if (!error) {
-        clearCategoryCache();
-        await data.reload();
-        setDraft(null);
+      if (error) {
+        Alert.alert('Could not delete category', error.message);
+        return;
       }
+
+      clearCategoryCache();
+      await data.reload();
+      setDraft(null);
     } finally {
       setSaving(false);
     }
+  };
+
+  const deleteCategoryById = async (category: CategoryRow): Promise<void> => {
+    if (category.is_system) return;
+
+    Alert.alert(`Delete ${category.name}?`, 'This removes the category from your list.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          void (async () => {
+            setSaving(true);
+            try {
+              const { error } = await supabase.from('categories').delete().eq('id', category.id);
+              if (error) {
+                Alert.alert('Could not delete category', error.message);
+                return;
+              }
+
+              clearCategoryCache();
+              await data.reload();
+            } finally {
+              setSaving(false);
+            }
+          })();
+        },
+      },
+    ]);
   };
 
   const saveTransferPersonDraft = async (): Promise<void> => {
@@ -237,6 +288,7 @@ export default function CategoryManagementScreen() {
       const result = await saveTransferPerson(transferPersonDraft);
       if (!result.ok) {
         setTransferPeopleError(result.error);
+        Alert.alert('Could not save person', result.error ?? 'Unknown error');
         return;
       }
 
@@ -256,6 +308,7 @@ export default function CategoryManagementScreen() {
       const result = await removeTransferPerson(transferPersonDraft.id);
       if (!result.ok) {
         setTransferPeopleError(result.error);
+        Alert.alert('Could not delete person', result.error ?? 'Unknown error');
         return;
       }
 
@@ -264,6 +317,34 @@ export default function CategoryManagementScreen() {
     } finally {
       setTransferPeopleSaving(false);
     }
+  };
+
+  const deleteTransferPersonById = (person: TransferPersonRow): void => {
+    Alert.alert(`Delete ${person.name}?`, 'This name will stop auto-defaulting to Transfers · MobilePay.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          void (async () => {
+            setTransferPeopleSaving(true);
+            setTransferPeopleError(null);
+            try {
+              const result = await removeTransferPerson(person.id);
+              if (!result.ok) {
+                setTransferPeopleError(result.error);
+                Alert.alert('Could not delete person', result.error ?? 'Unknown error');
+                return;
+              }
+
+              await loadTransferPeople(true);
+            } finally {
+              setTransferPeopleSaving(false);
+            }
+          })();
+        },
+      },
+    ]);
   };
 
   return (
@@ -333,40 +414,43 @@ export default function CategoryManagementScreen() {
 
               <View style={styles.childList}>
                 {children.map((child) => (
-                  <Pressable
+                  <Swipeable
                     key={child.id}
-                    style={({ pressed }) => [styles.childRow, pressed && !child.is_system && styles.rowPressed]}
-                    onPress={() => {
-                      if (!child.is_system) openEdit(child);
-                    }}
-                    onLongPress={() => {
-                      if (child.is_system) return;
-                      Alert.alert(child.name, undefined, [
-                        { text: 'Edit', onPress: () => openEdit(child) },
-                        { text: 'Cancel', style: 'cancel' },
-                      ]);
-                    }}
+                    enabled={!child.is_system}
+                    overshootRight={false}
+                    renderRightActions={() =>
+                      child.is_system ? null : (
+                        <SwipeDeleteAction label="Delete" onPress={() => void deleteCategoryById(child)} />
+                      )
+                    }
                   >
-                    <View style={[styles.childIconWrap, { backgroundColor: `${parent.color}22` }]}>
-                      <MaterialCommunityIcons name={child.icon as never} size={18} color={parent.color} />
-                    </View>
-                    <View style={styles.childCopy}>
-                      <Text style={styles.childName}>{child.name}</Text>
-                      <Text style={styles.childMeta}>
-                        {child.is_system ? 'System subcategory' : 'Custom subcategory'}
-                      </Text>
-                    </View>
-                    {budgetStates[child.id] ? (
-                      <Text
-                        style={[
-                          styles.budgetTag,
-                          { color: toneForBudget(budgetStates[child.id]?.tone ?? null) },
-                        ]}
-                      >
-                        {Math.round((budgetStates[child.id]?.ratio ?? 0) * 100)}%
-                      </Text>
-                    ) : null}
-                  </Pressable>
+                    <Pressable
+                      style={({ pressed }) => [styles.childRow, pressed && styles.rowPressed]}
+                      onPress={() => {
+                        openEdit(child);
+                      }}
+                    >
+                      <View style={[styles.childIconWrap, { backgroundColor: `${parent.color}22` }]}>
+                        <MaterialCommunityIcons name={child.icon as never} size={18} color={parent.color} />
+                      </View>
+                      <View style={styles.childCopy}>
+                        <Text style={styles.childName}>{child.name}</Text>
+                        <Text style={styles.childMeta}>
+                          {child.is_system ? 'System subcategory' : 'Custom subcategory'}
+                        </Text>
+                      </View>
+                      {budgetStates[child.id] ? (
+                        <Text
+                          style={[
+                            styles.budgetTag,
+                            { color: toneForBudget(budgetStates[child.id]?.tone ?? null) },
+                          ]}
+                        >
+                          {Math.round((budgetStates[child.id]?.ratio ?? 0) * 100)}%
+                        </Text>
+                      ) : null}
+                    </Pressable>
+                  </Swipeable>
                 ))}
               </View>
 
@@ -376,7 +460,7 @@ export default function CategoryManagementScreen() {
                     <View style={styles.transferPeopleCopy}>
                       <Text style={styles.transferPeopleTitle}>People</Text>
                       <Text style={styles.transferPeopleMeta}>
-                        When one of these names appears, auto-categorization defaults to Transfers · MobilePay.
+                        Auto-categorization defaults to Transfers · MobilePay only when the transaction name itself looks like this person's full name.
                       </Text>
                     </View>
                     <Pressable
@@ -397,17 +481,25 @@ export default function CategoryManagementScreen() {
                   ) : (
                     <View style={styles.transferPeopleList}>
                       {transferPeople.map((person) => (
-                        <Pressable
+                        <Swipeable
                           key={person.id}
-                          style={({ pressed }) => [styles.transferPersonRow, pressed && styles.rowPressed]}
-                          onPress={() => {
-                            setTransferPeopleError(null);
-                            setTransferPersonDraft({ id: person.id, name: person.name });
-                          }}
+                          enabled={!transferPeopleSaving}
+                          overshootRight={false}
+                          renderRightActions={() => (
+                            <SwipeDeleteAction label="Delete" onPress={() => deleteTransferPersonById(person)} />
+                          )}
                         >
-                          <Text style={styles.transferPersonName}>{person.name}</Text>
-                          <MaterialCommunityIcons name="pencil-outline" size={18} color={colors.textMuted} />
-                        </Pressable>
+                          <Pressable
+                            style={({ pressed }) => [styles.transferPersonRow, pressed && styles.rowPressed]}
+                            onPress={() => {
+                              setTransferPeopleError(null);
+                              setTransferPersonDraft({ id: person.id, name: person.name });
+                            }}
+                          >
+                            <Text style={styles.transferPersonName}>{person.name}</Text>
+                            <MaterialCommunityIcons name="pencil-outline" size={18} color={colors.textMuted} />
+                          </Pressable>
+                        </Swipeable>
                       ))}
                     </View>
                   )}
@@ -556,7 +648,7 @@ export default function CategoryManagementScreen() {
             />
 
             <Text style={styles.transferPeopleHint}>
-              If this name shows up in the transaction name or note, the app will default the category to Transfers · MobilePay.
+              This only triggers when the transaction name itself looks like this person's full name.
             </Text>
 
             {transferPeopleError ? <Text style={styles.transferPeopleError}>{transferPeopleError}</Text> : null}
@@ -639,6 +731,18 @@ const styles = StyleSheet.create({
   transferPeopleTitle: { ...typography.body, color: colors.text, fontWeight: '700' },
   transferPeopleMeta: { ...typography.label, color: colors.textMuted },
   transferPeopleList: { gap: spacing.sm },
+  swipeDeleteAction: {
+    minWidth: 96,
+    height: '100%',
+    marginLeft: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: colors.danger,
+  },
+  swipeDeleteText: { ...typography.label, color: colors.text, fontWeight: '700' },
   transferPersonRow: {
     flexDirection: 'row',
     alignItems: 'center',

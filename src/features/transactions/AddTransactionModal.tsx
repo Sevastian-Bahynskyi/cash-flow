@@ -1024,7 +1024,23 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
                   setPickerOpen(true);
                 }}
               >
-                <Text style={[styles.fieldText, !category && styles.placeholder]}>{visibleCategoryLabel}</Text>
+                <View style={styles.fieldLeading}>
+                  <View
+                    style={[
+                      styles.categoryIconWrap,
+                      {
+                        backgroundColor: category ? `${category.parentColor}22` : colors.surfaceAlt,
+                      },
+                    ]}
+                  >
+                    <MaterialCommunityIcons
+                      name={(category?.icon ?? 'shape-outline') as never}
+                      size={18}
+                      color={category?.parentColor ?? colors.textMuted}
+                    />
+                  </View>
+                  <Text style={[styles.fieldText, !category && styles.placeholder]}>{visibleCategoryLabel}</Text>
+                </View>
                 <View style={styles.fieldTrailing}>
                   {isSuggestingCategory ? (
                     <ActivityIndicator size="small" color={colors.textMuted} />
@@ -1455,9 +1471,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  fieldLeading: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flex: 1 },
+  categoryIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   fieldTrailing: { width: 20, alignItems: 'center', justifyContent: 'center' },
   detailValueRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  fieldText: { ...typography.body, color: colors.text },
+  fieldText: { ...typography.body, color: colors.text, flex: 1 },
   flagValue: { fontSize: 24, lineHeight: 28 },
   placeholder: { color: colors.textMuted },
   input: {
