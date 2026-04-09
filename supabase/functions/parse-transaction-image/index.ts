@@ -40,6 +40,8 @@ type ResponseBody = {
   error?: string;
 };
 
+const GROQ_IMAGE_MODEL = "meta-llama/llama-4-maverick-17b-128e-instruct";
+
 const json = (body: ResponseBody, init?: ResponseInit): Response =>
   new Response(JSON.stringify(body), {
     ...init,
@@ -191,6 +193,11 @@ Deno.serve(async (req: Request) => {
     "If the image is a receipt for one purchase, create one transaction for the total paid.",
     "If the image shows a list of completed transactions, create one transaction per visible completed row.",
     "Do not create grocery line items from a single receipt unless the image clearly shows separate completed payments.",
+    "Read amounts exactly as printed in the image before converting them to JSON numbers.",
+    "Do not invent decimal places. Examples: '4040' -> 4040, '4 040' -> 4040, '40.40' -> 40.40, '40,40' -> 40.40.",
+    "Only include cents when the image explicitly shows cents or the currency format clearly uses decimals.",
+    "For single-receipt photos, prefer the final paid total (for example TOTAL, Amount paid, Card payment, Dankort, Visa, Mastercard) over subtotal, tax, discount, change, or item rows.",
+    "If multiple totals are visible on a receipt, choose the amount that represents the completed payment, not the savings, fee, cashback, or running balance.",
     "Return strict JSON only with this shape:",
     '{"transactions":[{"kind":"expense","name":"string","amount":12.34,"currencyCode":"DKK","categoryId":"uuid-or-null","comment":"string-or-null","occurredOn":"YYYY-MM-DD"}]}',
     "Use only category ids from the candidate list.",
@@ -204,6 +211,7 @@ Deno.serve(async (req: Request) => {
     console.info("[parse-transaction-image] Invoking Groq.", {
       candidateCount: candidates.length,
       imageBytesApprox: imageDataUrl.length,
+      model: GROQ_IMAGE_MODEL,
     });
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
@@ -212,14 +220,20 @@ Deno.serve(async (req: Request) => {
         Authorization: `Bearer ${key}`,
       },
       body: JSON.stringify({
-        model: "meta-llama/llama-4-scout-17b-16e-instruct",
+        model: GROQ_IMAGE_MODEL,
         temperature: 0,
         max_tokens: 900,
+        response_format: {
+          type: "json_object",
+        },
         messages: [
           {
             role: "system",
             content:
-              'Return strict JSON only in the shape {"transactions":[{"kind":"expense","name":"string","amount":12.34,"currencyCode":"DKK","categoryId":"uuid-or-null","comment":"string-or-null","occurredOn":"YYYY-MM-DD"}]}.',
+              [
+                'Return strict JSON only in the shape {"transactions":[{"kind":"expense","name":"string","amount":12.34,"currencyCode":"DKK","categoryId":"uuid-or-null","comment":"string-or-null","occurredOn":"YYYY-MM-DD"}]}.',
+                "Be conservative with OCR. If a number is shown without decimals, keep it as a whole-unit amount.",
+              ].join(" "),
           },
           {
             role: "user",
