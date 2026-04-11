@@ -16,8 +16,27 @@ const SUPPORTED_CURRENCIES = [
   'RON',
 ] as const;
 
+const CURRENCY_FLAGS: Record<(typeof SUPPORTED_CURRENCIES)[number], string> = {
+  DKK: '🇩🇰',
+  EUR: '🇪🇺',
+  USD: '🇺🇸',
+  GBP: '🇬🇧',
+  SEK: '🇸🇪',
+  NOK: '🇳🇴',
+  PLN: '🇵🇱',
+  UAH: '🇺🇦',
+  CHF: '🇨🇭',
+  CAD: '🇨🇦',
+  AUD: '🇦🇺',
+  JPY: '🇯🇵',
+  CZK: '🇨🇿',
+  HUF: '🇭🇺',
+  RON: '🇷🇴',
+};
+
 export const currencyOptions = SUPPORTED_CURRENCIES.map((code) => ({
   code,
+  flag: CURRENCY_FLAGS[code],
   label: code,
 }));
 

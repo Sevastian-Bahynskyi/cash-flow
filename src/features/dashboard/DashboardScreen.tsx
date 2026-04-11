@@ -1,25 +1,26 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { BarChart, LineChart } from 'react-native-gifted-charts';
+import { runDetached } from '@/lib/async';
 import { MotionScope } from '@/ui/MotionScope';
 import { MotionView } from '@/ui/MotionView';
 import { FilterChips } from '@/ui/FilterChips';
 import { ScreenHeader } from '@/ui/ScreenHeader';
 import { CategoryIcon } from '@/ui/CategoryIcon';
+import { SkeletonBlock, SkeletonCard } from '@/ui/Skeleton';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 import { formatMinor, formatPercent } from '@/lib/format';
 import { type DashboardRange, useDashboard } from './useDashboard';
-import { ExpenseRingChart } from './ExpenseRingChart';
+import { ExpenseWaffleChart } from './ExpenseWaffleChart';
 
 const rangeOptions = [
   { label: 'Weekly', value: 'weekly' },
   { label: 'Monthly', value: 'monthly' },
   { label: 'Yearly', value: 'yearly' },
 ] as const satisfies readonly { label: string; value: DashboardRange }[];
-
 
 function MetricCard({
   icon,
@@ -43,12 +44,84 @@ function MetricCard({
   );
 }
 
+function DashboardSkeleton() {
+  return (
+    <>
+      <View style={styles.skeletonChipRow}>
+        <SkeletonBlock width={92} height={36} radius={radius.pill} />
+        <SkeletonBlock width={104} height={36} radius={radius.pill} />
+        <SkeletonBlock width={92} height={36} radius={radius.pill} />
+      </View>
+
+      <SkeletonCard style={styles.heroSkeletonCard}>
+        <SkeletonBlock width={118} height={12} radius={radius.sm} />
+        <SkeletonBlock width="56%" height={48} radius={radius.md} />
+        <SkeletonBlock width="72%" height={16} />
+        <View style={styles.heroStats}>
+          {[0, 1, 2].map((item) => (
+            <SkeletonBlock key={item} width={108} height={46} radius={radius.pill} />
+          ))}
+        </View>
+      </SkeletonCard>
+
+      <View style={styles.section}>
+        <View style={styles.metricsGrid}>
+          {[0, 1, 2, 3].map((item) => (
+            <SkeletonCard key={item} style={styles.metricCard}>
+              <SkeletonBlock width={18} height={18} radius={radius.sm} />
+              <SkeletonBlock width="44%" height={12} radius={radius.sm} />
+              <SkeletonBlock width="64%" height={18} />
+            </SkeletonCard>
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <SkeletonCard style={styles.chartCard}>
+          <SkeletonBlock width="34%" height={18} />
+          <SkeletonBlock width="62%" height={12} radius={radius.sm} />
+          <SkeletonBlock width="100%" height={220} radius={radius.md} />
+          <SkeletonBlock width="78%" height={12} radius={radius.sm} />
+        </SkeletonCard>
+      </View>
+
+      <View style={styles.section}>
+        <View style={styles.chartGrid}>
+          <SkeletonCard style={styles.chartCard}>
+            <SkeletonBlock width="36%" height={18} />
+            <SkeletonBlock width="66%" height={12} radius={radius.sm} />
+            <SkeletonBlock width="100%" height={260} radius={radius.md} />
+          </SkeletonCard>
+
+          <SkeletonCard style={styles.chartCard}>
+            <SkeletonBlock width="42%" height={18} />
+            <SkeletonBlock width="56%" height={12} radius={radius.sm} />
+            <View style={styles.categoryList}>
+              {[0, 1, 2, 3].map((item) => (
+                <View key={item} style={styles.skeletonCategoryRow}>
+                  <View style={styles.categoryLead}>
+                    <SkeletonBlock width={32} height={32} radius={radius.md} />
+                    <View style={styles.categoryCopy}>
+                      <SkeletonBlock width="74%" height={16} />
+                      <SkeletonBlock width="28%" height={12} radius={radius.sm} />
+                    </View>
+                  </View>
+                  <SkeletonBlock width={72} height={16} />
+                </View>
+              ))}
+            </View>
+          </SkeletonCard>
+        </View>
+      </View>
+    </>
+  );
+}
+
 export default function DashboardScreen() {
   const [range, setRange] = useState<DashboardRange>('monthly');
   const [refreshing, setRefreshing] = useState(false);
   const [motionRun, setMotionRun] = useState(0);
   const [selectedExpenseIndex, setSelectedExpenseIndex] = useState(0);
-  const [pieInteracting, setPieInteracting] = useState(false);
   const analytics = useDashboard(range);
   const { width } = useWindowDimensions();
 
@@ -70,12 +143,11 @@ export default function DashboardScreen() {
 
   useEffect(() => {
     setSelectedExpenseIndex(0);
-    setPieInteracting(false);
   }, [analytics.categoryBreakdown]);
 
   const selectedExpenseCategory =
     analytics.categoryBreakdown[selectedExpenseIndex] ?? analytics.categoryBreakdown[0] ?? null;
-  const pieSize = width < 390 ? 176 : 204;
+  const waffleSize = width < 390 ? 176 : 204;
 
   const onRefresh = async (): Promise<void> => {
     setRefreshing(true);
@@ -91,11 +163,20 @@ export default function DashboardScreen() {
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
-        scrollEnabled={!pieInteracting}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.text} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => runDetached(onRefresh(), 'dashboard.refresh')}
+            tintColor={colors.text}
+          />
+        }
       >
         <ScreenHeader title="Dashboard" subtitle="Weekly, monthly, yearly flow" />
 
+        {analytics.isInitialLoading ? <DashboardSkeleton /> : null}
+
+        {!analytics.isInitialLoading ? (
+          <>
         <FilterChips value={range} options={rangeOptions} onChange={setRange} />
 
         <MotionView direction="left" distance={190} delayMs={90} rotateFrom={-8}>
@@ -119,14 +200,6 @@ export default function DashboardScreen() {
             </View>
           </LinearGradient>
         </MotionView>
-
-        {analytics.loading && analytics.transactions.length === 0 ? (
-          <View style={styles.section}>
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>Loading dashboard...</Text>
-            </View>
-          </View>
-        ) : null}
 
         {analytics.error ? (
           <View style={styles.section}>
@@ -288,20 +361,29 @@ export default function DashboardScreen() {
                 <MotionView style={styles.chartGridPrimary} direction="left" distance={150} delayMs={240}>
                   <View style={styles.chartCard}>
                     <Text style={styles.cardTitle}>Expense split</Text>
-                    <Text style={styles.cardMeta}>Personal expenses only, excluding shared top-ups</Text>
+                    <Text style={styles.cardMeta}>
+                      Personal expenses only, excluding shared top-ups. Tap a block or row to inspect the amount.
+                    </Text>
 
                     {analytics.categoryBreakdown.length > 0 ? (
                       <View style={styles.pieDetailRow}>
-                        <ExpenseRingChart
+                        <ExpenseWaffleChart
                           categories={analytics.categoryBreakdown}
                           selectedIndex={selectedExpenseIndex}
                           onSelect={setSelectedExpenseIndex}
-                          size={pieSize}
-                          onInteractionChange={setPieInteracting}
+                          size={waffleSize}
                         />
 
                         {selectedExpenseCategory ? (
-                          <View style={styles.pieSelectionCard}>
+                          <View
+                            style={[
+                              styles.pieSelectionCard,
+                              {
+                                backgroundColor: `${selectedExpenseCategory.color}14`,
+                                borderColor: `${selectedExpenseCategory.color}55`,
+                              },
+                            ]}
+                          >
                             <View style={styles.pieSelectionHead}>
                               <View style={[styles.categoryIconWrap, styles.pieSelectionIconWrap, { backgroundColor: `${selectedExpenseCategory.color}22` }]}>
                                 <CategoryIcon
@@ -310,7 +392,7 @@ export default function DashboardScreen() {
                                   color={selectedExpenseCategory.color}
                                 />
                               </View>
-                              <Text style={styles.pieSelectionLabel}>Selected</Text>
+                              <Text style={styles.pieSelectionLabel}>Selected category</Text>
                             </View>
                             <Text style={styles.pieSelectionCategory}>{selectedExpenseCategory.label}</Text>
                             <Text style={styles.pieSelectionAmount}>{formatMinor(selectedExpenseCategory.amountMinor)}</Text>
@@ -334,7 +416,22 @@ export default function DashboardScreen() {
                     {analytics.categoryBreakdown.length > 0 ? (
                       <View style={styles.categoryList}>
                         {analytics.categoryBreakdown.map((category, index) => (
-                          <View key={category.categoryId} style={styles.categoryRow}>
+                          <Pressable
+                            key={category.categoryId}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Show ${category.label}`}
+                            onPress={() => setSelectedExpenseIndex(index)}
+                            style={({ pressed }) => [
+                              styles.categoryRow,
+                              index === selectedExpenseIndex
+                                ? {
+                                    backgroundColor: `${category.color}16`,
+                                    borderColor: `${category.color}55`,
+                                  }
+                                : null,
+                              pressed ? styles.categoryRowPressed : null,
+                            ]}
+                          >
                             <View style={styles.categoryLead}>
                               <View style={[styles.categoryIconWrap, { backgroundColor: `${category.color}22` }]}>
                                 <CategoryIcon name={category.icon} size={18} color={category.color} />
@@ -347,7 +444,7 @@ export default function DashboardScreen() {
                               </View>
                             </View>
                             <Text style={styles.categoryAmount}>{formatMinor(category.amountMinor)}</Text>
-                          </View>
+                          </Pressable>
                         ))}
                       </View>
                     ) : (
@@ -361,6 +458,8 @@ export default function DashboardScreen() {
             </View>
           </>
         )}
+          </>
+        ) : null}
       </ScrollView>
     </MotionScope>
   );
@@ -379,6 +478,8 @@ const styles = StyleSheet.create({
   heroAmount: { ...typography.amount, color: colors.text },
   heroMeta: { ...typography.body, color: colors.textMuted },
   heroStats: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap', paddingTop: spacing.xs },
+  heroSkeletonCard: { marginHorizontal: spacing.lg, gap: spacing.sm },
+  skeletonChipRow: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, flexWrap: 'wrap' },
   heroStatChip: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
@@ -439,6 +540,8 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderRadius: radius.md,
     backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
     gap: spacing.xs,
   },
   pieSelectionHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
@@ -453,8 +556,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     gap: spacing.md,
+    paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
+  categoryRowPressed: { opacity: 0.86 },
   categoryLead: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center', flex: 1 },
   categoryIconWrap: {
     width: 32,
@@ -468,6 +576,13 @@ const styles = StyleSheet.create({
   categoryLabel: { ...typography.body, color: colors.text, flexShrink: 1 },
   categoryShare: { ...typography.label, color: colors.textMuted },
   categoryAmount: { ...typography.body, color: colors.text, fontWeight: '600' },
+  skeletonCategoryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.xs,
+  },
   emptyCard: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.lg, borderWidth: 1, borderColor: colors.border },
   emptyInset: { paddingVertical: spacing.lg },
   emptyTitle: { ...typography.body, color: colors.text, fontWeight: '700', marginBottom: spacing.xs },

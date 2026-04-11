@@ -16,12 +16,14 @@ import { useOverview } from '@/features/overview/useOverview';
 import { buildCategoryMeta } from '@/features/categories/helpers';
 import { buildBudgetStateByCategory } from '@/features/budgets/helpers';
 import { findIncomeParentIds, isIncomeCategoryRow } from '@/features/categories/rules';
+import { runDetached } from '@/lib/async';
 import { supabase } from '@/lib/supabase';
 import { formatMinor, formatPercent } from '@/lib/format';
 import { ProgressBar } from '@/ui/ProgressBar';
 import { ScreenHeader } from '@/ui/ScreenHeader';
 import { CategoryIcon } from '@/ui/CategoryIcon';
 import { NumericKeypad } from '@/ui/NumericKeypad';
+import { SkeletonBlock, SkeletonCard } from '@/ui/Skeleton';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 
 type BudgetDraft = {
@@ -66,6 +68,43 @@ const highlightedAmount = (raw: string): { display: string; activeIndex: number 
 
   return { display, activeIndex: rawIndex };
 };
+
+function BudgetSkeleton() {
+  return (
+    <>
+      <SkeletonCard style={styles.skeletonHeroCard}>
+        <SkeletonBlock width="42%" height={24} radius={radius.md} />
+        <SkeletonBlock width="100%" height={14} radius={radius.sm} />
+        <SkeletonBlock width="78%" height={14} radius={radius.sm} />
+      </SkeletonCard>
+
+      <SkeletonCard style={styles.skeletonSearchCard} padding={spacing.md}>
+        <View style={styles.skeletonSearchRow}>
+          <SkeletonBlock width={18} height={18} radius={radius.pill} />
+          <SkeletonBlock width="46%" height={16} />
+        </View>
+      </SkeletonCard>
+
+      <View style={styles.section}>
+        {[0, 1, 2, 3, 4].map((item) => (
+          <SkeletonCard key={item} padding={spacing.md}>
+            <View style={styles.skeletonBudgetRow}>
+              <SkeletonBlock width={44} height={44} radius={radius.md} />
+              <View style={styles.rowBody}>
+                <View style={styles.rowHead}>
+                  <SkeletonBlock width="52%" height={16} />
+                  <SkeletonBlock width={74} height={14} radius={radius.sm} />
+                </View>
+                <SkeletonBlock width="66%" height={12} radius={radius.sm} />
+                <SkeletonBlock width="100%" height={10} radius={radius.pill} />
+              </View>
+            </View>
+          </SkeletonCard>
+        ))}
+      </View>
+    </>
+  );
+}
 
 export default function BudgetScreen() {
   const data = useOverview();
@@ -176,6 +215,10 @@ export default function BudgetScreen() {
           subtitle={data.activeCycle ? `Current cycle ${data.activeCycle.label}` : 'Add a salary transaction to start budgeting'}
         />
 
+        {data.isInitialLoading ? <BudgetSkeleton /> : null}
+
+        {!data.isInitialLoading ? (
+          <>
         <View style={styles.hero}>
           <Text style={styles.heroTitle}>Cycle budget state</Text>
           <Text style={styles.heroBody}>
@@ -266,6 +309,8 @@ export default function BudgetScreen() {
             })}
           </View>
         )}
+          </>
+        ) : null}
       </ScrollView>
 
       <Modal
@@ -289,9 +334,7 @@ export default function BudgetScreen() {
             actions={[
               {
                 icon: 'check',
-                onPress: () => {
-                  void saveBudget();
-                },
+                onPress: () => runDetached(saveBudget(), 'budgets.saveBudget'),
               },
             ]}
           />
@@ -317,9 +360,7 @@ export default function BudgetScreen() {
 
               <Pressable
                 style={({ pressed }) => [styles.primaryButton, (pressed || saving) && styles.buttonPressed]}
-                onPress={() => {
-                  void saveBudget();
-                }}
+                onPress={() => runDetached(saveBudget(), 'budgets.saveBudget')}
                 disabled={saving}
               >
                 <Text style={styles.primaryButtonText}>{saving ? 'Saving...' : 'Save budget'}</Text>
@@ -328,9 +369,7 @@ export default function BudgetScreen() {
               {draft?.budgetId ? (
                 <Pressable
                   style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}
-                  onPress={() => {
-                    void removeBudget();
-                  }}
+                  onPress={() => runDetached(removeBudget(), 'budgets.removeBudget')}
                 >
                   <Text style={styles.secondaryButtonText}>Remove budget</Text>
                 </Pressable>
@@ -376,6 +415,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     gap: spacing.sm,
   },
+  skeletonHeroCard: { marginHorizontal: spacing.lg },
+  skeletonSearchCard: { marginHorizontal: spacing.lg },
+  skeletonSearchRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  skeletonBudgetRow: { flexDirection: 'row', gap: spacing.md, alignItems: 'center' },
   heroTitle: { ...typography.h2, color: colors.text },
   heroBody: { ...typography.body, color: colors.textMuted },
   emptyCard: {

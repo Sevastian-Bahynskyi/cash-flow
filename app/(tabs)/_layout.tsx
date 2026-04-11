@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Tabs } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useComposer } from '@/features/transactions/ComposerContext';
+import { useComposer } from '@/features/transactions/composer/context/ComposerContext';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 
 const iconForRoute = (name: string, focused: boolean): keyof typeof MaterialCommunityIcons.glyphMap => {

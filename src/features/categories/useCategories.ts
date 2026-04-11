@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
+import { runDetached } from '@/lib/async';
 import { supabase } from '@/lib/supabase';
-import { applyCategoryOverrides } from './helpers';
+import { applyCategoryOverrides, getDisplayCategoryName } from './helpers';
 import type { CategoryOption, CategoryOverrideRow, CategoryRow } from './types';
 
 type State =
@@ -22,7 +23,7 @@ export function useCategories(): State {
   useEffect(() => {
     if (cache) return;
     let cancelled = false;
-    (async () => {
+    runDetached((async () => {
       const [categoriesRes, overridesRes] = await Promise.all([
         supabase
           .from('categories')
@@ -54,11 +55,12 @@ export function useCategories(): State {
         .map((r) => {
           const parent = parents.get(r.parent_id ?? '');
           const parentName = parent?.name ?? '';
+          const displayName = getDisplayCategoryName(parentName, r.name);
           return {
             id: r.id,
-            name: r.name,
+            name: displayName,
             parentName,
-            searchKey: `${parentName} ${r.name}`.toLowerCase(),
+            searchKey: `${parentName} ${displayName} ${r.name}`.toLowerCase(),
             parentId: r.parent_id ?? '',
             icon: r.icon,
             color: r.color,
@@ -69,7 +71,7 @@ export function useCategories(): State {
 
       cache = options;
       setState({ status: 'ready', options });
-    })();
+    })(), 'categories.useCategories.load');
     return () => {
       cancelled = true;
     };

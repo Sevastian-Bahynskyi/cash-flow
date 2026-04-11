@@ -16,15 +16,17 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { bankIconOptions, categoryColorOptions } from '@/features/categories/presentation';
 import { useOverview } from '@/features/overview/useOverview';
-import type { LoanEventKind, LoanRow } from '@/features/loans/types';
-import type { ReceivableEventKind, ReceivableRow } from '@/features/receivables/types';
-import type { SavingsAction, SavingsAccountRow } from '@/features/savings/types';
+import type { LoanEventKind } from '@/features/loans/types';
+import type { ReceivableEventKind } from '@/features/receivables/types';
+import type { SavingsAction } from '@/features/savings/types';
+import { runDetached } from '@/lib/async';
 import { formatDateLabel, formatMinor } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
 import { MotionScope } from '@/ui/MotionScope';
 import { MotionView } from '@/ui/MotionView';
 import { ProgressBar } from '@/ui/ProgressBar';
 import { ScreenHeader } from '@/ui/ScreenHeader';
+import { SkeletonBlock, SkeletonCard } from '@/ui/Skeleton';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 
 type SavingsAccountDraft = {
@@ -80,6 +82,57 @@ const parseMinor = (raw: string): number | null => {
   if (!Number.isFinite(value) || value < 0) return null;
   return Math.round(value * 100);
 };
+
+function BankSkeleton() {
+  return (
+    <>
+      <SkeletonCard style={styles.skeletonSummaryCard}>
+        <SkeletonBlock width={102} height={12} radius={radius.sm} />
+        <SkeletonBlock width="54%" height={42} radius={radius.md} />
+        <SkeletonBlock width="72%" height={12} radius={radius.sm} />
+      </SkeletonCard>
+
+      <View style={styles.heroRow}>
+        {[0, 1].map((item) => (
+          <SkeletonCard key={item} style={styles.heroCard}>
+            <SkeletonBlock width="42%" height={12} radius={radius.sm} />
+            <SkeletonBlock width="74%" height={30} radius={radius.md} />
+            <SkeletonBlock width="34%" height={12} radius={radius.sm} />
+          </SkeletonCard>
+        ))}
+      </View>
+
+      <SkeletonCard style={styles.skeletonSummaryCard}>
+        <SkeletonBlock width={96} height={12} radius={radius.sm} />
+        <SkeletonBlock width="46%" height={30} radius={radius.md} />
+        <SkeletonBlock width="86%" height={12} radius={radius.sm} />
+      </SkeletonCard>
+
+      {['Savings', 'Loans', 'Owed to you'].map((title, index) => (
+        <View key={title} style={styles.section}>
+          <View style={styles.sectionHead}>
+            <Text style={styles.sectionTitle}>{title}</Text>
+            <SkeletonBlock width={index === 0 ? 104 : 94} height={34} radius={radius.pill} />
+          </View>
+
+          {[0, 1].map((item) => (
+            <SkeletonCard key={item} padding={spacing.md}>
+              <View style={styles.skeletonBankRow}>
+                <SkeletonBlock width={44} height={44} radius={radius.md} />
+                <View style={styles.itemCopy}>
+                  <SkeletonBlock width="48%" height={16} />
+                  <SkeletonBlock width="62%" height={12} radius={radius.sm} />
+                </View>
+                <SkeletonBlock width={76} height={18} />
+              </View>
+              <SkeletonBlock width="100%" height={10} radius={radius.pill} />
+            </SkeletonCard>
+          ))}
+        </View>
+      ))}
+    </>
+  );
+}
 
 export default function BankScreen() {
   const { signOut } = useAuth();
@@ -458,6 +511,10 @@ export default function BankScreen() {
             actions={[{ icon: 'logout', onPress: () => void signOut() }]}
           />
 
+          {data.isInitialLoading ? <BankSkeleton /> : null}
+
+          {!data.isInitialLoading ? (
+            <>
           <MotionView direction="left" distance={210} delayMs={90} rotateFrom={-8}>
             <View style={styles.bankSummaryCard}>
               <Text style={styles.heroLabel}>Bank balance</Text>
@@ -545,7 +602,7 @@ export default function BankScreen() {
                         text: 'Delete',
                         style: 'destructive',
                         onPress: () => {
-                          void removeSavingsAccount(account.id);
+                          runDetached(removeSavingsAccount(account.id), 'bank.removeSavingsAccount');
                         },
                       },
                       { text: 'Cancel', style: 'cancel' },
@@ -661,7 +718,7 @@ export default function BankScreen() {
                         text: 'Delete',
                         style: 'destructive',
                         onPress: () => {
-                          void removeLoan(loan.id);
+                          runDetached(removeLoan(loan.id), 'bank.removeLoan');
                         },
                       },
                       { text: 'Cancel', style: 'cancel' },
@@ -786,7 +843,7 @@ export default function BankScreen() {
                         text: 'Delete',
                         style: 'destructive',
                         onPress: () => {
-                          void removeReceivable(receivable.id);
+                          runDetached(removeReceivable(receivable.id), 'bank.removeReceivable');
                         },
                       },
                       { text: 'Cancel', style: 'cancel' },
@@ -862,6 +919,8 @@ export default function BankScreen() {
           )}
             </View>
           </MotionView>
+            </>
+          ) : null}
         </ScrollView>
       </MotionScope>
 
@@ -876,7 +935,7 @@ export default function BankScreen() {
             back
             onBack={() => setAccountDraft(null)}
             title={accountDraft?.id ? 'Edit Savings' : 'New Savings'}
-            actions={[{ icon: 'check', onPress: () => void saveSavingsAccount() }]}
+            actions={[{ icon: 'check', onPress: () => runDetached(saveSavingsAccount(), 'bank.saveSavingsAccount'), disabled: saving }]}
           />
           <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalContent}>
             <Text style={styles.label}>Name</Text>
@@ -952,7 +1011,7 @@ export default function BankScreen() {
             onBack={() => setSavingsDraft(null)}
             title="Savings Action"
             subtitle={savingsDraft?.accountName}
-            actions={[{ icon: 'check', onPress: () => void saveSavingsAction() }]}
+            actions={[{ icon: 'check', onPress: () => runDetached(saveSavingsAction(), 'bank.saveSavingsAction'), disabled: saving }]}
           />
           <View style={styles.modalContent}>
             <Text style={styles.label}>Action</Text>
@@ -1005,7 +1064,7 @@ export default function BankScreen() {
             back
             onBack={() => setLoanDraft(null)}
             title={loanDraft?.id ? 'Edit Loan' : 'New Loan'}
-            actions={[{ icon: 'check', onPress: () => void saveLoan() }]}
+            actions={[{ icon: 'check', onPress: () => runDetached(saveLoan(), 'bank.saveLoan'), disabled: saving }]}
           />
           <View style={styles.modalContent}>
             <Text style={styles.label}>Name</Text>
@@ -1052,7 +1111,7 @@ export default function BankScreen() {
             onBack={() => setLoanEventDraft(null)}
             title={loanEventDraft?.kind === 'repaid' ? 'Repayment' : 'Borrow More'}
             subtitle={loanEventDraft?.loanName}
-            actions={[{ icon: 'check', onPress: () => void saveLoanEvent() }]}
+            actions={[{ icon: 'check', onPress: () => runDetached(saveLoanEvent(), 'bank.saveLoanEvent'), disabled: saving }]}
           />
           <View style={styles.modalContent}>
             <Text style={styles.label}>Amount</Text>
@@ -1079,7 +1138,7 @@ export default function BankScreen() {
             back
             onBack={() => setReceivableDraft(null)}
             title={receivableDraft?.id ? 'Edit Owed Item' : 'New Owed Item'}
-            actions={[{ icon: 'check', onPress: () => void saveReceivable() }]}
+            actions={[{ icon: 'check', onPress: () => runDetached(saveReceivable(), 'bank.saveReceivable'), disabled: saving }]}
           />
           <View style={styles.modalContent}>
             <Text style={styles.label}>Name</Text>
@@ -1126,7 +1185,7 @@ export default function BankScreen() {
             onBack={() => setReceivableEventDraft(null)}
             title={receivableEventDraft?.kind === 'repaid' ? 'Money Returned' : 'Lend More'}
             subtitle={receivableEventDraft?.receivableName}
-            actions={[{ icon: 'check', onPress: () => void saveReceivableEvent() }]}
+            actions={[{ icon: 'check', onPress: () => runDetached(saveReceivableEvent(), 'bank.saveReceivableEvent'), disabled: saving }]}
           />
           <View style={styles.modalContent}>
             <Text style={styles.label}>Amount</Text>
@@ -1156,6 +1215,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     gap: spacing.xs,
   },
+  skeletonSummaryCard: { marginHorizontal: spacing.lg },
   owedSummaryCard: {
     marginHorizontal: spacing.lg,
     marginTop: -4,
@@ -1185,6 +1245,7 @@ const styles = StyleSheet.create({
   section: { paddingHorizontal: spacing.lg, gap: spacing.sm },
   sectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sectionTitle: { ...typography.label, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
+  skeletonBankRow: { flexDirection: 'row', gap: spacing.md, alignItems: 'center' },
   inlineButton: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,

@@ -89,7 +89,7 @@ export const NumericKeypad = memo(function NumericKeypad({ value, onChange, onCl
 
 const styles = StyleSheet.create({
   wrap: {
-    backgroundColor: colors.danger,
+    backgroundColor: colors.surface,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
     paddingBottom: spacing.md,

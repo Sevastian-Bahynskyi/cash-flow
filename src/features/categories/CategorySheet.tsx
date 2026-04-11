@@ -13,10 +13,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 import { CategoryIcon } from '@/ui/CategoryIcon';
+import { getCategoryDisplayColor } from './helpers';
 import { useCategories } from './useCategories';
 import type { CategoryOption } from './types';
 import type { TransactionKind } from '@/features/transactions/types';
-import { isIncomeCategoryOption } from './rules';
+import { isAllowedIncomeCategoryOption, isIncomeCategoryOption } from './rules';
 
 type BudgetIndicator = {
   tone: 'neutral' | 'warning' | 'critical';
@@ -46,14 +47,23 @@ function CategoryRow({
   onClose,
   selectedId,
   budget,
+  kind,
 }: {
   item: CategoryOption;
   onSelect: (option: CategoryOption) => void;
   onClose: () => void;
   selectedId?: string | null;
   budget?: BudgetIndicator;
+  kind: TransactionKind;
 }) {
   const selected = selectedId === item.id;
+  const iconColor = getCategoryDisplayColor({
+    kind,
+    parentName: item.parentName,
+    name: item.name,
+    parentColor: item.parentColor,
+    color: item.color,
+  });
 
   return (
     <Pressable
@@ -63,8 +73,8 @@ function CategoryRow({
         onClose();
       }}
     >
-      <View style={[styles.rowIconWrap, { backgroundColor: `${item.parentColor}22` }]}>
-        <CategoryIcon name={item.icon} size={18} color={item.parentColor} />
+      <View style={[styles.rowIconWrap, { backgroundColor: `${iconColor}22` }]}>
+        <CategoryIcon name={item.icon} size={18} color={iconColor} />
       </View>
       <View style={styles.rowCopy}>
         <Text style={styles.rowParent}>{item.parentName}</Text>
@@ -96,7 +106,9 @@ export function CategorySheet({
   const filtered = useMemo<CategoryOption[]>(() => {
     if (state.status !== 'ready') return [];
     const visibleOptions =
-      kind === 'expense' ? state.options.filter((option) => !isIncomeCategoryOption(option)) : state.options;
+      kind === 'expense'
+        ? state.options.filter((option) => !isIncomeCategoryOption(option))
+        : state.options.filter((option) => isAllowedIncomeCategoryOption(option));
     const q = query.trim().toLowerCase();
     if (q.length === 0) return visibleOptions;
     return visibleOptions.filter((option) => option.searchKey.includes(q));
@@ -105,7 +117,9 @@ export function CategorySheet({
   const featured = useMemo(() => {
     if (state.status !== 'ready') return { frequent: [], recent: [] } as const;
     const visibleOptions =
-      kind === 'expense' ? state.options.filter((option) => !isIncomeCategoryOption(option)) : state.options;
+      kind === 'expense'
+        ? state.options.filter((option) => !isIncomeCategoryOption(option))
+        : state.options.filter((option) => isAllowedIncomeCategoryOption(option));
     const optionsById = new Map(visibleOptions.map((option) => [option.id, option]));
     const frequent = (frequentIds ?? [])
       .map((id) => optionsById.get(id))
@@ -123,7 +137,9 @@ export function CategorySheet({
     if (state.status !== 'ready') return [] as { parentId: string; parentName: string; items: CategoryOption[] }[];
     const groups = new Map<string, { parentId: string; parentName: string; items: CategoryOption[] }>();
     const visibleOptions =
-      kind === 'expense' ? state.options.filter((option) => !isIncomeCategoryOption(option)) : state.options;
+      kind === 'expense'
+        ? state.options.filter((option) => !isIncomeCategoryOption(option))
+        : state.options.filter((option) => isAllowedIncomeCategoryOption(option));
     for (const option of visibleOptions) {
       const existing = groups.get(option.parentId);
       if (existing) existing.items.push(option);
@@ -188,6 +204,7 @@ export function CategorySheet({
                       onClose={onClose}
                       selectedId={selectedId}
                       budget={budgetStateByCategory?.[item.id]}
+                      kind={kind}
                     />
                   ))
                 )
@@ -204,6 +221,7 @@ export function CategorySheet({
                           onClose={onClose}
                           selectedId={selectedId}
                           budget={budgetStateByCategory?.[item.id]}
+                          kind={kind}
                         />
                       ))}
                     </View>
@@ -220,6 +238,7 @@ export function CategorySheet({
                           onClose={onClose}
                           selectedId={selectedId}
                           budget={budgetStateByCategory?.[item.id]}
+                          kind={kind}
                         />
                       ))}
                     </View>
@@ -238,6 +257,7 @@ export function CategorySheet({
                             onClose={onClose}
                             selectedId={selectedId}
                             budget={budgetStateByCategory?.[item.id]}
+                            kind={kind}
                           />
                         ))}
                       </View>

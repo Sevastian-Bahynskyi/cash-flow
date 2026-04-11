@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import {
-  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -13,7 +12,46 @@ import { useOverview } from '@/features/overview/useOverview';
 import { buildCategoryMeta } from '@/features/categories/helpers';
 import { formatMinor } from '@/lib/format';
 import { ScreenHeader } from '@/ui/ScreenHeader';
+import { SkeletonBlock, SkeletonCard } from '@/ui/Skeleton';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
+
+function AlertsSkeleton() {
+  return (
+    <>
+      <SkeletonCard style={styles.skeletonHeroCard}>
+        <SkeletonBlock width="44%" height={24} radius={radius.md} />
+        <SkeletonBlock width="100%" height={14} radius={radius.sm} />
+        <SkeletonBlock width="72%" height={14} radius={radius.sm} />
+      </SkeletonCard>
+
+      <View style={styles.section}>
+        <SkeletonBlock width={98} height={12} radius={radius.sm} />
+        {[0, 1].map((item) => (
+          <SkeletonCard key={item} padding={spacing.md}>
+            <View style={styles.skeletonAlertHead}>
+              <SkeletonBlock width={18} height={18} radius={radius.pill} />
+              <SkeletonBlock width="56%" height={16} />
+            </View>
+            <SkeletonBlock width="48%" height={12} radius={radius.sm} />
+          </SkeletonCard>
+        ))}
+      </View>
+
+      <View style={styles.section}>
+        <SkeletonBlock width={104} height={12} radius={radius.sm} />
+        {[0, 1].map((item) => (
+          <SkeletonCard key={item} padding={spacing.md} style={styles.skeletonHintCard}>
+            <SkeletonBlock width={18} height={18} radius={radius.pill} />
+            <View style={styles.skeletonHintCopy}>
+              <SkeletonBlock width="100%" height={14} radius={radius.sm} />
+              <SkeletonBlock width="74%" height={14} radius={radius.sm} />
+            </View>
+          </SkeletonCard>
+        ))}
+      </View>
+    </>
+  );
+}
 
 export default function AlertsScreen() {
   const data = useOverview();
@@ -44,6 +82,10 @@ export default function AlertsScreen() {
       >
         <ScreenHeader back title="Alerts" subtitle="Warnings, reminders, and weekly context" />
 
+        {data.isInitialLoading ? <AlertsSkeleton /> : null}
+
+        {!data.isInitialLoading ? (
+          <>
         <View style={styles.hero}>
           <Text style={styles.heroTitle}>Heads-up only</Text>
           <Text style={styles.heroBody}>
@@ -96,6 +138,8 @@ export default function AlertsScreen() {
             ))
           )}
         </View>
+          </>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -112,6 +156,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     gap: spacing.md,
   },
+  skeletonHeroCard: { marginHorizontal: spacing.lg },
   heroTitle: { ...typography.h2, color: colors.text },
   heroBody: { ...typography.body, color: colors.textMuted },
   buttonPressed: { opacity: 0.86 },
@@ -123,6 +168,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   emptyText: { ...typography.body, color: colors.textMuted },
+  skeletonAlertHead: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center' },
   alertCard: {
     padding: spacing.md,
     borderRadius: radius.lg,
@@ -141,5 +187,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     alignItems: 'center',
   },
+  skeletonHintCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  skeletonHintCopy: { flex: 1, gap: spacing.xs },
   hintText: { ...typography.body, color: colors.text, flex: 1 },
 });

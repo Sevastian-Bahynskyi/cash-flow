@@ -13,9 +13,11 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { buildCategoryMeta } from '@/features/categories/helpers';
 import { CategorySheet } from '@/features/categories/CategorySheet';
 import { useOverview } from '@/features/overview/useOverview';
+import { runDetached } from '@/lib/async';
 import { supabase } from '@/lib/supabase';
 import { formatDateLabel } from '@/lib/format';
 import { ScreenHeader } from '@/ui/ScreenHeader';
+import { SkeletonBlock, SkeletonCard } from '@/ui/Skeleton';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 
 type AiRuleRow = {
@@ -34,10 +36,35 @@ type RuleDraft = {
   is_blocked: boolean;
 };
 
+function AiRulesSkeleton() {
+  return (
+    <>
+      <SkeletonCard style={styles.skeletonHeroCard}>
+        <SkeletonBlock width="42%" height={24} radius={radius.md} />
+        <SkeletonBlock width="100%" height={14} radius={radius.sm} />
+        <SkeletonBlock width="76%" height={14} radius={radius.sm} />
+      </SkeletonCard>
+
+      <View style={styles.section}>
+        {[0, 1, 2, 3].map((item) => (
+          <SkeletonCard key={item} padding={spacing.md}>
+            <View style={styles.skeletonRuleHead}>
+              <SkeletonBlock width="48%" height={16} />
+              <SkeletonBlock width={72} height={12} radius={radius.sm} />
+            </View>
+            <SkeletonBlock width="58%" height={12} radius={radius.sm} />
+          </SkeletonCard>
+        ))}
+      </View>
+    </>
+  );
+}
+
 export default function AiRulesScreen() {
   const overview = useOverview();
   const [rules, setRules] = useState<AiRuleRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasLoadedRules, setHasLoadedRules] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [draft, setDraft] = useState<RuleDraft | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -56,11 +83,14 @@ export default function AiRulesScreen() {
       }
     } finally {
       setLoading(false);
+      setHasLoadedRules(true);
     }
   };
 
+  const isInitialLoading = overview.isInitialLoading || (loading && !hasLoadedRules);
+
   useEffect(() => {
-    void loadRules();
+    runDetached(loadRules(), 'aiRules.load');
   }, []);
 
   const onRefresh = async (): Promise<void> => {
@@ -104,6 +134,10 @@ export default function AiRulesScreen() {
       >
         <ScreenHeader back title="Smart Assist" subtitle="Correction memory and blocked suggestions" />
 
+        {isInitialLoading ? <AiRulesSkeleton /> : null}
+
+        {!isInitialLoading ? (
+          <>
         <View style={styles.hero}>
           <Text style={styles.heroTitle}>Learning stays simple</Text>
           <Text style={styles.heroBody}>
@@ -151,6 +185,8 @@ export default function AiRulesScreen() {
             ))
           )}
         </View>
+          </>
+        ) : null}
       </ScrollView>
 
       <Modal
@@ -165,7 +201,7 @@ export default function AiRulesScreen() {
             onBack={() => setDraft(null)}
             title="Edit Rule"
             subtitle={draft?.pattern_key}
-            actions={[{ icon: 'check', onPress: () => void saveDraft() }]}
+            actions={[{ icon: 'check', onPress: () => runDetached(saveDraft(), 'aiRules.saveDraft') }]}
           />
           <View style={styles.modalBody}>
             <Pressable
@@ -203,7 +239,7 @@ export default function AiRulesScreen() {
               style={({ pressed }) => [styles.destructiveButton, pressed && styles.rowPressed]}
               onPress={() => {
                 if (!draft) return;
-                void deleteRule(draft.id);
+                runDetached(deleteRule(draft.id), 'aiRules.deleteRule');
               }}
             >
               <Text style={styles.destructiveButtonText}>Delete rule</Text>
@@ -234,9 +270,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     gap: spacing.sm,
   },
+  skeletonHeroCard: { marginHorizontal: spacing.lg },
   heroTitle: { ...typography.h2, color: colors.text },
   heroBody: { ...typography.body, color: colors.textMuted },
   section: { paddingHorizontal: spacing.lg, gap: spacing.sm },
+  skeletonRuleHead: { flexDirection: 'row', gap: spacing.md, alignItems: 'center', justifyContent: 'space-between' },
   emptyCard: {
     padding: spacing.lg,
     borderRadius: radius.lg,

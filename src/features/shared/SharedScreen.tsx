@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
+import { runDetached } from '@/lib/async';
 import { useOverview } from '@/features/overview/useOverview';
-import { useComposer } from '@/features/transactions/ComposerContext';
+import { useComposer } from '@/features/transactions/composer/context/ComposerContext';
 import { TransactionList } from '@/features/transactions/TransactionList';
-import { buildCategoryMeta } from '@/features/categories/helpers';
+import { buildCategoryMeta, getCategoryMetaDisplayColor } from '@/features/categories/helpers';
 import { FilterChips } from '@/ui/FilterChips';
 import { MotionScope } from '@/ui/MotionScope';
 import { MotionView } from '@/ui/MotionView';
 import { ProgressBar } from '@/ui/ProgressBar';
 import { ScreenHeader } from '@/ui/ScreenHeader';
+import { SkeletonBlock, SkeletonCard } from '@/ui/Skeleton';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 import { formatMinor, formatPercent } from '@/lib/format';
 import type { SalaryCycle } from '@/lib/cycles';
@@ -30,6 +32,66 @@ const cycleMatch = (row: TransactionRow, cycle: SalaryCycle | null): boolean => 
   return afterStart && beforeEnd;
 };
 
+function SharedSkeleton() {
+  return (
+    <>
+      <SkeletonCard style={styles.skeletonHeroCard}>
+        <SkeletonBlock width={108} height={12} radius={radius.sm} />
+        <SkeletonBlock width="56%" height={48} radius={radius.md} />
+        <View style={styles.heroStats}>
+          <SkeletonBlock width={128} height={46} radius={radius.pill} />
+          <SkeletonBlock width={108} height={46} radius={radius.pill} />
+        </View>
+        <SkeletonBlock width={98} height={38} radius={radius.pill} />
+      </SkeletonCard>
+
+      <View style={styles.metricsRow}>
+        {[0, 1].map((item) => (
+          <SkeletonCard key={item} style={styles.metricCard}>
+            <SkeletonBlock width="42%" height={12} radius={radius.sm} />
+            <SkeletonBlock width="70%" height={26} radius={radius.md} />
+            <SkeletonBlock width="32%" height={12} radius={radius.sm} />
+          </SkeletonCard>
+        ))}
+      </View>
+
+      <View style={styles.metricsRow}>
+        {[0, 1].map((item) => (
+          <SkeletonCard key={item} style={styles.metricCard}>
+            <SkeletonBlock width="40%" height={12} radius={radius.sm} />
+            <SkeletonBlock width="66%" height={26} radius={radius.md} />
+            <SkeletonBlock width="30%" height={12} radius={radius.sm} />
+          </SkeletonCard>
+        ))}
+      </View>
+
+      <View style={styles.card}>
+        <SkeletonBlock width={74} height={12} radius={radius.sm} />
+        <View style={styles.timelineList}>
+          {[0, 1, 2].map((item) => (
+            <View key={item} style={styles.skeletonTimelineRow}>
+              <SkeletonBlock width="46%" height={16} />
+              <SkeletonBlock width={68} height={16} />
+            </View>
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.card}>
+        <SkeletonBlock width={124} height={12} radius={radius.sm} />
+        <View style={styles.timelineList}>
+          {[0, 1, 2, 3].map((item) => (
+            <View key={item} style={styles.skeletonHistoryRow}>
+              <SkeletonBlock width="62%" height={16} />
+              <SkeletonBlock width="100%" height={10} radius={radius.pill} />
+            </View>
+          ))}
+        </View>
+      </View>
+    </>
+  );
+}
+
 export default function SharedScreen() {
   const data = useOverview();
   const composer = useComposer();
@@ -38,7 +100,9 @@ export default function SharedScreen() {
   const [motionRun, setMotionRun] = useState(0);
 
   useEffect(() => {
-    if (composer.refreshKey > 0) void data.reload();
+    if (composer.refreshKey > 0) {
+      runDetached(data.reload(), 'shared.reload');
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [composer.refreshKey]);
 
@@ -73,7 +137,7 @@ export default function SharedScreen() {
       : row.category_id
         ? categoryMeta[row.category_id]?.label ?? 'Shared'
         : 'Shared',
-    categoryColor: row.category_id ? categoryMeta[row.category_id]?.color ?? colors.accent : colors.accent,
+    categoryColor: row.category_id ? getCategoryMetaDisplayColor(categoryMeta[row.category_id], row.kind) : colors.accent,
     categoryIcon: row.category_id ? categoryMeta[row.category_id]?.icon ?? 'account-group-outline' : 'cash-plus',
   }));
 
@@ -88,7 +152,7 @@ export default function SharedScreen() {
         categoryId,
         spentMinor,
         label: categoryMeta[categoryId]?.label ?? 'Category',
-        color: categoryMeta[categoryId]?.color ?? colors.accent,
+        color: getCategoryMetaDisplayColor(categoryMeta[categoryId], 'expense'),
       }))
       .sort((a, b) => b.spentMinor - a.spentMinor)
       .slice(0, 5);
@@ -125,6 +189,10 @@ export default function SharedScreen() {
       >
         <ScreenHeader title="Shared" subtitle="Fairness and shared spend" />
 
+      {data.isInitialLoading ? <SharedSkeleton /> : null}
+
+      {!data.isInitialLoading ? (
+        <>
       <MotionView direction="right" distance={210} delayMs={90} rotateFrom={8}>
         <View style={styles.hero}>
           <Text style={styles.heroLabel}>Shared balance</Text>
@@ -161,12 +229,6 @@ export default function SharedScreen() {
       </MotionView>
 
       <FilterChips value={filter} options={filterOptions} onChange={setFilter} />
-
-      {data.loading && combined.length === 0 ? (
-        <View style={styles.card}>
-          <Text style={styles.metricMeta}>Loading the shared dashboard...</Text>
-        </View>
-      ) : null}
 
       {!selectedCycle ? (
         <View style={styles.card}>
@@ -291,9 +353,11 @@ export default function SharedScreen() {
             })
           }
           onDelete={(row) => {
-            void deleteTransaction(row);
+            runDetached(deleteTransaction(row), 'shared.deleteTransaction');
           }}
         />
+        </>
+      ) : null}
       </ScrollView>
     </MotionScope>
   );
@@ -312,6 +376,7 @@ const styles = StyleSheet.create({
   heroLabel: { ...typography.label, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
   heroAmount: { ...typography.amount, color: colors.text },
   heroStats: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap', paddingTop: spacing.xs },
+  skeletonHeroCard: { marginHorizontal: spacing.lg, gap: spacing.sm },
   heroStatChip: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
@@ -360,6 +425,8 @@ const styles = StyleSheet.create({
   },
   timelineList: { gap: spacing.sm },
   timelineRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  skeletonTimelineRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.md },
+  skeletonHistoryRow: { gap: spacing.sm },
   timelineLabel: { ...typography.body, color: colors.text, flex: 1, marginRight: spacing.md },
   timelineAmount: { ...typography.body, color: colors.text, fontWeight: '600' },
   categoryRow: { gap: spacing.sm },

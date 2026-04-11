@@ -15,6 +15,8 @@ type TransactionListItem = {
 
 type Props = {
   title?: string;
+  actionLabel?: string;
+  onActionPress?: () => void;
   items: TransactionListItem[];
   emptyLabel: string;
   onEdit: (row: TransactionRow) => void;
@@ -89,6 +91,8 @@ function TransactionRowCard({
 
 export const TransactionList = memo(function TransactionList({
   title,
+  actionLabel,
+  onActionPress,
   items,
   emptyLabel,
   onEdit,
@@ -97,7 +101,16 @@ export const TransactionList = memo(function TransactionList({
 }: Props) {
   return (
     <View style={styles.wrap}>
-      {title ? <Text style={styles.title}>{title}</Text> : null}
+      {title || (actionLabel && onActionPress) ? (
+        <View style={styles.head}>
+          {title ? <Text style={styles.title}>{title}</Text> : <View />}
+          {actionLabel && onActionPress ? (
+            <Pressable style={({ pressed }) => [styles.action, pressed && styles.actionPressed]} onPress={onActionPress}>
+              <Text style={styles.actionText}>{actionLabel}</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
       {items.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyText}>{emptyLabel}</Text>
@@ -122,7 +135,11 @@ export const TransactionList = memo(function TransactionList({
 
 const styles = StyleSheet.create({
   wrap: { gap: spacing.sm, paddingHorizontal: spacing.lg },
+  head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
   title: { ...typography.label, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
+  action: { paddingVertical: spacing.xs, paddingHorizontal: spacing.sm },
+  actionPressed: { opacity: 0.82 },
+  actionText: { ...typography.label, color: colors.accent, fontWeight: '600' },
   list: { gap: spacing.sm },
   empty: {
     backgroundColor: colors.surface,

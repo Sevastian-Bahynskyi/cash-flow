@@ -113,6 +113,25 @@ const normalizeCurrencyCode = (value: unknown): string => {
   return /^[A-Z]{3}$/.test(normalized) ? normalized : 'DKK';
 };
 
+const normalizeCategoryName = (value: string): string => value.trim().toLowerCase();
+
+const isTransferCategoryCandidate = (category: { parent: string; name: string }): boolean =>
+  normalizeCategoryName(category.parent) === 'transfers';
+
+const isSalaryCategoryCandidate = (category: { parent: string; name: string }): boolean =>
+  normalizeCategoryName(category.parent) === 'income' && normalizeCategoryName(category.name) === 'salary';
+
+const isOtherIncomeCategoryCandidate = (category: { parent: string; name: string }): boolean => {
+  const normalizedName = normalizeCategoryName(category.name);
+  return normalizeCategoryName(category.parent) === 'income' &&
+    (normalizedName === 'other income' || normalizedName === 'others');
+};
+
+const isAllowedIncomeCategoryCandidate = (category: { parent: string; name: string }): boolean =>
+  isSalaryCategoryCandidate(category) ||
+  isTransferCategoryCandidate(category) ||
+  isOtherIncomeCategoryCandidate(category);
+
 const normalizeKind = (value: unknown): TransactionKind =>
   value === 'income' ? 'income' : 'expense';
 
@@ -192,21 +211,35 @@ const buildDrafts = ({
   payload,
   categories,
   fallbackDate,
+  trustExpenseCategorySuggestions,
 }: {
   payload: ImportResponse | null;
   categories: { id: string; parent: string; name: string }[];
   fallbackDate: string;
+  trustExpenseCategorySuggestions: boolean;
 }): ImportedTransactionDraft[] => {
+  const categoriesById = new Map(categories.map((category) => [category.id, category]));
   const validCategoryIds = new Set(categories.map((category) => category.id));
+  const otherIncomeCategoryId =
+    categories.find((category) => isOtherIncomeCategoryCandidate(category))?.id ?? null;
   const rows = Array.isArray(payload?.transactions) ? payload.transactions : [];
   return rows
     .map((row, index): ImportedTransactionDraft | null => {
       const amount = normalizeAmount(row.amount);
       if (!amount) return null;
-      const categoryId =
+      const suggestedCategoryId =
         typeof row.categoryId === 'string' && validCategoryIds.has(row.categoryId)
           ? row.categoryId
           : null;
+      const suggestedCategory = suggestedCategoryId ? categoriesById.get(suggestedCategoryId) ?? null : null;
+      const categoryId =
+        normalizeKind(row.kind) === 'income'
+          ? suggestedCategory && isAllowedIncomeCategoryCandidate(suggestedCategory)
+            ? suggestedCategory.id
+            : otherIncomeCategoryId
+          : trustExpenseCategorySuggestions
+            ? suggestedCategoryId
+            : null;
       return {
         id: `${Date.now()}-${index}`,
         kind: normalizeKind(row.kind),
@@ -399,6 +432,7 @@ const importTransactions = async ({
       payload,
       categories,
       fallbackDate: today,
+      trustExpenseCategorySuggestions: endpoint === 'parse-transaction-image',
     });
 
     if (rawDrafts.length === 0) {

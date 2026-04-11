@@ -5,13 +5,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useOverview, type BudgetAlert } from '@/features/overview/useOverview';
-import { useComposer } from '@/features/transactions/ComposerContext';
+import { useComposer } from '@/features/transactions/composer/context/ComposerContext';
 import { TransactionList } from '@/features/transactions/TransactionList';
-import { buildCategoryMeta } from '@/features/categories/helpers';
+import { buildCategoryMeta, getCategoryMetaDisplayColor } from '@/features/categories/helpers';
 import { MotionScope } from '@/ui/MotionScope';
 import { MotionView } from '@/ui/MotionView';
 import { ProgressBar } from '@/ui/ProgressBar';
 import { ScreenHeader } from '@/ui/ScreenHeader';
+import { SkeletonBlock, SkeletonCard } from '@/ui/Skeleton';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 import { transactionBalance } from '@/lib/balance';
 import { formatMinor, formatPercent } from '@/lib/format';
@@ -27,6 +28,77 @@ const cycleMatch = (row: TransactionRow, cycle: SalaryCycle | null): boolean => 
   const beforeEnd = cycle.endOnExclusive === null || row.occurred_on < cycle.endOnExclusive;
   return afterStart && beforeEnd;
 };
+
+function HomeSkeleton() {
+  return (
+    <>
+      <SkeletonCard style={styles.heroSkeletonCard}>
+        <SkeletonBlock width={112} height={12} radius={radius.sm} />
+        <SkeletonBlock width="58%" height={48} radius={radius.md} />
+        <View style={styles.skeletonHeroStats}>
+          <SkeletonBlock width={108} height={46} radius={radius.pill} />
+          <SkeletonBlock width={124} height={46} radius={radius.pill} />
+        </View>
+      </SkeletonCard>
+
+      <View style={styles.selectorBlock}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cycleCarousel}>
+          {[108, 128, 116].map((width) => (
+            <SkeletonBlock key={width} width={width} height={36} radius={radius.pill} />
+          ))}
+        </ScrollView>
+      </View>
+
+      <View style={styles.filterRow}>
+        <SkeletonBlock width={116} height={36} radius={radius.pill} />
+        <SkeletonBlock width={92} height={36} radius={radius.pill} />
+      </View>
+
+      <View style={styles.quickRow}>
+        {[0, 1].map((item) => (
+          <SkeletonCard key={item} style={styles.skeletonQuickCard}>
+            <SkeletonBlock width={20} height={20} radius={radius.sm} />
+            <SkeletonBlock width={item === 0 ? '52%' : '60%'} height={16} />
+          </SkeletonCard>
+        ))}
+      </View>
+
+      <View style={styles.section}>
+        <SkeletonBlock width={108} height={12} radius={radius.sm} />
+        <View style={styles.sectionBody}>
+          {[0, 1, 2].map((item) => (
+            <SkeletonCard key={item} padding={spacing.md}>
+              <View style={styles.skeletonRow}>
+                <SkeletonBlock width="54%" height={16} />
+                <SkeletonBlock width={52} height={16} />
+              </View>
+              <SkeletonBlock width="72%" height={12} radius={radius.sm} />
+              <SkeletonBlock width="100%" height={10} radius={radius.pill} />
+            </SkeletonCard>
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <SkeletonBlock width={156} height={12} radius={radius.sm} />
+        <View style={styles.sectionBody}>
+          {[0, 1, 2, 3].map((item) => (
+            <SkeletonCard key={item} padding={spacing.md}>
+              <View style={styles.skeletonTransactionRow}>
+                <SkeletonBlock width={42} height={42} radius={radius.md} />
+                <View style={styles.skeletonTransactionCopy}>
+                  <SkeletonBlock width="58%" height={16} />
+                  <SkeletonBlock width="42%" height={12} radius={radius.sm} />
+                </View>
+                <SkeletonBlock width={74} height={18} />
+              </View>
+            </SkeletonCard>
+          ))}
+        </View>
+      </View>
+    </>
+  );
+}
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -112,9 +184,13 @@ export default function HomeScreen() {
   const recentItems = personalTransactions.slice(0, 8).map((row) => ({
     row,
     categoryLabel: row.category_id ? categoryMeta[row.category_id]?.label ?? 'Uncategorized' : row.kind === 'income' ? 'Income' : 'Uncategorized',
-    categoryColor: row.category_id ? categoryMeta[row.category_id]?.color ?? colors.accent : colors.accent,
+    categoryColor: row.category_id ? getCategoryMetaDisplayColor(categoryMeta[row.category_id], row.kind) : colors.accent,
     categoryIcon: row.category_id ? categoryMeta[row.category_id]?.icon ?? 'cash' : row.kind === 'income' ? 'bank-outline' : 'cash',
   }));
+  const hasAnyPersonalHistory = useMemo(
+    () => data.transactions.some((row) => !row.shared),
+    [data.transactions],
+  );
 
   const categorySpend = useMemo(() => {
     const totals = new Map<string, number>();
@@ -127,7 +203,7 @@ export default function HomeScreen() {
         categoryId,
         spentMinor,
         label: categoryMeta[categoryId]?.label ?? 'Category',
-        color: categoryMeta[categoryId]?.color ?? colors.accent,
+        color: getCategoryMetaDisplayColor(categoryMeta[categoryId], 'expense') ?? colors.accent,
       }))
       .sort((a, b) => b.spentMinor - a.spentMinor)
       .slice(0, 5);
@@ -217,6 +293,10 @@ export default function HomeScreen() {
           ]}
         />
 
+        {data.isInitialLoading ? <HomeSkeleton /> : null}
+
+        {!data.isInitialLoading ? (
+          <>
         <MotionView direction="left" distance={210} delayMs={90} rotateFrom={-9}>
           <LinearGradient colors={['#1F2438', '#101219', '#0B0B0F']} style={styles.hero}>
             <Text style={styles.heroEyebrow}>{heroEyebrow}</Text>
@@ -322,14 +402,6 @@ export default function HomeScreen() {
           </MotionView>
         </View>
 
-        {data.loading && data.transactions.length === 0 ? (
-          <View style={styles.section}>
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>Loading...</Text>
-            </View>
-          </View>
-        ) : null}
-
         {data.error ? (
           <View style={styles.section}>
             <View style={styles.errorCard}>
@@ -407,6 +479,8 @@ export default function HomeScreen() {
         <View style={[styles.section, styles.sectionFlush]}>
           <TransactionList
             title="Recent personal activity"
+            actionLabel={hasAnyPersonalHistory ? 'See more' : undefined}
+            onActionPress={hasAnyPersonalHistory ? () => router.push('/personal-history' as never) : undefined}
             items={recentItems}
             emptyLabel="Log the first transaction to start building your personal history."
             onEdit={(row) => composer.openEdit(row)}
@@ -433,6 +507,8 @@ export default function HomeScreen() {
             }}
           />
         </View>
+          </>
+        ) : null}
       </ScrollView>
     </MotionScope>
   );
@@ -450,6 +526,8 @@ const styles = StyleSheet.create({
   heroEyebrow: { ...typography.label, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
   heroAmount: { ...typography.amount, color: colors.text },
   heroStats: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap', paddingTop: spacing.xs },
+  heroSkeletonCard: { marginHorizontal: spacing.lg, gap: spacing.sm },
+  skeletonHeroStats: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap', paddingTop: spacing.xs },
   heroStatChip: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
@@ -500,6 +578,7 @@ const styles = StyleSheet.create({
   filterChipTextActive: { color: colors.text },
   quickRow: { flexDirection: 'row', gap: spacing.md, paddingHorizontal: spacing.lg },
   quickMotion: { flex: 1 },
+  skeletonQuickCard: { flex: 1 },
   quickCard: {
     flex: 1,
     backgroundColor: colors.surface,
@@ -512,6 +591,9 @@ const styles = StyleSheet.create({
   sectionFlush: { paddingHorizontal: 0 },
   sectionTitle: { ...typography.label, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
   sectionBody: { gap: spacing.sm },
+  skeletonRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
+  skeletonTransactionRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  skeletonTransactionCopy: { flex: 1, gap: spacing.xs },
   alertCard: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,

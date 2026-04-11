@@ -44,6 +44,7 @@ export type BudgetAlert = {
 
 export type OverviewData = {
   loading: boolean;
+  isInitialLoading: boolean;
   error: string | null;
   userId: string | null;
   cycleBalanceMinor: number;
@@ -82,6 +83,7 @@ const EMPTY_SHARED: SharedCycleResult = {
 
 export const useOverview = (): OverviewData => {
   const [loading, setLoading] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [cycleBalanceMinor, setCycleBalanceMinor] = useState(0);
@@ -298,6 +300,7 @@ export const useOverview = (): OverviewData => {
       setError(getErrorMessage(e, 'Failed to load overview'));
     } finally {
       setLoading(false);
+      setHasLoadedOnce(true);
     }
   }, []);
 
@@ -307,6 +310,7 @@ export const useOverview = (): OverviewData => {
 
   return {
     loading,
+    isInitialLoading: loading && !hasLoadedOnce,
     error,
     userId,
     cycleBalanceMinor,

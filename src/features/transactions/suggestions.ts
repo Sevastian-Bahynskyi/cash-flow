@@ -1,18 +1,44 @@
 import { supabase, supabaseFunctionsUrl, supabasePublishableKey } from '@/lib/supabase';
 import { normalizePattern } from '@/lib/currency';
+import { reportDevError } from '@/lib/errors';
 import { fetchTransferPeople, normalizeTransferPersonName } from '@/features/transfers/people';
-import type { TransactionRow } from './types';
+import {
+  normalizeMerchantLookupKey,
+  resolveHardcodedCategoryCandidate,
+} from './categorizationRules';
+import type { TransactionKind, TransactionRow } from './types';
 
 export type SuggestedCategoryResult = {
   categoryId: string;
   confidence: number;
-  source: 'memory' | 'people' | 'history' | 'ai';
+  source: 'memory' | 'rules' | 'people' | 'history' | 'ai';
   patternKey: string;
 };
 
-type SuggestionHistoryRow = {
+export type SuggestCategoryCandidate = {
+  id: string;
+  parent: string;
+  name: string;
+  icon?: string;
+};
+
+export type ImportCategorySuggestionRow = {
+  id: string;
+  kind: TransactionKind;
+  name: string;
+  comment: string | null;
+};
+
+export type BatchSuggestedCategoryResult = {
+  id: string;
+  categoryId: string;
+  confidence: number;
+};
+
+export type SuggestionHistoryRow = {
   name: string;
   category_id: string | null;
+  kind: TransactionKind | null;
 };
 
 type LocalSuggestionResult = {
@@ -29,6 +55,16 @@ type AiRuleRow = {
 type SuggestFunctionResponse = {
   categoryId: string | null;
   confidence?: number | null;
+  error?: string;
+};
+
+type BatchSuggestFunctionResponse = {
+  results?: {
+    id?: unknown;
+    categoryId?: unknown;
+    confidence?: unknown;
+  }[];
+  error?: string;
 };
 
 const txSelect =
@@ -72,7 +108,7 @@ const extractPersonLikeName = (value: string): string | null => {
 
 const detectTransferPersonCategory = async (
   name: string,
-  candidates: { id: string; parent: string; name: string; icon?: string }[],
+  candidates: SuggestCategoryCandidate[],
 ): Promise<string | null> => {
   const mobilePayCategory = candidates.find(
     (candidate) =>
@@ -91,6 +127,22 @@ const detectTransferPersonCategory = async (
   const match = people.find((person) => person.normalized_name === personLikeName);
   return match ? mobilePayCategory.id : null;
 };
+
+const clampConfidence = (value: number): number => Math.max(0, Math.min(1, value));
+
+const buildHistoryPayload = (
+  historyRows: SuggestionHistoryRow[],
+): { name: string; categoryId: string; kind?: TransactionKind }[] =>
+  historyRows
+    .filter(
+      (row): row is { name: string; category_id: string; kind: TransactionKind | null } => Boolean(row.category_id),
+    )
+    .slice(0, 24)
+    .map((row) => ({
+      name: row.name,
+      categoryId: row.category_id,
+      ...(row.kind ? { kind: row.kind } : {}),
+    }));
 
 export const fetchAiRule = async (patternKey: string): Promise<AiRuleRow | null> => {
   const { data, error } = await supabase
@@ -114,9 +166,7 @@ export const upsertAiRule = async ({
 }): Promise<boolean> => {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError || !userData.user) {
-    if (__DEV__) {
-      console.warn('[ai-rule] Could not resolve current user for rule update.');
-    }
+    reportDevError('ai-rule.get-user', userError ?? new Error('Could not resolve current user for rule update.'));
     return false;
   }
 
@@ -131,23 +181,28 @@ export const upsertAiRule = async ({
     { onConflict: 'user_id,pattern_key' },
   );
   if (error) {
-    if (__DEV__) {
-      console.warn('[ai-rule] Failed to persist rule update.', error.message);
-    }
+    reportDevError('ai-rule.upsert', error, { patternKey, categoryId, isBlocked });
     return false;
   }
   return true;
 };
 
-const fetchSuggestionHistory = async (): Promise<SuggestionHistoryRow[]> => {
-  const { data, error } = await supabase
+export const fetchSuggestionHistory = async (
+  kind?: TransactionKind,
+  limit = 120,
+): Promise<SuggestionHistoryRow[]> => {
+  let query = supabase
     .from('transactions')
-    .select('name, category_id')
-    .eq('kind', 'expense')
+    .select('name, category_id, kind')
     .not('category_id', 'is', null)
     .order('updated_at', { ascending: false })
-    .limit(60);
+    .limit(limit);
 
+  if (kind) {
+    query = query.eq('kind', kind);
+  }
+
+  const { data, error } = await query;
   if (error || !data) return [];
   return data as SuggestionHistoryRow[];
 };
@@ -161,19 +216,23 @@ export const localSuggestCategory = async (
   const q = nameQuery.trim();
   if (q.length < 2) return null;
 
-  const rows = historyRows ?? (await fetchSuggestionHistory());
+  const rows = historyRows ?? (await fetchSuggestionHistory('expense', 60));
   if (rows.length === 0) return null;
 
-  const exactPattern = normalizePattern(q);
+  const exactPattern = normalizeMerchantLookupKey(q);
+  if (exactPattern.length < 2) return null;
   const exactCounts = new Map<string, number>();
   const fuzzyCounts = new Map<string, number>();
 
   for (const row of rows) {
     if (!row.category_id) continue;
-    if (normalizePattern(row.name) === exactPattern) {
+    const historyPattern = normalizeMerchantLookupKey(row.name);
+    if (!historyPattern) continue;
+
+    if (historyPattern === exactPattern) {
       exactCounts.set(row.category_id, (exactCounts.get(row.category_id) ?? 0) + 1);
     }
-    if (row.name.toLowerCase().includes(q.toLowerCase())) {
+    if (historyPattern.includes(exactPattern) || exactPattern.includes(historyPattern)) {
       fuzzyCounts.set(row.category_id, (fuzzyCounts.get(row.category_id) ?? 0) + 1);
     }
   }
@@ -244,12 +303,73 @@ export const fetchRecentCategoryIds = async (): Promise<string[]> => {
   return ids;
 };
 
+export const resolveLocalSuggestedCategory = async ({
+  kind,
+  name,
+  candidates,
+  historyRows,
+}: {
+  kind: TransactionKind;
+  name: string;
+  candidates: SuggestCategoryCandidate[];
+  historyRows?: SuggestionHistoryRow[];
+}): Promise<SuggestedCategoryResult | null> => {
+  const patternKey = normalizePattern(name);
+  if (patternKey.length < 2) return null;
+
+  const rule = await fetchAiRule(patternKey);
+  if (rule?.is_blocked) return null;
+  if (rule?.category_id) {
+    return {
+      categoryId: rule.category_id,
+      confidence: 1,
+      source: 'memory',
+      patternKey,
+    };
+  }
+
+  const hardcoded = resolveHardcodedCategoryCandidate({
+    kind,
+    name,
+    candidates,
+  });
+  if (hardcoded) {
+    return {
+      categoryId: hardcoded.categoryId,
+      confidence: hardcoded.confidence,
+      source: 'rules',
+      patternKey,
+    };
+  }
+
+  const transferCategoryId = await detectTransferPersonCategory(name, candidates);
+  if (transferCategoryId) {
+    return {
+      categoryId: transferCategoryId,
+      confidence: 0.98,
+      source: 'people',
+      patternKey,
+    };
+  }
+
+  const scopedHistoryRows = historyRows ?? (await fetchSuggestionHistory(kind, 60));
+  const local = await localSuggestCategory(name, scopedHistoryRows);
+  if (!local) return null;
+
+  return {
+    categoryId: local.categoryId,
+    confidence: local.confidence,
+    source: 'history',
+    patternKey,
+  };
+};
+
 // Remote fallback. Invokes the suggest-category edge function with candidate
 // categories. Returns null on any failure — must never block save.
 export const remoteSuggestCategory = async (
   name: string,
   comment: string | null,
-  candidates: { id: string; parent: string; name: string; icon?: string }[],
+  candidates: SuggestCategoryCandidate[],
   historyRows: SuggestionHistoryRow[],
 ): Promise<{ categoryId: string; confidence: number } | null> => {
   try {
@@ -258,26 +378,18 @@ export const remoteSuggestCategory = async (
       error: sessionError,
     } = await supabase.auth.getSession();
     if (sessionError || !session?.access_token) {
-      if (__DEV__) {
-        console.warn('[suggest-category] Missing Supabase session for edge function invoke.');
-      }
+      reportDevError(
+        'suggest-category.remote.session',
+        sessionError ?? new Error('Missing Supabase session for edge function invoke.'),
+      );
       return null;
     }
 
-    const history = historyRows
-      .filter((row): row is { name: string; category_id: string } => Boolean(row.category_id))
-      .slice(0, 12)
-      .map((row) => ({
-        name: row.name,
-        categoryId: row.category_id,
-      }));
-
     if (!supabaseFunctionsUrl || !supabasePublishableKey) {
-      if (__DEV__) {
-        console.warn(
-          '[suggest-category] Missing Supabase function URL or publishable key for edge function calls.',
-        );
-      }
+      reportDevError(
+        'suggest-category.remote.config',
+        new Error('Missing Supabase function URL or publishable key for edge function calls.'),
+      );
       return null;
     }
 
@@ -288,18 +400,21 @@ export const remoteSuggestCategory = async (
         Authorization: `Bearer ${session.access_token}`,
         apikey: supabasePublishableKey,
       },
-      body: JSON.stringify({ name, comment, candidates, history }),
+      body: JSON.stringify({
+        name,
+        comment,
+        candidates,
+        history: buildHistoryPayload(historyRows),
+      }),
     });
 
     if (!response.ok) {
-      if (__DEV__) {
-        const responseText = await response.text().catch(() => '');
-        console.warn(
-          `[suggest-category] Edge function request failed: ${response.status} ${response.statusText}${
-            responseText ? ` — ${responseText}` : ''
-          }`,
-        );
-      }
+      const responseText = await response.text().catch(() => '');
+      reportDevError(
+        'suggest-category.remote.response',
+        new Error(`Edge function request failed with ${response.status}.`),
+        { responseText: responseText.slice(0, 300) },
+      );
       return null;
     }
 
@@ -307,18 +422,104 @@ export const remoteSuggestCategory = async (
     if (!data?.categoryId) return null;
     return {
       categoryId: data.categoryId,
-      confidence: Math.max(0, Math.min(1, data.confidence ?? 0.6)),
+      confidence: clampConfidence(data.confidence ?? 0.6),
     };
   } catch (error) {
-    if (__DEV__) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.warn('[suggest-category] Unexpected invoke error:', message);
-    }
+    reportDevError('suggest-category.remote.unexpected', error);
     return null;
   }
 };
 
-// Fetch category ids used in the user's last 90 days, ordered by use count desc.
+const parseBatchSuggestResults = (
+  payload: BatchSuggestFunctionResponse | null,
+  validCategoryIds: Set<string>,
+): BatchSuggestedCategoryResult[] => {
+  const rows = Array.isArray(payload?.results) ? payload.results : [];
+  const parsed: BatchSuggestedCategoryResult[] = [];
+
+  for (const row of rows) {
+    const id = typeof row.id === 'string' ? row.id : null;
+    const categoryId =
+      typeof row.categoryId === 'string' && validCategoryIds.has(row.categoryId) ? row.categoryId : null;
+    if (!id || !categoryId) continue;
+
+    parsed.push({
+      id,
+      categoryId,
+      confidence:
+        typeof row.confidence === 'number' && Number.isFinite(row.confidence)
+          ? clampConfidence(row.confidence)
+          : 0.5,
+    });
+  }
+
+  return parsed;
+};
+
+export const batchRemoteSuggestCategories = async ({
+  rows,
+  candidates,
+  historyRows,
+}: {
+  rows: ImportCategorySuggestionRow[];
+  candidates: SuggestCategoryCandidate[];
+  historyRows: SuggestionHistoryRow[];
+}): Promise<BatchSuggestedCategoryResult[] | null> => {
+  if (rows.length === 0 || candidates.length === 0) return [];
+
+  try {
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
+    if (sessionError || !session?.access_token) {
+      reportDevError(
+        'suggest-category.batch.session',
+        sessionError ?? new Error('Missing Supabase session for batched category suggestions.'),
+      );
+      return null;
+    }
+
+    if (!supabaseFunctionsUrl || !supabasePublishableKey) {
+      reportDevError(
+        'suggest-category.batch.config',
+        new Error('Missing Supabase function URL or publishable key for batched category suggestions.'),
+      );
+      return null;
+    }
+
+    const response = await fetch(`${supabaseFunctionsUrl}/suggest-category`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+        apikey: supabasePublishableKey,
+      },
+      body: JSON.stringify({
+        rows,
+        candidates,
+        history: buildHistoryPayload(historyRows),
+      }),
+    });
+
+    if (!response.ok) {
+      const responseText = await response.text().catch(() => '');
+      reportDevError(
+        'suggest-category.batch.response',
+        new Error(`Batched category request failed with ${response.status}.`),
+        { responseText: responseText.slice(0, 300), rowCount: rows.length },
+      );
+      return null;
+    }
+
+    const payload = (await response.json()) as BatchSuggestFunctionResponse;
+    return parseBatchSuggestResults(payload, new Set(candidates.map((candidate) => candidate.id)));
+  } catch (error) {
+    reportDevError('suggest-category.batch.unexpected', error, { rowCount: rows.length });
+    return null;
+  }
+};
+
 export const fetchFrequentCategoryIds = async (): Promise<string[]> => {
   const since = new Date();
   since.setDate(since.getDate() - 90);
@@ -344,83 +545,46 @@ export const fetchFrequentCategoryIds = async (): Promise<string[]> => {
 export const resolveSuggestedCategory = async (
   name: string,
   comment: string | null,
-  candidates: { id: string; parent: string; name: string; icon?: string }[],
-  options?: { preferRemote?: boolean },
+  candidates: SuggestCategoryCandidate[],
+  options?: { preferRemote?: boolean; kind?: TransactionKind },
 ): Promise<SuggestedCategoryResult | null> => {
+  const kind = options?.kind ?? 'expense';
+  const local = await resolveLocalSuggestedCategory({ kind, name, candidates });
   const patternKey = normalizePattern(name);
-  if (patternKey.length < 2) return null;
 
-  const rule = await fetchAiRule(patternKey);
-  if (rule?.is_blocked) return null;
-  if (rule?.category_id) {
-    return {
-      categoryId: rule.category_id,
-      confidence: 1,
-      source: 'memory',
-      patternKey,
-    };
+  if (local && (!options?.preferRemote || local.source !== 'history' || local.confidence >= 0.88)) {
+    return local;
   }
 
-  const transferCategoryId = await detectTransferPersonCategory(name, candidates);
-  if (transferCategoryId) {
-    return {
-      categoryId: transferCategoryId,
-      confidence: 0.98,
-      source: 'people',
-      patternKey,
-    };
-  }
-
-  const historyRows = await fetchSuggestionHistory();
-  const local = await localSuggestCategory(name, historyRows);
-
-  if (local?.matchKind === 'exact' && !options?.preferRemote) {
-    return {
-      categoryId: local.categoryId,
-      confidence: local.confidence,
-      source: 'history',
-      patternKey,
-    };
-  }
-
+  const historyRows = await fetchSuggestionHistory(kind, 60);
   const remote = await remoteSuggestCategory(name, comment, candidates, historyRows);
 
   if (local && remote) {
-    if (local.matchKind === 'exact' && remote.categoryId !== local.categoryId && remote.confidence < 0.94) {
-      return {
-        categoryId: local.categoryId,
-        confidence: local.confidence,
-        source: 'history',
-        patternKey,
-      };
+    const localHistory =
+      local.source === 'history'
+        ? {
+            categoryId: local.categoryId,
+            confidence: local.confidence,
+          }
+        : null;
+
+    if (localHistory && remote.categoryId !== localHistory.categoryId && remote.confidence < 0.94) {
+      return local;
     }
 
-    if (remote.confidence >= local.confidence + 0.08) {
-      return {
-        categoryId: remote.categoryId,
-        confidence: remote.confidence,
-        source: 'ai',
-        patternKey,
-      };
+    if (localHistory && remote.confidence < localHistory.confidence + 0.08) {
+      return local;
     }
 
     return {
-      categoryId: local.categoryId,
-      confidence: local.confidence,
-      source: 'history',
+      categoryId: remote.categoryId,
+      confidence: remote.confidence,
+      source: 'ai',
       patternKey,
     };
   }
 
-  if (local) {
-    return {
-      categoryId: local.categoryId,
-      confidence: local.confidence,
-      source: 'history',
-      patternKey,
-    };
-  }
-
+  if (local) return local;
   if (!remote) return null;
 
   return {
@@ -429,4 +593,18 @@ export const resolveSuggestedCategory = async (
     source: 'ai',
     patternKey,
   };
+};
+
+export const resolveGuaranteedBatchCategoryResults = async ({
+  rows,
+  candidates,
+  historyRows,
+}: {
+  rows: ImportCategorySuggestionRow[];
+  candidates: SuggestCategoryCandidate[];
+  historyRows: SuggestionHistoryRow[];
+}): Promise<BatchSuggestedCategoryResult[]> => {
+  if (rows.length === 0 || candidates.length === 0) return [];
+
+  return (await batchRemoteSuggestCategories({ rows, candidates, historyRows })) ?? [];
 };

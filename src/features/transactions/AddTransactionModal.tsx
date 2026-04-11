@@ -27,10 +27,14 @@ import { useCategories } from '@/features/categories/useCategories';
 import type { CategoryOption } from '@/features/categories/types';
 import {
   findSalaryCategoryOption,
+  findOtherIncomeCategoryOption,
+  normalizeIncomeCategoryOption,
+  isAllowedIncomeCategoryOption,
   isIncomeCategoryOption,
   isMobilePayCategoryOption,
   isSalaryCategoryOption,
 } from '@/features/categories/rules';
+import { getCategoryDisplayColor } from '@/features/categories/helpers';
 import {
   fetchFrequentCategoryIds,
   fetchRecentCategoryIds,
@@ -41,24 +45,26 @@ import {
 } from './suggestions';
 import { convertToDkk } from '@/lib/currency';
 import { getDeviceCountryIso, getDeviceCurrencyCode, getLiveCountryIso } from '@/lib/device';
+import { runDetached } from '@/lib/async';
 import { formatCountryFlag, formatDateLabel, formatMinor, normalizeCountryIso } from '@/lib/format';
 import { activeCycle, buildSalaryCycles } from '@/lib/cycles';
 import { fetchTransferPeople, normalizeTransferPersonName } from '@/features/transfers/people';
 import type { TransferPersonRow } from '@/features/transfers/types';
-import { ImageImportPreviewModal } from './ImageImportPreviewModal';
+import { ImportReviewModal } from '@/features/transactions/composer/components/ImportReviewModal';
 import {
   TransactionCurrencySelector,
   TransactionFieldLabel,
   TransactionKindSelector,
   TransactionPickerField,
   TransactionTextField,
-} from './TransactionFormFields';
+} from '@/features/transactions/composer/components/TransactionFormFields';
 import {
   importTransactionsFromCsv,
   importTransactionsFromImage,
   type ImportedTransactionDraft,
   type SkippedImportedTransaction,
 } from './imageImport';
+import { shouldAutoMarkSharedTopup } from './categorizationRules';
 import { isCsvImportFile, readCsvImportText, type CsvImportFile, type PendingImport } from './importFiles';
 import type { TransactionDraft, TransactionInsert, TransactionKind, TransactionRow } from './types';
 
@@ -291,6 +297,15 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
   const amountDisplayState = useMemo(() => highlightedAmount(amount), [amount]);
   const selectedIsSalary = isSalaryCategoryOption(category);
   const selectedIsMobilePay = isMobilePayCategoryOption(category);
+  const categoryAccentColor = category
+    ? getCategoryDisplayColor({
+        kind,
+        parentName: category.parentName,
+        name: category.name,
+        parentColor: category.parentColor,
+        color: category.color,
+      })
+    : colors.textMuted;
   const selectedTransferPerson = useMemo(() => {
     const normalizedName = normalizeTransferPersonName(name);
     if (!normalizedName) return null;
@@ -328,12 +343,20 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
     const nextDate = nextDraft?.occurred_on ?? lastCreatedDate;
     const deviceCountry = (nextDraft?.country_iso ?? getDeviceCountryIso() ?? 'DK').toUpperCase();
     const deviceCurrency = nextDraft?.currency_code ?? getDeviceCurrencyCode();
-    const nextCategory =
+    const baseCategory =
       nextDraft?.category_id
         ? categoryOptions.find((option) => option.id === nextDraft.category_id) ?? null
         : nextDraft?.is_salary
           ? findSalaryCategoryOption(categoryOptions)
-          : null;
+          : nextDraft?.kind === 'income'
+            ? findOtherIncomeCategoryOption(categoryOptions)
+            : null;
+    const nextCategory =
+      nextDraft?.kind === 'income'
+        ? normalizeIncomeCategoryOption(baseCategory, categoryOptions)
+        : isIncomeCategoryOption(baseCategory)
+          ? null
+          : baseCategory;
     setKind(nextDraft?.kind ?? 'expense');
     setAmount(minorToInput(nextDraft?.original_amount_minor ?? nextDraft?.amount_minor));
     setCurrencyCode(deviceCurrency);
@@ -385,10 +408,10 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
     let cancelled = false;
     const localeCountry = (getDeviceCountryIso() ?? 'DK').toUpperCase();
 
-    void getLiveCountryIso().then((liveCountry) => {
+    runDetached(getLiveCountryIso().then((liveCountry) => {
       if (cancelled || !liveCountry) return;
       setCountryIso((current) => (current === localeCountry ? liveCountry : current));
-    });
+    }), 'transactions.liveCountry');
 
     return () => {
       cancelled = true;
@@ -398,7 +421,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
   useEffect(() => {
     if (!visible || categoryOptions.length === 0) return;
     if (draft?.category) {
-      setCategory(draft.category);
+      setCategory(draft.kind === 'income' ? normalizeIncomeCategoryOption(draft.category, categoryOptions) : draft.category);
       return;
     }
     if (draft?.is_salary && !draft?.category_id) {
@@ -407,20 +430,22 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
     }
     if (draft?.category_id) {
       const match = categoryOptions.find((option) => option.id === draft.category_id);
-      if (match) setCategory(match);
+      if (match) {
+        setCategory(draft?.kind === 'income' ? normalizeIncomeCategoryOption(match, categoryOptions) : match);
+      }
     }
   }, [categoryOptions, draft?.category, draft?.category_id, visible]);
 
   useEffect(() => {
     if (!visible) return;
-    void fetchTransferPeople().then((rows) => {
+    runDetached(fetchTransferPeople().then((rows) => {
       setTransferPeople(rows);
-    });
+    }), 'transactions.fetchTransferPeople');
   }, [visible]);
 
   useEffect(() => {
     if (!visible || categoryOptions.length === 0) return;
-    void Promise.all([
+    runDetached(Promise.all([
       fetchFrequentCategoryIds(),
       fetchRecentCategoryIds(),
       buildBudgetIndicators(categoryOptions),
@@ -428,7 +453,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
       setFrequentIds(frequent);
       setRecentCategoryIds(recent);
       setBudgetStateByCategory(indicators);
-    });
+    }), 'transactions.bootstrapCategoryState');
   }, [categoryOptions, visible]);
 
   useEffect(() => {
@@ -781,17 +806,38 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
           return;
         }
 
-        if (!row.categoryId) {
+        if (row.kind !== 'income' && !row.categoryId) {
           setImageImportError('Each imported transaction needs a category before saving.');
           return;
         }
 
-        const importCategory = categoryOptions.find((option) => option.id === row.categoryId) ?? null;
+        const importCategory = normalizeIncomeCategoryOption(
+          categoryOptions.find((option) => option.id === row.categoryId) ?? null,
+          categoryOptions,
+        );
+        const resolvedCategory =
+          row.kind === 'income'
+            ? importCategory
+            : categoryOptions.find((option) => option.id === row.categoryId) ?? null;
+        if (!resolvedCategory) {
+          setImageImportError(
+            row.kind === 'income'
+              ? 'Each imported income needs Salary, Transfer, or Income · Others.'
+              : 'Each imported transaction needs a category before saving.',
+          );
+          return;
+        }
 
         const conversion =
           row.currencyCode === 'DKK'
             ? { convertedMinor: originalAmountMinor, rate: 1 }
             : await convertToDkk(originalAmountMinor, row.currencyCode, row.occurredOn.trim());
+        const isSharedTopup =
+          row.kind === 'expense' &&
+          shouldAutoMarkSharedTopup({
+            name: normalizedName,
+            comment: row.comment,
+          });
 
         payloads.push({
           user_id: userData.user.id,
@@ -800,13 +846,13 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
           occurred_on: row.occurredOn.trim(),
           name: normalizedName,
           comment: row.comment.trim().length > 0 ? row.comment.trim() : null,
-          category_id: row.categoryId,
+          category_id: resolvedCategory.id,
           country_iso: normalizeCountryIso(countryIso),
           recurring: false,
           shared: false,
           shared_participant: null,
-          is_salary: row.kind === 'income' && isSalaryCategoryOption(importCategory),
-          is_shared_topup: false,
+          is_salary: row.kind === 'income' && isSalaryCategoryOption(resolvedCategory),
+          is_shared_topup: isSharedTopup,
           currency_code: row.currencyCode,
           original_amount_minor: originalAmountMinor,
           converted_amount_minor: conversion.convertedMinor,
@@ -852,14 +898,21 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
   };
 
   const handleSave = async (): Promise<void> => {
+    const resolvedCategory =
+      kind === 'income' ? normalizeIncomeCategoryOption(category, categoryOptions) : category;
+
     const originalAmountMinor = parseAmountMinor(amount);
     if (originalAmountMinor === null) {
       setValidationMessage('Enter an amount greater than zero.');
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
-    if (!category) {
-      setValidationMessage(`Pick a category before saving this ${kind}.`);
+    if (!resolvedCategory) {
+      setValidationMessage(
+        kind === 'income'
+          ? 'Pick Salary, Transfer, or Income · Others before saving this income.'
+          : `Pick a category before saving this ${kind}.`,
+      );
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
@@ -890,13 +943,13 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
         occurred_on: date,
         name: name.trim(),
         comment: comment.trim().length > 0 ? comment.trim() : null,
-        category_id: category.id,
+        category_id: resolvedCategory.id,
         country_iso: normalizeCountryIso(countryIso),
         recurring,
         shared: kind === 'expense' && !isSharedTopup ? shared : false,
         shared_participant:
           kind === 'expense' && !isSharedTopup && shared ? sharedParticipant : null,
-        is_salary: kind === 'income' && selectedIsSalary,
+        is_salary: kind === 'income' && isSalaryCategoryOption(resolvedCategory),
         is_shared_topup: kind === 'expense' ? isSharedTopup : false,
         currency_code: currencyCode,
         original_amount_minor: originalAmountMinor,
@@ -914,10 +967,10 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
         return;
       }
 
-      if (suggestion && userTouchedCategory && category && category.id !== suggestion.category.id) {
+      if (suggestion && userTouchedCategory && resolvedCategory.id !== suggestion.category.id) {
         await upsertAiRule({
           patternKey: suggestion.patternKey,
-          categoryId: category.id,
+          categoryId: resolvedCategory.id,
           isBlocked: false,
         });
       }
@@ -930,14 +983,14 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
         amount_minor: conversion.convertedMinor,
         original_amount_minor: originalAmountMinor,
         currency_code: currencyCode,
-        category_id: category?.id ?? null,
+        category_id: resolvedCategory.id,
         name: name.trim(),
         comment: comment.trim().length > 0 ? comment.trim() : null,
         occurred_on: date,
         recurring,
         shared,
         shared_participant: shared ? sharedParticipant : null,
-        is_salary: kind === 'income' && selectedIsSalary,
+        is_salary: kind === 'income' && isSalaryCategoryOption(resolvedCategory),
         is_shared_topup: isSharedTopup,
         country_iso: normalizeCountryIso(countryIso),
       };
@@ -978,6 +1031,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
     setName(row.name);
     setComment(row.comment ?? '');
     setDate(row.occurred_on);
+    setKind(row.kind);
     setRecurring(row.recurring);
     setShared(row.shared);
     setSharedParticipant(row.shared_participant ?? 'me');
@@ -985,9 +1039,13 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
     setCurrencyCode(row.currency_code);
     setAmount(minorToInput(row.original_amount_minor));
     setCountryIso(row.country_iso ?? countryIso);
-    const match =
+    const baseMatch =
       categoryOptions.find((option) => option.id === row.category_id) ??
       (row.is_salary ? findSalaryCategoryOption(categoryOptions) : null);
+    const match =
+      row.kind === 'income'
+        ? normalizeIncomeCategoryOption(baseMatch, categoryOptions)
+        : baseMatch;
     if (match) {
       autoAppliedCategoryId.current = null;
       setCategory(match);
@@ -1032,6 +1090,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
               setKind('income');
               setShared(false);
               setIsSharedTopup(false);
+              setCategory((current) => normalizeIncomeCategoryOption(current, categoryOptions));
             }}
           />
           <Pressable
@@ -1054,17 +1113,13 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
                   ? 'In DKK'
                   : `Saved in DKK · entered in ${currencyCode}`}
               </Text>
-              <View style={styles.amountToggleBadge}>
-                <MaterialCommunityIcons
-                  name={keypadOpen ? 'keyboard-close-outline' : 'keyboard-outline'}
-                  size={16}
-                  color={colors.text}
-                />
-                <Text style={styles.amountToggleText}>{keypadOpen ? 'Hide keypad' : 'Show keypad'}</Text>
-              </View>
+              <TransactionCurrencySelector
+                value={currencyCode}
+                onChange={setCurrencyCode}
+                appearance="inline"
+              />
             </View>
           </Pressable>
-          <TransactionCurrencySelector value={currencyCode} onChange={setCurrencyCode} />
         </View>
 
         <ScrollView
@@ -1091,12 +1146,15 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
             placeholder="Pick a category"
             onPress={() => {
               autoAppliedCategoryId.current = null;
+              if (kind === 'income') {
+                setCategory((current) => normalizeIncomeCategoryOption(current, categoryOptions));
+              }
               setUserTouchedCategory(true);
               setPickerOpen(true);
             }}
             leadingCategoryIcon={category?.icon ?? 'shape-outline'}
-            leadingIconColor={category?.parentColor ?? colors.textMuted}
-            leadingIconBackgroundColor={category ? `${category.parentColor}22` : colors.surfaceAlt}
+            leadingIconColor={categoryAccentColor}
+            leadingIconBackgroundColor={category ? `${categoryAccentColor}22` : colors.surfaceAlt}
             trailing={
               kind === 'expense' && isSuggestingCategory ? (
                 <ActivityIndicator size="small" color={colors.textMuted} />
@@ -1419,7 +1477,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
           kind={kind}
           onSelect={(option) => {
             autoAppliedCategoryId.current = null;
-            setCategory(option);
+            setCategory(kind === 'income' ? normalizeIncomeCategoryOption(option, categoryOptions) : option);
             setUserTouchedCategory(true);
           }}
           frequentIds={frequentIds}
@@ -1428,7 +1486,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
           budgetStateByCategory={budgetStateByCategory}
         />
 
-        <ImageImportPreviewModal
+        <ImportReviewModal
           visible={imageImportVisible}
           rows={imageImportDrafts}
           skippedDuplicates={imageImportSkippedDuplicates}
@@ -1547,33 +1605,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     flexWrap: 'wrap',
   },
-  amountToggleBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  amountToggleText: { ...typography.label, color: colors.text, fontWeight: '600' },
-  currencyRow: { gap: spacing.sm, paddingTop: spacing.xs },
-  currencyChip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  currencyChipActive: {
-    backgroundColor: 'rgba(124,92,255,0.18)',
-    borderColor: colors.accent,
-  },
-  currencyChipText: { ...typography.label, color: colors.textMuted },
-  currencyChipTextActive: { color: colors.text },
   fields: { flex: 1 },
   fieldsContent: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg, gap: spacing.sm },
   importStack: { gap: spacing.sm },

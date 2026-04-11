@@ -1,8 +1,8 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 import AddTransactionModal from '@/features/transactions/AddTransactionModal';
 import type { CategoryOption } from '@/features/categories/types';
-import type { CsvImportFile, PendingImport } from './importFiles';
-import type { TransactionDraft, TransactionRow } from './types';
+import type { CsvImportFile, PendingImport } from '@/features/transactions/importFiles';
+import type { TransactionDraft, TransactionRow } from '@/features/transactions/types';
 
 type ComposerDraft = TransactionDraft & {
   category?: CategoryOption | null;

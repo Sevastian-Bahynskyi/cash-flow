@@ -6,7 +6,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { colors } from '@/ui/tokens';
 import { AuthProvider, useAuth } from '@/features/auth/AuthProvider';
-import { ComposerProvider } from '@/features/transactions/ComposerContext';
+import { ComposerProvider } from '@/features/transactions/composer/context/ComposerContext';
 
 function AuthGate() {
   const { session, loading } = useAuth();
@@ -51,6 +51,7 @@ function AuthGate() {
         <Stack.Screen name="budgets" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="alerts" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="ai-rules" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="personal-history" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="sign-in" />
         <Stack.Screen name="auth-callback" />
         <Stack.Screen name="oauth/consent" />

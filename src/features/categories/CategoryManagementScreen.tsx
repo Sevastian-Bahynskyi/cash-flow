@@ -24,9 +24,11 @@ import {
 import type { TransferPersonRow } from '@/features/transfers/types';
 import { useOverview } from '@/features/overview/useOverview';
 import { buildBudgetStateByCategory } from '@/features/budgets/helpers';
+import { runDetached } from '@/lib/async';
 import { supabase } from '@/lib/supabase';
 import { ScreenHeader } from '@/ui/ScreenHeader';
 import { CategoryIcon } from '@/ui/CategoryIcon';
+import { SkeletonBlock, SkeletonCard } from '@/ui/Skeleton';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 
 type CategoryDraft = {
@@ -62,6 +64,50 @@ function SwipeDeleteAction({ label, onPress }: { label: string; onPress: () => v
   );
 }
 
+function CategoriesSkeleton() {
+  return (
+    <>
+      <SkeletonCard style={styles.skeletonHeroCard}>
+        <SkeletonBlock width="44%" height={24} radius={radius.md} />
+        <SkeletonBlock width="100%" height={14} radius={radius.sm} />
+        <SkeletonBlock width="74%" height={14} radius={radius.sm} />
+      </SkeletonCard>
+
+      <View style={styles.section}>
+        {[0, 1, 2].map((item) => (
+          <SkeletonCard key={item} padding={spacing.lg}>
+            <View style={styles.skeletonParentHead}>
+              <SkeletonBlock width={48} height={48} radius={radius.md} />
+              <View style={styles.parentCopy}>
+                <SkeletonBlock width="46%" height={18} />
+                <SkeletonBlock width="64%" height={12} radius={radius.sm} />
+              </View>
+            </View>
+
+            <View style={styles.parentActions}>
+              <SkeletonBlock width={132} height={34} radius={radius.pill} />
+              <SkeletonBlock width={72} height={34} radius={radius.pill} />
+            </View>
+
+            <View style={styles.childList}>
+              {[0, 1, 2].map((child) => (
+                <View key={child} style={styles.skeletonChildRow}>
+                  <SkeletonBlock width={36} height={36} radius={radius.md} />
+                  <View style={styles.childCopy}>
+                    <SkeletonBlock width="44%" height={16} />
+                    <SkeletonBlock width="58%" height={12} radius={radius.sm} />
+                  </View>
+                  <SkeletonBlock width={42} height={14} radius={radius.sm} />
+                </View>
+              ))}
+            </View>
+          </SkeletonCard>
+        ))}
+      </View>
+    </>
+  );
+}
+
 export default function CategoryManagementScreen() {
   const data = useOverview();
   const [refreshing, setRefreshing] = useState(false);
@@ -69,6 +115,7 @@ export default function CategoryManagementScreen() {
   const [saving, setSaving] = useState(false);
   const [transferPeople, setTransferPeople] = useState<TransferPersonRow[]>([]);
   const [transferPeopleLoading, setTransferPeopleLoading] = useState(true);
+  const [hasLoadedTransferPeople, setHasLoadedTransferPeople] = useState(false);
   const [transferPersonDraft, setTransferPersonDraft] = useState<TransferPersonDraft | null>(null);
   const [transferPeopleSaving, setTransferPeopleSaving] = useState(false);
   const [transferPeopleError, setTransferPeopleError] = useState<string | null>(null);
@@ -107,8 +154,11 @@ export default function CategoryManagementScreen() {
       setTransferPeople(rows);
     } finally {
       setTransferPeopleLoading(false);
+      setHasLoadedTransferPeople(true);
     }
   };
+
+  const isInitialLoading = data.isInitialLoading || (transferPeopleLoading && !hasLoadedTransferPeople);
 
   const onRefresh = async (): Promise<void> => {
     setRefreshing(true);
@@ -120,7 +170,7 @@ export default function CategoryManagementScreen() {
   };
 
   useEffect(() => {
-    void loadTransferPeople();
+    runDetached(loadTransferPeople(), 'categories.loadTransferPeople');
   }, []);
 
   const openCreateParent = (): void => {
@@ -251,7 +301,7 @@ export default function CategoryManagementScreen() {
     }
   };
 
-  const deleteCategoryById = async (category: CategoryRow): Promise<void> => {
+  const deleteCategoryById = (category: CategoryRow): void => {
     if (category.is_system) return;
 
     Alert.alert(`Delete ${category.name}?`, 'This removes the category from your list.', [
@@ -260,7 +310,7 @@ export default function CategoryManagementScreen() {
         text: 'Delete',
         style: 'destructive',
         onPress: () => {
-          void (async () => {
+          runDetached((async () => {
             setSaving(true);
             try {
               const { error } = await supabase.from('categories').delete().eq('id', category.id);
@@ -274,7 +324,7 @@ export default function CategoryManagementScreen() {
             } finally {
               setSaving(false);
             }
-          })();
+          })(), 'categories.deleteCategoryById');
         },
       },
     ]);
@@ -327,7 +377,7 @@ export default function CategoryManagementScreen() {
         text: 'Delete',
         style: 'destructive',
         onPress: () => {
-          void (async () => {
+          runDetached((async () => {
             setTransferPeopleSaving(true);
             setTransferPeopleError(null);
             try {
@@ -342,7 +392,7 @@ export default function CategoryManagementScreen() {
             } finally {
               setTransferPeopleSaving(false);
             }
-          })();
+          })(), 'categories.deleteTransferPersonById');
         },
       },
     ]);
@@ -362,6 +412,10 @@ export default function CategoryManagementScreen() {
           actions={[{ icon: 'plus', onPress: openCreateParent }]}
         />
 
+        {isInitialLoading ? <CategoriesSkeleton /> : null}
+
+        {!isInitialLoading ? (
+          <>
         <View style={styles.hero}>
           <Text style={styles.heroTitle}>Category system</Text>
           <Text style={styles.heroBody}>
@@ -420,10 +474,10 @@ export default function CategoryManagementScreen() {
                     enabled={!child.is_system}
                     overshootRight={false}
                     renderRightActions={() =>
-                      child.is_system ? null : (
-                        <SwipeDeleteAction label="Delete" onPress={() => void deleteCategoryById(child)} />
-                      )
-                    }
+	                      child.is_system ? null : (
+	                        <SwipeDeleteAction label="Delete" onPress={() => deleteCategoryById(child)} />
+	                      )
+	                    }
                   >
                     <Pressable
                       style={({ pressed }) => [styles.childRow, pressed && styles.rowPressed]}
@@ -461,7 +515,7 @@ export default function CategoryManagementScreen() {
                     <View style={styles.transferPeopleCopy}>
                       <Text style={styles.transferPeopleTitle}>People</Text>
                       <Text style={styles.transferPeopleMeta}>
-                        Auto-categorization defaults to Transfers · MobilePay only when the transaction name itself looks like this person's full name.
+                        Auto-categorization defaults to Transfers · MobilePay only when the transaction name itself looks like this person&apos;s full name.
                       </Text>
                     </View>
                     <Pressable
@@ -509,6 +563,8 @@ export default function CategoryManagementScreen() {
             </View>
           ))}
         </View>
+          </>
+        ) : null}
       </ScrollView>
 
       <Modal
@@ -529,9 +585,7 @@ export default function CategoryManagementScreen() {
                 : [
                     {
                       icon: 'check',
-                      onPress: () => {
-                        void saveCategory();
-                      },
+                      onPress: () => runDetached(saveCategory(), 'categories.saveCategory'),
                     },
                   ]
             }
@@ -598,9 +652,7 @@ export default function CategoryManagementScreen() {
             {!draft?.readOnly && draft?.mode === 'edit' && draft.canDelete ? (
               <Pressable
                 style={({ pressed }) => [styles.destructiveButton, pressed && styles.buttonPressed]}
-                onPress={() => {
-                  void deleteCategory();
-                }}
+                onPress={() => runDetached(deleteCategory(), 'categories.deleteCategory')}
               >
                 <Text style={styles.destructiveButtonText}>{saving ? 'Working...' : 'Delete category'}</Text>
               </Pressable>
@@ -624,9 +676,7 @@ export default function CategoryManagementScreen() {
             actions={[
               {
                 icon: 'check',
-                onPress: () => {
-                  void saveTransferPersonDraft();
-                },
+                onPress: () => runDetached(saveTransferPersonDraft(), 'categories.saveTransferPersonDraft'),
                 disabled: transferPeopleSaving,
               },
             ]}
@@ -645,7 +695,7 @@ export default function CategoryManagementScreen() {
             />
 
             <Text style={styles.transferPeopleHint}>
-              This only triggers when the transaction name itself looks like this person's full name.
+              This only triggers when the transaction name itself looks like this person&apos;s full name.
             </Text>
 
             {transferPeopleError ? <Text style={styles.transferPeopleError}>{transferPeopleError}</Text> : null}
@@ -653,9 +703,7 @@ export default function CategoryManagementScreen() {
             {transferPersonDraft?.id ? (
               <Pressable
                 style={({ pressed }) => [styles.destructiveButton, pressed && styles.buttonPressed]}
-                onPress={() => {
-                  void deleteTransferPerson();
-                }}
+                onPress={() => runDetached(deleteTransferPerson(), 'categories.deleteTransferPerson')}
               >
                 <Text style={styles.destructiveButtonText}>
                   {transferPeopleSaving ? 'Working...' : 'Delete person'}
@@ -680,6 +728,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     gap: spacing.sm,
   },
+  skeletonHeroCard: { marginHorizontal: spacing.lg },
+  skeletonParentHead: { flexDirection: 'row', gap: spacing.md, alignItems: 'center' },
+  skeletonChildRow: { flexDirection: 'row', gap: spacing.md, alignItems: 'center' },
   heroTitle: { ...typography.h2, color: colors.text },
   heroBody: { ...typography.body, color: colors.textMuted },
   section: { paddingHorizontal: spacing.lg, gap: spacing.md },

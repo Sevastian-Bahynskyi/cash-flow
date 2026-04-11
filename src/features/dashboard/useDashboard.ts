@@ -1,8 +1,7 @@
 import { useMemo } from 'react';
-import type { barDataItem, lineDataItem, pieDataItem } from 'react-native-gifted-charts';
-import { buildCategoryMeta } from '@/features/categories/helpers';
+import type { barDataItem, lineDataItem } from 'react-native-gifted-charts';
+import { buildCategoryMeta, getCategoryMetaDisplayColor } from '@/features/categories/helpers';
 import { useOverview } from '@/features/overview/useOverview';
-import type { TransactionRow } from '@/features/transactions/types';
 import type { SalaryCycle } from '@/lib/cycles';
 import { colors } from '@/ui/tokens';
 
@@ -53,7 +52,6 @@ type DashboardPresentation = {
   cashFlowLineData: lineDataItem[];
   expenseBarData: barDataItem[];
   incomeLineData: lineDataItem[];
-  expensePieData: pieDataItem[];
   chartBounds: {
     cashFlowMax: number;
     mostNegativeCashFlow: number;
@@ -228,9 +226,6 @@ const createEmptyBucket = (bucket: BucketDefinition): DashboardBucket => ({
   cashFlowMinor: 0,
 });
 
-const isPersonalExpense = (row: TransactionRow): boolean =>
-  row.kind === 'expense' && !row.shared && !row.is_shared_topup;
-
 export const useDashboard = (range: DashboardRange): ReturnType<typeof useOverview> & DashboardPresentation => {
   const overview = useOverview();
 
@@ -289,7 +284,7 @@ export const useDashboard = (range: DashboardRange): ReturnType<typeof useOvervi
         return {
           categoryId,
           label: meta?.label ?? 'Category',
-          color: meta?.color ?? pieFallbackColors[index % pieFallbackColors.length] ?? colors.accent,
+          color: meta ? getCategoryMetaDisplayColor(meta, 'expense') : pieFallbackColors[index % pieFallbackColors.length] ?? colors.accent,
           icon: meta?.icon ?? 'shape-outline',
           amountMinor,
           share: expenseMinor === 0 ? 0 : amountMinor / expenseMinor,
@@ -329,13 +324,6 @@ export const useDashboard = (range: DashboardRange): ReturnType<typeof useOvervi
       dataPointRadius: 4,
     })) satisfies lineDataItem[];
 
-    const expensePieData = categoryBreakdown.map((category) => ({
-      value: majorAmount(category.amountMinor),
-      color: category.color,
-      gradientCenterColor: '#FFFFFF',
-      focused: category === largestCategory,
-    })) satisfies pieDataItem[];
-
     const cashFlowValues = buckets.map((bucket) => majorAmount(bucket.cashFlowMinor));
     const flowMagnitudes = buckets.flatMap((bucket) => [
       majorAmount(bucket.outflowMinor),
@@ -362,7 +350,6 @@ export const useDashboard = (range: DashboardRange): ReturnType<typeof useOvervi
       cashFlowLineData,
       expenseBarData,
       incomeLineData,
-      expensePieData,
       chartBounds: {
         cashFlowMax: Math.max(1, ...cashFlowValues, 0),
         mostNegativeCashFlow: Math.abs(Math.min(0, ...cashFlowValues)),
