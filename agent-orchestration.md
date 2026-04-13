@@ -14,7 +14,7 @@ This repository uses a conservative, explicit orchestration policy for all AI co
 ## Skills and Plugins
 - Treat all skills as opt-in, not automatic.
 - Treat all plugins as opt-in, not automatic.
-- This includes `caveman`, `lean-ctx`, and `symdex`.
+- This includes `caveman`, `lean-ctx`, `symdex`, and repo-local skills such as `react-native`.
 - Use these only when the user explicitly asks for them by name, or clearly requests the exact capability.
 
 ## When Explicit Use Is Allowed

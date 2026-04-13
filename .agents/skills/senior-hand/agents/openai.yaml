@@ -1,7 +1,0 @@
-interface:
-  display_name: "Senior Hand"
-  short_description: "Conservative modernization orchestrator"
-  default_prompt: "Use $senior-hand to scan this repo and modernize one safe slice at a time."
-
-policy:
-  allow_implicit_invocation: false
