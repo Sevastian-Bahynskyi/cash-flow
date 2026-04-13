@@ -9,7 +9,14 @@
 - Read [context.md](./context.md) before implementing product logic.
 - Use [step1.md](./step1.md), [step2.md](./step2.md), and [step3.md](./step3.md) as the delivery order.
 - Follow [codex.md](./codex.md) for coding constraints.
+- Follow [agent-orchestration.md](./agent-orchestration.md) for skill and plugin usage policy.
 - Use `.claude/skills/react-native.md` for app code and `.claude/skills/supabase.md` for database and backend work.
+
+## Agent Orchestration
+- Skills and plugins are opt-in only.
+- Do not auto-use newly added skills or plugins.
+- Keep default behavior tool-first and direct unless the user explicitly asks for a skill/plugin.
+- This applies to all optional plugins, including `caveman`, `lean-ctx`, and `symdex`.
 
 ## Stack Defaults
 - Expo-managed React Native app.

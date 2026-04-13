@@ -1,5 +1,11 @@
 # Codex Rules
 
+## Agent Orchestration
+- Follow [agent-orchestration.md](./agent-orchestration.md) before deciding to use skills or plugins.
+- Skills and plugins are opt-in only; do not auto-use them.
+- Keep default behavior direct and local unless the user explicitly asks for specialized orchestration.
+- This includes optional plugins such as `caveman`, `lean-ctx`, and `symdex`.
+
 ## Core Rules
 - Use TypeScript `strict` everywhere.
 - Do not use `any`, implicit `any`, or unsafe casts.
