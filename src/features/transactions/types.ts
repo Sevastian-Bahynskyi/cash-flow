@@ -36,6 +36,8 @@ export type TransactionDraft = {
   shared_participant?: SharedParticipant | null;
   is_salary?: boolean;
   is_shared_topup?: boolean;
+  /** When true, entry came from Shared tab: shared expense vs top-up fixed from draft. */
+  from_shared_screen?: boolean;
   country_iso?: string | null;
 };
 

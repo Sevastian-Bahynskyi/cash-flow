@@ -53,6 +53,17 @@ export const findTransferCategoryOption = (
   options.find((option) => isTransferCategoryOption(option)) ??
   null;
 
+/** Shared-account top-up: prefer Transfers · Top up, else generic Transfers · Transfer. */
+export const findSharedTopupCategoryOption = (
+  options: readonly CategoryOption[],
+): CategoryOption | null => {
+  const topUp = options.find(
+    (option) => isTransferCategoryOption(option) && normalize(option.name) === 'top up',
+  );
+  if (topUp) return topUp;
+  return findTransferCategoryOption(options);
+};
+
 export const findOtherIncomeCategoryOption = (
   options: readonly CategoryOption[],
 ): CategoryOption | null =>
