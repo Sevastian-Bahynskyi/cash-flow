@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { BarChart, LineChart } from 'react-native-gifted-charts';
 import { runDetached } from '@/lib/async';
@@ -119,10 +120,11 @@ function DashboardSkeleton() {
 
 export default function DashboardScreen() {
   const [range, setRange] = useState<DashboardRange>('monthly');
+  const [selectedWindowId, setSelectedWindowId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [motionRun, setMotionRun] = useState(0);
   const [selectedExpenseIndex, setSelectedExpenseIndex] = useState(0);
-  const analytics = useDashboard(range);
+  const analytics = useDashboard(range, selectedWindowId);
   const { width } = useWindowDimensions();
 
   useFocusEffect(
@@ -145,8 +147,16 @@ export default function DashboardScreen() {
     setSelectedExpenseIndex(0);
   }, [analytics.categoryBreakdown]);
 
+  useEffect(() => {
+    setSelectedWindowId(null);
+  }, [range]);
+
   const selectedExpenseCategory =
     analytics.categoryBreakdown[selectedExpenseIndex] ?? analytics.categoryBreakdown[0] ?? null;
+  const selectedWindowIndex = Math.max(
+    0,
+    analytics.windows.findIndex((window) => window.id === analytics.selectedWindowId),
+  );
   const waffleSize = width < 390 ? 176 : 204;
 
   const onRefresh = async (): Promise<void> => {
@@ -180,25 +190,63 @@ export default function DashboardScreen() {
         <FilterChips value={range} options={rangeOptions} onChange={setRange} />
 
         <MotionView direction="left" distance={190} delayMs={90} rotateFrom={-8}>
-          <LinearGradient colors={['#17304C', '#101A2B', '#0B0B0F']} style={styles.hero}>
-            <Text style={styles.heroEyebrow}>{analytics.rangeLabel}</Text>
-            <Text style={styles.heroAmount}>{formatMinor(analytics.summary.cashFlowMinor)}</Text>
-            <Text style={styles.heroMeta}>{analytics.rangeDescription}</Text>
-            <View style={styles.heroStats}>
-              <View style={styles.heroStatChip}>
-                <Text style={styles.heroStatLabel}>Income</Text>
-                <Text style={styles.heroStatValue}>{formatMinor(analytics.summary.incomeMinor)}</Text>
+          <View style={styles.heroWrap}>
+            <LinearGradient colors={['#17304C', '#101A2B', '#0B0B0F']} style={styles.hero}>
+              <Text style={styles.heroEyebrow}>{analytics.rangeLabel}</Text>
+              <Text style={styles.heroAmount}>{formatMinor(analytics.summary.cashFlowMinor)}</Text>
+              <Text style={styles.heroMeta}>{analytics.rangeDescription}</Text>
+              <View style={styles.heroStats}>
+                <View style={styles.heroStatChip}>
+                  <Text style={styles.heroStatLabel}>Income</Text>
+                  <Text style={styles.heroStatValue}>{formatMinor(analytics.summary.incomeMinor)}</Text>
+                </View>
+                <View style={styles.heroStatChip}>
+                  <Text style={styles.heroStatLabel}>Outflow</Text>
+                  <Text style={styles.heroStatValue}>{formatMinor(analytics.summary.outflowMinor)}</Text>
+                </View>
+                <View style={styles.heroStatChip}>
+                  <Text style={styles.heroStatLabel}>Expenses</Text>
+                  <Text style={styles.heroStatValue}>{formatMinor(analytics.summary.expenseMinor)}</Text>
+                </View>
               </View>
-              <View style={styles.heroStatChip}>
-                <Text style={styles.heroStatLabel}>Outflow</Text>
-                <Text style={styles.heroStatValue}>{formatMinor(analytics.summary.outflowMinor)}</Text>
+            </LinearGradient>
+
+            {analytics.windows.length > 1 ? (
+              <View pointerEvents="box-none" style={styles.heroArrows}>
+                {selectedWindowIndex > 0 ? (
+                  <Pressable
+                    style={({ pressed }) => [styles.heroArrow, pressed ? styles.heroArrowPressed : null]}
+                    onPress={() => {
+                      const previous = analytics.windows[selectedWindowIndex - 1];
+                      if (!previous) return;
+                      setSelectedWindowId(previous.id);
+                      void Haptics.selectionAsync();
+                    }}
+                  >
+                    <MaterialCommunityIcons name="chevron-left" size={24} color={colors.text} />
+                  </Pressable>
+                ) : (
+                  <View style={styles.heroArrowSpacer} />
+                )}
+
+                {selectedWindowIndex < analytics.windows.length - 1 ? (
+                  <Pressable
+                    style={({ pressed }) => [styles.heroArrow, pressed ? styles.heroArrowPressed : null]}
+                    onPress={() => {
+                      const next = analytics.windows[selectedWindowIndex + 1];
+                      if (!next) return;
+                      setSelectedWindowId(next.id);
+                      void Haptics.selectionAsync();
+                    }}
+                  >
+                    <MaterialCommunityIcons name="chevron-right" size={24} color={colors.text} />
+                  </Pressable>
+                ) : (
+                  <View style={styles.heroArrowSpacer} />
+                )}
               </View>
-              <View style={styles.heroStatChip}>
-                <Text style={styles.heroStatLabel}>Expenses</Text>
-                <Text style={styles.heroStatValue}>{formatMinor(analytics.summary.expenseMinor)}</Text>
-              </View>
-            </View>
-          </LinearGradient>
+            ) : null}
+          </View>
         </MotionView>
 
         {analytics.error ? (
@@ -468,12 +516,34 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { paddingBottom: spacing.xxl * 4, gap: spacing.lg },
+  heroWrap: { marginHorizontal: spacing.lg },
   hero: {
-    marginHorizontal: spacing.lg,
     borderRadius: radius.lg,
     padding: spacing.xl,
     gap: spacing.sm,
   },
+  heroArrows: {
+    position: 'absolute',
+    left: spacing.sm,
+    right: spacing.sm,
+    top: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  heroArrowSpacer: { width: 34 },
+  heroArrow: {
+    width: 34,
+    height: 34,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(11,11,15,0.46)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  heroArrowPressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
   heroEyebrow: { ...typography.label, color: '#A9C3DE', textTransform: 'uppercase', letterSpacing: 0.5 },
   heroAmount: { ...typography.amount, color: colors.text },
   heroMeta: { ...typography.body, color: colors.textMuted },
