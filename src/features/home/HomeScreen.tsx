@@ -1,9 +1,19 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import Animated, {
+  cancelAnimation,
+  Extrapolation,
+  interpolate,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
 import { useOverview, type BudgetAlert } from '@/features/overview/useOverview';
 import { useComposer } from '@/features/transactions/composer/context/ComposerContext';
 import { TransactionList } from '@/features/transactions/TransactionList';
@@ -22,6 +32,13 @@ import type { TransactionRow } from '@/features/transactions/types';
 import { supabase } from '@/lib/supabase';
 
 type RangeFilter = 'cycle' | 'year' | 'all';
+
+const toLocalIsoDay = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 const cycleMatch = (row: TransactionRow, cycle: SalaryCycle | null): boolean => {
   if (!cycle) return false;
@@ -111,7 +128,12 @@ export default function HomeScreen() {
   const [recentSelectionMode, setRecentSelectionMode] = useState(false);
   const [selectedRecentIds, setSelectedRecentIds] = useState<string[]>([]);
   const [motionRun, setMotionRun] = useState(0);
+  const previousStreakDays = useRef(0);
   const currentYear = new Date().getFullYear();
+  const scrollY = useSharedValue(0);
+  const heroPulse = useSharedValue(0);
+  const streakFloat = useSharedValue(0);
+  const streakSparkle = useSharedValue(0);
 
   useEffect(() => {
     if (composer.refreshKey > 0) runDetached(data.reload(), 'home.reload');
@@ -124,6 +146,21 @@ export default function HomeScreen() {
       setMotionRun((current) => current + 1);
     }, []),
   );
+
+  useEffect(() => {
+    cancelAnimation(heroPulse);
+    cancelAnimation(streakFloat);
+    cancelAnimation(streakSparkle);
+    heroPulse.value = withRepeat(withTiming(1, { duration: 1600 }), -1, true);
+    streakFloat.value = withRepeat(withTiming(1, { duration: 1150 }), -1, true);
+    streakSparkle.value = withRepeat(withTiming(1, { duration: 1300 }), -1, true);
+
+    return () => {
+      cancelAnimation(heroPulse);
+      cancelAnimation(streakFloat);
+      cancelAnimation(streakSparkle);
+    };
+  }, [heroPulse, streakFloat, streakSparkle]);
 
   const cycles = useMemo(
     () => buildSalaryCycles(data.transactions.filter((row) => row.is_salary)),
@@ -195,6 +232,27 @@ export default function HomeScreen() {
     [data.transactions],
   );
   const selectedRecentCount = selectedRecentIds.length;
+  const dailyPersonalCount = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const row of data.transactions) {
+      if (row.shared) continue;
+      counts.set(row.occurred_on, (counts.get(row.occurred_on) ?? 0) + 1);
+    }
+    return counts;
+  }, [data.transactions]);
+  const streakDays = useMemo(() => {
+    let streak = 0;
+    const cursor = new Date();
+    cursor.setHours(0, 0, 0, 0);
+    while (dailyPersonalCount.has(toLocalIsoDay(cursor))) {
+      streak += 1;
+      cursor.setDate(cursor.getDate() - 1);
+    }
+    return streak;
+  }, [dailyPersonalCount]);
+  const streakProgress = Math.min(streakDays / 7, 1);
+  const streakTier = streakDays >= 14 ? 'Legend' : streakDays >= 7 ? 'On fire' : streakDays >= 3 ? 'Building' : 'Warm-up';
+  const todayCount = dailyPersonalCount.get(toLocalIsoDay(new Date())) ?? 0;
 
   const categorySpend = useMemo(() => {
     const totals = new Map<string, number>();
@@ -333,12 +391,52 @@ export default function HomeScreen() {
     }
   };
 
+  useEffect(() => {
+    if (streakDays > previousStreakDays.current && streakDays >= 2) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+    previousStreakDays.current = streakDays;
+  }, [streakDays]);
+
+  const onScroll = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      scrollY.value = event.contentOffset.y;
+    },
+  });
+
+  const heroAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: interpolate(scrollY.value, [0, 220], [0, -34], Extrapolation.CLAMP) },
+      { scale: interpolate(scrollY.value, [0, 220], [1, 0.96], Extrapolation.CLAMP) },
+    ],
+  }));
+
+  const heroGlowStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(heroPulse.value, [0, 1], [0.1, 0.32]),
+  }));
+
+  const streakIconStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: interpolate(streakFloat.value, [0, 1], [0, -7]) }],
+  }));
+
+  const streakSparkOneStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(streakSparkle.value, [0, 0.5, 1], [0.15, 0.8, 0.15]),
+    transform: [{ translateX: interpolate(streakSparkle.value, [0, 1], [-6, 8]) }],
+  }));
+
+  const streakSparkTwoStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(streakSparkle.value, [0, 0.5, 1], [0.7, 0.2, 0.7]),
+    transform: [{ translateY: interpolate(streakSparkle.value, [0, 1], [2, -6]) }],
+  }));
+
   return (
     <MotionScope value={motionRun}>
-      <ScrollView
+      <Animated.ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.text} />}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
       >
         <ScreenHeader
           title="Home"
@@ -356,26 +454,29 @@ export default function HomeScreen() {
         {!data.isInitialLoading ? (
           <>
         <MotionView direction="left" distance={210} delayMs={90} rotateFrom={-9}>
-          <LinearGradient colors={['#1F2438', '#101219', '#0B0B0F']} style={styles.hero}>
-            <Text style={styles.heroEyebrow}>{heroEyebrow}</Text>
-            <Text style={styles.heroAmount}>{formatMinor(snapshotMinor)}</Text>
-            <View style={styles.heroStats}>
-              <MotionView direction="up" distance={90} delayMs={220}>
-                <View style={styles.heroStatChip}>
-                  <Text style={styles.heroStatLabel}>Cycle</Text>
-                  <Text style={styles.heroStatValue}>{currentCycleLabel}</Text>
-                </View>
-              </MotionView>
-              <MotionView direction="right" distance={120} delayMs={280}>
-                <View style={styles.heroStatChip}>
-                  <Text style={styles.heroStatLabel}>Spend</Text>
-                  <Text style={styles.heroStatValue}>
-                    {formatMinor(categorySpend.reduce((sum, item) => sum + item.spentMinor, 0))}
-                  </Text>
-                </View>
-              </MotionView>
-            </View>
-          </LinearGradient>
+          <Animated.View style={[styles.heroWrap, heroAnimatedStyle]}>
+            <LinearGradient colors={['#1F2438', '#101219', '#0B0B0F']} style={styles.hero}>
+              <Text style={styles.heroEyebrow}>{heroEyebrow}</Text>
+              <Text style={styles.heroAmount}>{formatMinor(snapshotMinor)}</Text>
+              <View style={styles.heroStats}>
+                <MotionView direction="up" distance={90} delayMs={220}>
+                  <View style={styles.heroStatChip}>
+                    <Text style={styles.heroStatLabel}>Cycle</Text>
+                    <Text style={styles.heroStatValue}>{currentCycleLabel}</Text>
+                  </View>
+                </MotionView>
+                <MotionView direction="right" distance={120} delayMs={280}>
+                  <View style={styles.heroStatChip}>
+                    <Text style={styles.heroStatLabel}>Spend</Text>
+                    <Text style={styles.heroStatValue}>
+                      {formatMinor(categorySpend.reduce((sum, item) => sum + item.spentMinor, 0))}
+                    </Text>
+                  </View>
+                </MotionView>
+              </View>
+            </LinearGradient>
+            <Animated.View pointerEvents="none" style={[styles.heroGlow, heroGlowStyle]} />
+          </Animated.View>
         </MotionView>
 
         {cyclesWithTransactions.length > 0 ? (
@@ -405,6 +506,7 @@ export default function HomeScreen() {
                       onPress={() => {
                         setSelectedCycleId(cycle.id);
                         setFilter('cycle');
+                        void Haptics.selectionAsync();
                       }}
                     >
                       <Text style={[styles.cycleChipText, active && styles.cycleChipTextActive]}>
@@ -425,7 +527,10 @@ export default function HomeScreen() {
               filter === 'year' && styles.filterChipActive,
               pressed && styles.cycleChipPressed,
             ]}
-            onPress={() => setFilter('year')}
+            onPress={() => {
+              setFilter('year');
+              void Haptics.selectionAsync();
+            }}
           >
             <Text style={[styles.filterChipText, filter === 'year' && styles.filterChipTextActive]}>
               {yearChipLabel}
@@ -437,7 +542,10 @@ export default function HomeScreen() {
               filter === 'all' && styles.filterChipActive,
               pressed && styles.cycleChipPressed,
             ]}
-            onPress={() => setFilter('all')}
+            onPress={() => {
+              setFilter('all');
+              void Haptics.selectionAsync();
+            }}
           >
             <Text style={[styles.filterChipText, filter === 'all' && styles.filterChipTextActive]}>
               All time
@@ -447,13 +555,25 @@ export default function HomeScreen() {
 
         <View style={styles.quickRow}>
           <MotionView style={styles.quickMotion} direction="left" distance={165} delayMs={170}>
-            <Pressable style={styles.quickCard} onPress={() => router.push('/budgets')}>
+            <Pressable
+              style={styles.quickCard}
+              onPress={() => {
+                void Haptics.selectionAsync();
+                router.push('/budgets');
+              }}
+            >
               <MaterialCommunityIcons name="target" size={20} color={colors.accent} />
               <Text style={styles.quickTitle}>Budgets</Text>
             </Pressable>
           </MotionView>
           <MotionView style={styles.quickMotion} direction="right" distance={165} delayMs={230}>
-            <Pressable style={styles.quickCard} onPress={() => router.push('/categories')}>
+            <Pressable
+              style={styles.quickCard}
+              onPress={() => {
+                void Haptics.selectionAsync();
+                router.push('/categories');
+              }}
+            >
               <MaterialCommunityIcons name="shape-outline" size={20} color={colors.success} />
               <Text style={styles.quickTitle}>Categories</Text>
             </Pressable>
@@ -534,6 +654,38 @@ export default function HomeScreen() {
           </View>
         ) : null}
 
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Momentum streak</Text>
+          <MotionView direction="up" distance={140} delayMs={230}>
+            <View style={styles.streakCard}>
+              <Animated.View style={[styles.streakSpark, styles.streakSparkOne, streakSparkOneStyle]} />
+              <Animated.View style={[styles.streakSpark, styles.streakSparkTwo, streakSparkTwoStyle]} />
+              <View style={styles.streakTopRow}>
+                <Animated.View style={[styles.streakIconWrap, streakIconStyle]}>
+                  <MaterialCommunityIcons name={streakDays >= 7 ? 'fire' : 'trending-up'} size={20} color={colors.accentAlt} />
+                </Animated.View>
+                <View style={styles.streakCopy}>
+                  <Text style={styles.streakTitle}>{streakDays} day{streakDays === 1 ? '' : 's'} active</Text>
+                  <Text style={styles.streakMeta}>{streakTier} · {todayCount} logged today</Text>
+                </View>
+              </View>
+              <ProgressBar value={streakProgress} color={colors.accentAlt} />
+              <View style={styles.streakBottomRow}>
+                <Text style={styles.streakGoal}>Goal: 7-day streak</Text>
+                <Pressable
+                  style={({ pressed }) => [styles.streakAction, pressed && styles.cycleChipPressed]}
+                  onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    composer.openCreate();
+                  }}
+                >
+                  <Text style={styles.streakActionText}>Log now</Text>
+                </Pressable>
+              </View>
+            </View>
+          </MotionView>
+        </View>
+
         <View style={[styles.section, styles.sectionFlush]}>
           <TransactionList
             title="Recent personal activity"
@@ -588,7 +740,7 @@ export default function HomeScreen() {
         </View>
           </>
         ) : null}
-      </ScrollView>
+      </Animated.ScrollView>
     </MotionScope>
   );
 }
@@ -596,11 +748,17 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { paddingBottom: spacing.xxl * 4, gap: spacing.lg },
+  heroWrap: { marginHorizontal: spacing.lg },
   hero: {
-    marginHorizontal: spacing.lg,
     borderRadius: radius.lg,
     padding: spacing.xl,
     gap: spacing.sm,
+    overflow: 'hidden',
+  },
+  heroGlow: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: radius.lg,
+    backgroundColor: 'rgba(124,92,255,0.16)',
   },
   heroEyebrow: { ...typography.label, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
   heroAmount: { ...typography.amount, color: colors.text },
@@ -705,4 +863,41 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   hintText: { ...typography.body, color: colors.text, flex: 1 },
+  streakCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    gap: spacing.sm,
+    overflow: 'hidden',
+  },
+  streakTopRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  streakIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(124,92,255,0.18)',
+  },
+  streakCopy: { flex: 1, gap: 2 },
+  streakTitle: { ...typography.body, color: colors.text, fontWeight: '700' },
+  streakMeta: { ...typography.label, color: colors.textMuted },
+  streakBottomRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  streakGoal: { ...typography.label, color: colors.textMuted },
+  streakAction: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(124,92,255,0.2)',
+  },
+  streakActionText: { ...typography.label, color: colors.text, fontWeight: '700' },
+  streakSpark: {
+    position: 'absolute',
+    width: 8,
+    height: 8,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(245,185,66,0.8)',
+  },
+  streakSparkOne: { top: 10, right: 14 },
+  streakSparkTwo: { top: 26, right: 30 },
 });

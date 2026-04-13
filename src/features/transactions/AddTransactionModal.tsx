@@ -927,8 +927,16 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
       );
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      // Close the nested import modal first to avoid iOS modal teardown glitches.
+      setImageImportVisible(false);
+      setImageImportError(null);
+      setImageImportSkippedDuplicates([]);
       onSaved();
-      handleClose();
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          handleClose();
+        });
+      });
     } catch (error) {
       setImageImportError(error instanceof Error ? error.message : 'Could not save imported transactions right now.');
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);

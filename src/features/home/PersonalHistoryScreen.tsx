@@ -530,6 +530,7 @@ export default function PersonalHistoryScreen() {
   };
 
   const toggleSelectRow = (row: TransactionRow): void => {
+    runDetached(Haptics.selectionAsync(), 'personal-history.toggle-select.haptics');
     setSelectedIds((current) =>
       current.includes(row.id)
         ? current.filter((id) => id !== row.id)
@@ -600,6 +601,7 @@ export default function PersonalHistoryScreen() {
                   {
                     icon: selectionMode ? 'close' : 'checkbox-multiple-blank-outline',
                     onPress: () => {
+                      runDetached(Haptics.selectionAsync(), 'personal-history.toggle-selection-mode.haptics');
                       setSelectionMode((current) => {
                         const next = !current;
                         if (!next) setSelectedIds([]);

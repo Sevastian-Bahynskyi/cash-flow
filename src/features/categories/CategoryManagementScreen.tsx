@@ -13,6 +13,7 @@ import {
 import { Swipeable } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { clearCategoryCache } from '@/features/categories/useCategories';
 import type { CategoryRow } from '@/features/categories/types';
 import { categoryColorOptions, categoryIconOptions } from '@/features/categories/presentation';
@@ -49,6 +50,8 @@ type TransferPersonDraft = {
   id?: string;
   name: string;
 };
+
+type CategoryTab = 'expense' | 'income';
 
 type UsageBadge = {
   label: 'Expense' | 'Income';
@@ -157,6 +160,7 @@ function CategoriesSkeleton() {
 
 export default function CategoryManagementScreen() {
   const data = useOverview();
+  const [activeTab, setActiveTab] = useState<CategoryTab>('expense');
   const [refreshing, setRefreshing] = useState(false);
   const [draft, setDraft] = useState<CategoryDraft | null>(null);
   const [saving, setSaving] = useState(false);
@@ -190,6 +194,16 @@ export default function CategoryManagementScreen() {
             .sort((a, b) => a.name.localeCompare(b.name)),
         })),
     [data.categories],
+  );
+
+  const visibleParents = useMemo(
+    () =>
+      parents.filter(({ usageBadges }) =>
+        activeTab === 'expense'
+          ? usageBadges.some((badge) => badge.label === 'Expense')
+          : usageBadges.some((badge) => badge.label === 'Income'),
+      ),
+    [activeTab, parents],
   );
 
   const transfersParentId = useMemo(
@@ -227,6 +241,7 @@ export default function CategoryManagementScreen() {
   }, []);
 
   const openCreateParent = (): void => {
+    runDetached(Haptics.selectionAsync(), 'categories.openCreateParent.haptics');
     setDraft({
       mode: 'create-parent',
       parentId: null,
@@ -241,6 +256,7 @@ export default function CategoryManagementScreen() {
   };
 
   const openCreateChild = (parent: CategoryRow): void => {
+    runDetached(Haptics.selectionAsync(), 'categories.openCreateChild.haptics');
     setDraft({
       mode: 'create-child',
       parentId: parent.id,
@@ -255,6 +271,7 @@ export default function CategoryManagementScreen() {
   };
 
   const openEdit = (category: CategoryRow): void => {
+    runDetached(Haptics.selectionAsync(), 'categories.openEdit.haptics');
     const isSystemSubcategory = category.is_system && category.level === 2;
     setDraft({
       mode: 'edit',
@@ -288,12 +305,14 @@ export default function CategoryManagementScreen() {
           );
           if (error) {
             Alert.alert('Could not save category', error.message);
+            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
             return;
           }
 
           clearCategoryCache();
           await data.reload();
           setDraft(null);
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           return;
         }
 
@@ -304,12 +323,14 @@ export default function CategoryManagementScreen() {
         const { error } = await supabase.from('categories').update(payload).eq('id', draft.categoryId);
         if (error) {
           Alert.alert('Could not save category', error.message);
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
           return;
         }
 
         clearCategoryCache();
         await data.reload();
         setDraft(null);
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         return;
       }
 
@@ -325,12 +346,14 @@ export default function CategoryManagementScreen() {
       const { error } = await supabase.from('categories').insert(payload);
       if (error) {
         Alert.alert('Could not create category', error.message);
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         return;
       }
 
       clearCategoryCache();
       await data.reload();
       setDraft(null);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } finally {
       setSaving(false);
     }
@@ -343,12 +366,14 @@ export default function CategoryManagementScreen() {
       const { error } = await supabase.from('categories').delete().eq('id', draft.categoryId);
       if (error) {
         Alert.alert('Could not delete category', error.message);
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         return;
       }
 
       clearCategoryCache();
       await data.reload();
       setDraft(null);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } finally {
       setSaving(false);
     }
@@ -369,11 +394,13 @@ export default function CategoryManagementScreen() {
               const { error } = await supabase.from('categories').delete().eq('id', category.id);
               if (error) {
                 Alert.alert('Could not delete category', error.message);
+                await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
                 return;
               }
 
               clearCategoryCache();
               await data.reload();
+              await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             } finally {
               setSaving(false);
             }
@@ -393,11 +420,13 @@ export default function CategoryManagementScreen() {
       if (!result.ok) {
         setTransferPeopleError(result.error);
         Alert.alert('Could not save person', result.error ?? 'Unknown error');
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         return;
       }
 
       await loadTransferPeople(true);
       setTransferPersonDraft(null);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } finally {
       setTransferPeopleSaving(false);
     }
@@ -413,11 +442,13 @@ export default function CategoryManagementScreen() {
       if (!result.ok) {
         setTransferPeopleError(result.error);
         Alert.alert('Could not delete person', result.error ?? 'Unknown error');
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         return;
       }
 
       await loadTransferPeople(true);
       setTransferPersonDraft(null);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } finally {
       setTransferPeopleSaving(false);
     }
@@ -438,10 +469,12 @@ export default function CategoryManagementScreen() {
               if (!result.ok) {
                 setTransferPeopleError(result.error);
                 Alert.alert('Could not delete person', result.error ?? 'Unknown error');
+                await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
                 return;
               }
 
               await loadTransferPeople(true);
+              await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             } finally {
               setTransferPeopleSaving(false);
             }
@@ -461,24 +494,49 @@ export default function CategoryManagementScreen() {
         <ScreenHeader
           back
           title="Categories"
-          subtitle="Parents stay bold. Subcategories stay fast."
+          subtitle={activeTab === 'expense' ? 'Expense categories and subcategories' : 'Income categories and subcategories'}
           actions={[{ icon: 'plus', onPress: openCreateParent }]}
         />
+
+        {!isInitialLoading ? (
+          <View style={styles.tabRow}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.tabChip,
+                activeTab === 'expense' && styles.tabChipActive,
+                pressed && styles.buttonPressed,
+              ]}
+              onPress={() => {
+                if (activeTab === 'expense') return;
+                setActiveTab('expense');
+                runDetached(Haptics.selectionAsync(), 'categories.setExpenseTab.haptics');
+              }}
+            >
+              <Text style={[styles.tabChipText, activeTab === 'expense' && styles.tabChipTextActive]}>Expenses</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.tabChip,
+                activeTab === 'income' && styles.tabChipActive,
+                pressed && styles.buttonPressed,
+              ]}
+              onPress={() => {
+                if (activeTab === 'income') return;
+                setActiveTab('income');
+                runDetached(Haptics.selectionAsync(), 'categories.setIncomeTab.haptics');
+              }}
+            >
+              <Text style={[styles.tabChipText, activeTab === 'income' && styles.tabChipTextActive]}>Income</Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         {isInitialLoading ? <CategoriesSkeleton /> : null}
 
         {!isInitialLoading ? (
           <>
-            <View style={styles.hero}>
-              <Text style={styles.heroTitle}>Category system</Text>
-              <Text style={styles.heroBody}>
-                Default categories stay protected. Income, expense, and transfer categories keep
-                the same labels and tones used in the transaction picker.
-              </Text>
-            </View>
-
             <View style={styles.section}>
-              {parents.map(({ parent, children, usageBadges }) => (
+              {visibleParents.map(({ parent, children, usageBadges }) => (
                 <View key={parent.id} style={styles.parentCard}>
               <View style={styles.parentHead}>
                 <View style={[styles.parentIconWrap, { backgroundColor: `${parent.color}22` }]}>
@@ -490,11 +548,6 @@ export default function CategoryManagementScreen() {
                     <Text style={styles.parentMeta}>
                       {parent.is_system ? 'System category' : 'Custom category'}
                     </Text>
-                    {usageBadges.map((badge) => (
-                      <View key={`${parent.id}-${badge.label}`} style={[styles.usageBadge, { backgroundColor: `${badge.color}22` }]}>
-                        <Text style={[styles.usageBadgeText, { color: badge.color }]}>{badge.label}</Text>
-                      </View>
-                    ))}
                     {budgetStates[parent.id] ? (
                       <Text
                         style={[
@@ -535,7 +588,10 @@ export default function CategoryManagementScreen() {
                     parentColor: parent.color,
                     color: child.color,
                   });
-                  const childDisplayColor = usageBadges[0]?.color ?? parent.color;
+                  const activeUsageBadge = usageBadges.find((badge) =>
+                    activeTab === 'expense' ? badge.label === 'Expense' : badge.label === 'Income',
+                  );
+                  const childDisplayColor = activeUsageBadge?.color ?? usageBadges[0]?.color ?? parent.color;
 
                   return (
                     <Swipeable
@@ -563,14 +619,6 @@ export default function CategoryManagementScreen() {
                           <Text style={styles.childMeta}>
                             {child.is_system ? 'System subcategory' : 'Custom subcategory'}
                           </Text>
-                          {usageBadges.map((badge) => (
-                            <View
-                              key={`${child.id}-${badge.label}`}
-                              style={[styles.usageBadge, { backgroundColor: `${badge.color}22` }]}
-                            >
-                              <Text style={[styles.usageBadgeText, { color: badge.color }]}>{badge.label}</Text>
-                            </View>
-                          ))}
                         </View>
                       </View>
                       {budgetStates[child.id] ? (
@@ -595,7 +643,8 @@ export default function CategoryManagementScreen() {
                     <View style={styles.transferPeopleCopy}>
                       <Text style={styles.transferPeopleTitle}>People</Text>
                       <Text style={styles.transferPeopleMeta}>
-                        Auto-categorization defaults to Transfers · MobilePay only when the transaction name itself looks like this person&apos;s full name.
+                        Auto-categorization defaults to Transfers · MobilePay only when the transaction name itself looks
+                        like this person&apos;s full name.
                       </Text>
                     </View>
                     <Pressable
@@ -603,6 +652,7 @@ export default function CategoryManagementScreen() {
                       onPress={() => {
                         setTransferPeopleError(null);
                         setTransferPersonDraft({ name: '' });
+                        runDetached(Haptics.selectionAsync(), 'categories.addTransferPerson.haptics');
                       }}
                     >
                       <Text style={styles.smallButtonText}>Add person</Text>
@@ -629,6 +679,7 @@ export default function CategoryManagementScreen() {
                             onPress={() => {
                               setTransferPeopleError(null);
                               setTransferPersonDraft({ id: person.id, name: person.name });
+                              runDetached(Haptics.selectionAsync(), 'categories.editTransferPerson.haptics');
                             }}
                           >
                             <Text style={styles.transferPersonName}>{person.name}</Text>
@@ -801,6 +852,21 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.bg },
   container: { flex: 1, backgroundColor: colors.bg },
   content: { paddingBottom: spacing.xxl * 3, gap: spacing.lg },
+  tabRow: { paddingHorizontal: spacing.lg, flexDirection: 'row', gap: spacing.sm },
+  tabChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  tabChipActive: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  tabChipText: { ...typography.label, color: colors.textMuted },
+  tabChipTextActive: { color: colors.text },
   hero: {
     marginHorizontal: spacing.lg,
     padding: spacing.lg,
@@ -905,12 +971,6 @@ const styles = StyleSheet.create({
   childName: { ...typography.body, color: colors.text, fontWeight: '600' },
   childMetaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, alignItems: 'center' },
   childMeta: { ...typography.label, color: colors.textMuted },
-  usageBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-    borderRadius: radius.pill,
-  },
-  usageBadgeText: { ...typography.label, fontSize: 12, fontWeight: '700' },
   modalSafeArea: { flex: 1, backgroundColor: colors.bg },
   modalScroll: { flex: 1 },
   modalContent: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.md },
