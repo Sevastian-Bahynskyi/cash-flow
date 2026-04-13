@@ -29,6 +29,7 @@ type Props = {
   index: number;
   category: CategoryOption | null;
   categoryLoading: boolean;
+  categoryFailed: boolean;
   expanded: boolean;
   amountPickerOpen: boolean;
   incomeFallbackCategoryId: string | null;
@@ -46,6 +47,7 @@ export function ImportReviewTransactionCard({
   index,
   category,
   categoryLoading,
+  categoryFailed,
   expanded,
   amountPickerOpen,
   incomeFallbackCategoryId,
@@ -69,9 +71,17 @@ export function ImportReviewTransactionCard({
     : colors.textMuted;
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, categoryFailed && styles.cardWarning]}>
       <View style={styles.cardHeader}>
-        <Text style={styles.cardTitle}>Transaction {index + 1}</Text>
+        <View style={styles.cardHeaderCopy}>
+          <Text style={styles.cardTitle}>Transaction {index + 1}</Text>
+          {categoryFailed ? (
+            <View style={styles.warningBadge}>
+              <MaterialCommunityIcons name="alert-outline" size={14} color={colors.accentAlt} />
+              <Text style={styles.warningBadgeText}>Needs category</Text>
+            </View>
+          ) : null}
+        </View>
         <Pressable onPress={onRemove} hitSlop={12}>
           <MaterialCommunityIcons name="close" size={18} color={colors.textMuted} />
         </Pressable>
@@ -198,13 +208,32 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     gap: spacing.sm,
   },
+  cardWarning: {
+    borderWidth: 1,
+    borderColor: 'rgba(245,185,66,0.45)',
+  },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.md,
   },
+  cardHeaderCopy: {
+    flex: 1,
+    gap: spacing.xs,
+  },
   cardTitle: { ...typography.body, color: colors.text, fontWeight: '700' },
+  warningBadge: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(245,185,66,0.14)',
+  },
+  warningBadgeText: { ...typography.label, color: '#F5B942', fontWeight: '600' },
   showMoreButton: {
     flexDirection: 'row',
     alignItems: 'center',

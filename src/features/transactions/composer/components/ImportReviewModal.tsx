@@ -8,6 +8,7 @@ import { colors, radius, spacing, typography } from '@/ui/tokens';
 import { findOtherIncomeCategoryOption, normalizeIncomeCategoryOption } from '@/features/categories/rules';
 import type { CategoryOption } from '@/features/categories/types';
 import type { ImportedTransactionDraft, SkippedImportedTransaction } from '@/features/transactions/imageImport';
+import type { TransferPersonRow } from '@/features/transfers/types';
 import { useImportReviewState } from '@/features/transactions/composer/hooks/useImportReviewState';
 import { ImportReviewTransactionCard } from './ImportReviewTransactionCard';
 
@@ -43,6 +44,7 @@ type Props = {
   errorMessage: string | null;
   categoriesById: Record<string, CategoryOption>;
   categoryOptions: CategoryOption[];
+  transferPeople: TransferPersonRow[];
   frequentIds?: readonly string[];
   recentIds?: readonly string[];
   budgetStateByCategory?: Record<string, BudgetIndicator>;
@@ -60,6 +62,7 @@ export function ImportReviewModal({
   errorMessage,
   categoriesById,
   categoryOptions,
+  transferPeople,
   frequentIds,
   recentIds,
   budgetStateByCategory,
@@ -91,6 +94,7 @@ export function ImportReviewModal({
     visible,
     rows,
     categoryOptions,
+    transferPeople,
     onChangeRow,
   });
   const canSaveImport = hasRows && !saving && !isCategorizing && rows.every((row) => isReadyToSaveRow(row, categoryOptions));
@@ -148,6 +152,7 @@ export function ImportReviewModal({
           {rows.map((row, index) => {
             const category = row.categoryId ? (categoriesById[row.categoryId] ?? null) : null;
             const expanded = expandedRowIds.includes(row.id);
+            const categoryFailed = !isCategorizing && !category;
 
             return (
               <ImportReviewTransactionCard
@@ -156,6 +161,7 @@ export function ImportReviewModal({
                 index={index}
                 category={category}
                 categoryLoading={isCategorizing && !category}
+                categoryFailed={categoryFailed}
                 expanded={expanded}
                 amountPickerOpen={amountPickerRowId === row.id}
                 incomeFallbackCategoryId={incomeFallbackCategoryId}

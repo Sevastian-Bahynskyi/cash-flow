@@ -81,6 +81,73 @@ const normalizeName = (value: unknown): string | null => {
   return text.length > 0 ? text : null;
 };
 
+const normalizePersonCandidate = (value: string): string[] =>
+  value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z'\- ]+/g, " ")
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+const looksLikePersonName = (value: string | null): boolean => {
+  if (!value) return false;
+  const parts = normalizePersonCandidate(value);
+  return parts.length >= 2 && parts.length <= 4 && parts.every((part) => /^[A-Za-z][A-Za-z'-]*$/.test(part));
+};
+
+const toTitleCaseName = (value: string): string =>
+  normalizePersonCandidate(value)
+    .map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1).toLowerCase()}`)
+    .join(" ");
+
+const mentionMobilePay = (value: string | null | undefined): boolean =>
+  /\bmobilepay\b|\bmob pay\b|\bmp\b/i.test(String(value ?? ""));
+
+const extractMobilePayNameFromText = (value: string): string | null => {
+  const stripped = value
+    .replace(/\bmobile\s*pay\b/gi, " ")
+    .replace(/\bmob\.?\s*pay\b/gi, " ")
+    .replace(/\bmp\b/gi, " ")
+    .replace(/\boverforsel\b/gi, " ")
+    .replace(/\boverfoersel\b/gi, " ")
+    .replace(/\btransfer\b/gi, " ")
+    .trim();
+  return looksLikePersonName(stripped) ? toTitleCaseName(stripped) : null;
+};
+
+const resolveImportedName = ({
+  kind,
+  fallbackName,
+  rawText,
+  message,
+  sender,
+  receiver,
+}: {
+  kind: "expense" | "income";
+  fallbackName: string;
+  rawText?: string | null;
+  message?: string | null;
+  sender?: string | null;
+  receiver?: string | null;
+}): string => {
+  const rawName = normalizeName(fallbackName) ?? "Imported transaction";
+  if (!mentionMobilePay(rawText) && !mentionMobilePay(message) && !mentionMobilePay(fallbackName)) {
+    return rawName;
+  }
+
+  const directCounterparty = kind === "income" ? sender : receiver;
+  if (looksLikePersonName(directCounterparty ?? null)) {
+    return toTitleCaseName(directCounterparty ?? "");
+  }
+
+  return (
+    extractMobilePayNameFromText(rawText ?? "") ??
+    extractMobilePayNameFromText(message ?? "") ??
+    rawName
+  );
+};
+
 const parseSignedLocalizedAmount = (value: string): number | null => {
   const trimmed = value.trim();
   if (!trimmed) return null;
@@ -327,7 +394,14 @@ const parseBankExport = (
 
     parsed.push({
       kind,
-      name: normalizeName(rawText) ?? "Imported transaction",
+      name: resolveImportedName({
+        kind,
+        fallbackName: rawText,
+        rawText,
+        message,
+        sender,
+        receiver,
+      }),
       amount,
       currencyCode,
       categoryId: deterministicCurated?.categoryId ?? null,
@@ -514,7 +588,14 @@ const inferTransactionsHeuristically = (
 
     transactions.push({
       kind,
-      name,
+      name: resolveImportedName({
+        kind,
+        fallbackName: name,
+        rawText: name,
+        message: comment,
+        sender: null,
+        receiver: null,
+      }),
       amount: Math.round(amount * 100) / 100,
       currencyCode: currencyIndex >= 0 ? normalizeCurrencyCode(row[currencyIndex] ?? "") : "DKK",
       categoryId: null,
@@ -584,7 +665,14 @@ const parseTransactions = (
 
       return {
         kind,
-        name,
+        name: resolveImportedName({
+          kind,
+          fallbackName: name,
+          rawText,
+          message,
+          sender: normalizeNullableText(objectRow.sender),
+          receiver: normalizeNullableText(objectRow.receiver),
+        }),
         amount,
         currencyCode: normalizeCurrencyCode(objectRow.currencyCode),
         categoryId,
@@ -686,6 +774,7 @@ Deno.serve(async (req: Request) => {
     '{"transactions":[{"kind":"expense","name":"string","amount":12.34,"currencyCode":"DKK","categoryId":"uuid-or-null","comment":"string-or-null","occurredOn":"YYYY-MM-DD","rawText":"string-or-null","message":"string-or-null","transactionType":"string-or-null","sender":"string-or-null","receiver":"string-or-null","bankCategory":"string-or-null","suggestedSharedTopup":false}]}',
     "If the expense category is unclear, return null for categoryId.",
     "If the row is an obvious salary, interest, benefit, or transfer income, you may set categoryId.",
+    "For person-to-person MobilePay transfers, prefer the actual counterparty person name as name instead of a generic MobilePay label.",
     "Keep rawText equal to the bank's original merchant/description text when available.",
     `Fallback date: ${today}`,
     fileName ? `Filename: ${fileName}` : "Filename: unknown.csv",

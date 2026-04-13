@@ -9,6 +9,8 @@ import {
 } from '@/features/transactions/suggestions';
 import type { ImportedTransactionDraft } from '@/features/transactions/imageImport';
 import type { CategoryOption } from '@/features/categories/types';
+import type { TransferPersonRow } from '@/features/transfers/types';
+import { matchTransferPersonName } from '@/features/transactions/merchantIntelligence';
 
 const parseIsoDate = (iso: string): Date => {
   const [year = 1970, month = 1, day = 1] = iso.split('-').map(Number);
@@ -44,10 +46,20 @@ type Args = {
   visible: boolean;
   rows: ImportedTransactionDraft[];
   categoryOptions: CategoryOption[];
+  transferPeople: TransferPersonRow[];
   onChangeRow: (id: string, patch: Partial<ImportedTransactionDraft>) => void;
 };
 
-export function useImportReviewState({ visible, rows, categoryOptions, onChangeRow }: Args) {
+const normalizeCategoryName = (value: string): string => value.trim().toLowerCase();
+
+const findMobilePayCategoryId = (options: readonly CategoryOption[]): string | null =>
+  options.find(
+    (option) =>
+      normalizeCategoryName(option.parentName) === 'transfers' &&
+      normalizeCategoryName(option.name) === 'mobilepay',
+  )?.id ?? null;
+
+export function useImportReviewState({ visible, rows, categoryOptions, transferPeople, onChangeRow }: Args) {
   const [categoryPickerRowId, setCategoryPickerRowId] = useState<string | null>(null);
   const [datePickerRowId, setDatePickerRowId] = useState<string | null>(null);
   const [amountPickerRowId, setAmountPickerRowId] = useState<string | null>(null);
@@ -195,6 +207,63 @@ export function useImportReviewState({ visible, rows, categoryOptions, onChangeR
       },
     );
   }, [categoryCandidates, onChangeRow, rows, visible]);
+
+  useEffect(() => {
+    if (!visible || transferPeople.length === 0 || categoryOptions.length === 0) return;
+
+    const mobilePayCategoryId = findMobilePayCategoryId(categoryOptions);
+    if (!mobilePayCategoryId) return;
+
+    const peopleByNormalizedName = new Map(
+      transferPeople.map((person) => [person.normalized_name, person] as const),
+    );
+    const normalizedPeople = transferPeople.map((person) => person.normalized_name);
+
+    for (const row of rows) {
+      const matchedNormalizedName = matchTransferPersonName({
+        context: {
+          kind: row.kind,
+          name: row.name,
+          comment: row.comment,
+          rawText: row.rawText,
+          message: row.message,
+          transactionType: row.transactionType,
+          sender: row.sender,
+          receiver: row.receiver,
+          bankCategory: row.bankCategory,
+        },
+        normalizedPeople,
+      });
+      if (!matchedNormalizedName) continue;
+
+      const matchedPerson = peopleByNormalizedName.get(matchedNormalizedName);
+      if (!matchedPerson) continue;
+
+      const patch: Partial<ImportedTransactionDraft> = {};
+      if (row.name.trim() !== matchedPerson.name) {
+        patch.name = matchedPerson.name;
+      }
+      if (row.categoryId !== mobilePayCategoryId) {
+        patch.categoryId = mobilePayCategoryId;
+      }
+      if (row.categorySource !== 'transfer_person') {
+        patch.categorySource = 'transfer_person';
+      }
+      if (row.categoryConfidence !== 0.99) {
+        patch.categoryConfidence = 0.99;
+      }
+      if (row.normalizedMerchant !== matchedPerson.normalized_name) {
+        patch.normalizedMerchant = matchedPerson.normalized_name;
+      }
+      if (row.suggestedSharedTopup) {
+        patch.suggestedSharedTopup = false;
+      }
+
+      if (Object.keys(patch).length > 0) {
+        onChangeRow(row.id, patch);
+      }
+    }
+  }, [categoryOptions, onChangeRow, rows, transferPeople, visible]);
 
   const toggleRowExpanded = (rowId: string): void => {
     setExpandedRowIds((current) => {

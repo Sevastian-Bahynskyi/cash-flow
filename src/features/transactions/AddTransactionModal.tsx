@@ -513,7 +513,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
     preferRemote?: boolean;
     forceApply?: boolean;
   } = {}): Promise<void> => {
-    if (!visible || kind !== 'expense' || categoryOptions.length === 0) {
+    if (!visible || categoryOptions.length === 0) {
       setSuggestion(null);
       setIsSuggestingCategory(false);
       return;
@@ -544,7 +544,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
         name: option.name,
         icon: option.icon,
       })),
-      { preferRemote },
+      { kind, preferRemote },
     );
 
     if (runId !== suggestionRunId.current) return;
@@ -850,7 +850,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
         if (!resolvedCategory) {
           setImageImportError(
             row.kind === 'income'
-              ? 'Each imported income needs Salary, Transfer, or Income · Others.'
+              ? 'Each imported income needs Salary, a Transfers category, or Income · Others.'
               : 'Each imported transaction needs a category before saving.',
           );
           return;
@@ -968,7 +968,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
     if (!resolvedCategory) {
       setValidationMessage(
         kind === 'income'
-          ? 'Pick Salary, Transfer, or Income · Others before saving this income.'
+          ? 'Pick Salary, a Transfers category, or Income · Others before saving this income.'
           : `Pick a category before saving this ${kind}.`,
       );
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -1439,7 +1439,9 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
             <>
               <Text style={styles.label}>Person</Text>
               {transferPeople.length === 0 ? (
-                <Text style={styles.inlineHint}>Add transfer people in Categories so MobilePay names stay consistent.</Text>
+                <Text style={styles.inlineHint}>
+                  Add transfer people in Categories so MobilePay names stay consistent for income and expense transfers.
+                </Text>
               ) : (
                 <View style={styles.actionRow}>
                   {transferPeople.map((person) => {
@@ -1576,6 +1578,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
           errorMessage={imageImportError}
           categoriesById={Object.fromEntries(categoryOptions.map((option) => [option.id, option]))}
           categoryOptions={categoryOptions}
+          transferPeople={transferPeople}
           frequentIds={frequentIds}
           recentIds={recentCategoryIds}
           budgetStateByCategory={budgetStateByCategory}

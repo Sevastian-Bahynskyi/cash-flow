@@ -251,6 +251,7 @@ Deno.serve(async (req: Request) => {
     "Use only category ids from the candidate list.",
     "If the date is unclear, use the provided fallback date.",
     "If the category is unclear for an expense, return null for categoryId.",
+    "For person-to-person MobilePay transfers, use the visible counterparty person name as name when available, not just 'MobilePay'.",
     `Fallback date: ${today}`,
     `Candidate categories:\n${candidateList}`,
   ].join("\n");

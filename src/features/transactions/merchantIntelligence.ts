@@ -556,6 +556,15 @@ export const resolveCuratedCategoryCandidate = ({
 
 const alphaOnlyToken = /^[a-z][a-z'-]*$/;
 
+const isPlausibleTransferPersonName = (value: string): boolean => {
+  const parts = value
+    .split(' ')
+    .filter((part) => part.length > 1 && !personNameStopWords.has(part));
+
+  if (parts.length < 2 || parts.length > 4) return false;
+  return parts.every((part) => alphaOnlyToken.test(part));
+};
+
 export const extractProbableTransferPersonName = (context: MerchantSuggestionContext): string | null => {
   const mobilePaySource = [context.rawText ?? context.name, context.message ?? '']
     .map((part) => part.trim())
@@ -572,13 +581,24 @@ export const extractProbableTransferPersonName = (context: MerchantSuggestionCon
   );
   if (!stripped) return null;
 
-  const parts = stripped
-    .split(' ')
-    .filter((part) => part.length > 1 && !personNameStopWords.has(part));
+  return isPlausibleTransferPersonName(stripped) ? stripped : null;
+};
 
-  if (parts.length < 2 || parts.length > 4) return null;
-  if (!parts.every((part) => alphaOnlyToken.test(part))) return null;
-  return parts.join(' ');
+export const matchTransferPersonName = ({
+  context,
+  normalizedPeople,
+}: {
+  context: MerchantSuggestionContext;
+  normalizedPeople: readonly string[];
+}): string | null => {
+  const exactName = normalizeTransferPersonName(context.name);
+  if (exactName && normalizedPeople.includes(exactName) && isPlausibleTransferPersonName(exactName)) {
+    return exactName;
+  }
+
+  const extractedName = extractProbableTransferPersonName(context);
+  if (!extractedName || !normalizedPeople.includes(extractedName)) return null;
+  return extractedName;
 };
 
 export const resolveTransferPersonCandidate = ({
@@ -590,8 +610,8 @@ export const resolveTransferPersonCandidate = ({
   candidates: readonly MerchantCategoryCandidate[];
   normalizedPeople: readonly string[];
 }): MerchantCategorySuggestion | null => {
-  const personName = extractProbableTransferPersonName(context);
-  if (!personName || !normalizedPeople.includes(personName)) return null;
+  const personName = matchTransferPersonName({ context, normalizedPeople });
+  if (!personName) return null;
 
   const categoryId = findCategoryCandidateId(candidates, mobilePayPaths);
   if (!categoryId) return null;
