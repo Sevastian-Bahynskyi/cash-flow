@@ -16,6 +16,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { clearCategoryCache } from '@/features/categories/useCategories';
 import type { CategoryRow } from '@/features/categories/types';
 import { categoryColorOptions, categoryIconOptions } from '@/features/categories/presentation';
+import { getCategoryDisplayColor, getDisplayCategoryName } from '@/features/categories/helpers';
 import {
   fetchTransferPeople,
   removeTransferPerson,
@@ -49,10 +50,56 @@ type TransferPersonDraft = {
   name: string;
 };
 
+type UsageBadge = {
+  label: 'Expense' | 'Income';
+  color: string;
+};
+
 const toneForBudget = (tone: 'neutral' | 'warning' | 'critical' | null): string => {
   if (tone === 'critical') return colors.danger;
   if (tone === 'warning') return '#F5B942';
   return colors.textMuted;
+};
+
+const buildUsageBadges = ({
+  parentName,
+  name,
+  parentColor,
+  color,
+}: {
+  parentName: string;
+  name: string;
+  parentColor?: string | null;
+  color?: string | null;
+}): UsageBadge[] => {
+  const normalizedParentName = parentName.trim().toLowerCase();
+  const expenseColor = getCategoryDisplayColor({
+    kind: 'expense',
+    parentName,
+    name,
+    parentColor,
+    color,
+  });
+  const incomeColor = getCategoryDisplayColor({
+    kind: 'income',
+    parentName,
+    name,
+    parentColor,
+    color,
+  });
+
+  if (normalizedParentName === 'transfers') {
+    return [
+      { label: 'Expense', color: expenseColor },
+      { label: 'Income', color: incomeColor },
+    ];
+  }
+
+  if (normalizedParentName === 'income') {
+    return [{ label: 'Income', color: incomeColor }];
+  }
+
+  return [{ label: 'Expense', color: expenseColor }];
 };
 
 function SwipeDeleteAction({ label, onPress }: { label: string; onPress: () => void }) {
@@ -132,6 +179,12 @@ export default function CategoryManagementScreen() {
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((parent) => ({
           parent,
+          usageBadges: buildUsageBadges({
+            parentName: parent.name,
+            name: parent.name,
+            parentColor: parent.color,
+            color: parent.color,
+          }),
           children: data.categories
             .filter((category) => category.parent_id === parent.id)
             .sort((a, b) => a.name.localeCompare(b.name)),
@@ -416,16 +469,17 @@ export default function CategoryManagementScreen() {
 
         {!isInitialLoading ? (
           <>
-        <View style={styles.hero}>
-          <Text style={styles.heroTitle}>Category system</Text>
-          <Text style={styles.heroBody}>
-            Default categories stay protected. You can add custom parents and subcategories, edit custom names and icons, and keep the hierarchy obvious.
-          </Text>
-        </View>
+            <View style={styles.hero}>
+              <Text style={styles.heroTitle}>Category system</Text>
+              <Text style={styles.heroBody}>
+                Default categories stay protected. Income, expense, and transfer categories keep
+                the same labels and tones used in the transaction picker.
+              </Text>
+            </View>
 
-        <View style={styles.section}>
-          {parents.map(({ parent, children }) => (
-            <View key={parent.id} style={styles.parentCard}>
+            <View style={styles.section}>
+              {parents.map(({ parent, children, usageBadges }) => (
+                <View key={parent.id} style={styles.parentCard}>
               <View style={styles.parentHead}>
                 <View style={[styles.parentIconWrap, { backgroundColor: `${parent.color}22` }]}>
                   <CategoryIcon name={parent.icon} size={22} color={parent.color} />
@@ -436,6 +490,11 @@ export default function CategoryManagementScreen() {
                     <Text style={styles.parentMeta}>
                       {parent.is_system ? 'System category' : 'Custom category'}
                     </Text>
+                    {usageBadges.map((badge) => (
+                      <View key={`${parent.id}-${badge.label}`} style={[styles.usageBadge, { backgroundColor: `${badge.color}22` }]}>
+                        <Text style={[styles.usageBadgeText, { color: badge.color }]}>{badge.label}</Text>
+                      </View>
+                    ))}
                     {budgetStates[parent.id] ? (
                       <Text
                         style={[
@@ -468,31 +527,51 @@ export default function CategoryManagementScreen() {
               </View>
 
               <View style={styles.childList}>
-                {children.map((child) => (
-                  <Swipeable
-                    key={child.id}
-                    enabled={!child.is_system}
-                    overshootRight={false}
-                    renderRightActions={() =>
-	                      child.is_system ? null : (
-	                        <SwipeDeleteAction label="Delete" onPress={() => deleteCategoryById(child)} />
-	                      )
-	                    }
-                  >
-                    <Pressable
-                      style={({ pressed }) => [styles.childRow, pressed && styles.rowPressed]}
-                      onPress={() => {
-                        openEdit(child);
-                      }}
+                {children.map((child) => {
+                  const displayName = getDisplayCategoryName(parent.name, child.name);
+                  const usageBadges = buildUsageBadges({
+                    parentName: parent.name,
+                    name: child.name,
+                    parentColor: parent.color,
+                    color: child.color,
+                  });
+                  const childDisplayColor = usageBadges[0]?.color ?? parent.color;
+
+                  return (
+                    <Swipeable
+                      key={child.id}
+                      enabled={!child.is_system}
+                      overshootRight={false}
+                      renderRightActions={() =>
+                        child.is_system ? null : (
+                          <SwipeDeleteAction label="Delete" onPress={() => deleteCategoryById(child)} />
+                        )
+                      }
                     >
-                    <View style={[styles.childIconWrap, { backgroundColor: `${parent.color}22` }]}>
-                      <CategoryIcon name={child.icon} size={18} color={parent.color} />
-                    </View>
+                      <Pressable
+                        style={({ pressed }) => [styles.childRow, pressed && styles.rowPressed]}
+                        onPress={() => {
+                          openEdit(child);
+                        }}
+                      >
+                        <View style={[styles.childIconWrap, { backgroundColor: `${childDisplayColor}22` }]}>
+                          <CategoryIcon name={child.icon} size={18} color={childDisplayColor} />
+                        </View>
                       <View style={styles.childCopy}>
-                        <Text style={styles.childName}>{child.name}</Text>
-                        <Text style={styles.childMeta}>
-                          {child.is_system ? 'System subcategory' : 'Custom subcategory'}
-                        </Text>
+                        <Text style={styles.childName}>{displayName}</Text>
+                        <View style={styles.childMetaRow}>
+                          <Text style={styles.childMeta}>
+                            {child.is_system ? 'System subcategory' : 'Custom subcategory'}
+                          </Text>
+                          {usageBadges.map((badge) => (
+                            <View
+                              key={`${child.id}-${badge.label}`}
+                              style={[styles.usageBadge, { backgroundColor: `${badge.color}22` }]}
+                            >
+                              <Text style={[styles.usageBadgeText, { color: badge.color }]}>{badge.label}</Text>
+                            </View>
+                          ))}
+                        </View>
                       </View>
                       {budgetStates[child.id] ? (
                         <Text
@@ -504,9 +583,10 @@ export default function CategoryManagementScreen() {
                           {Math.round((budgetStates[child.id]?.ratio ?? 0) * 100)}%
                         </Text>
                       ) : null}
-                    </Pressable>
-                  </Swipeable>
-                ))}
+                      </Pressable>
+                    </Swipeable>
+                  );
+                })}
               </View>
 
               {parent.id === transfersParentId ? (
@@ -560,9 +640,9 @@ export default function CategoryManagementScreen() {
                   )}
                 </View>
               ) : null}
+                </View>
+              ))}
             </View>
-          ))}
-        </View>
           </>
         ) : null}
       </ScrollView>
@@ -823,7 +903,14 @@ const styles = StyleSheet.create({
   },
   childCopy: { flex: 1, gap: 2 },
   childName: { ...typography.body, color: colors.text, fontWeight: '600' },
+  childMetaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, alignItems: 'center' },
   childMeta: { ...typography.label, color: colors.textMuted },
+  usageBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+  },
+  usageBadgeText: { ...typography.label, fontSize: 12, fontWeight: '700' },
   modalSafeArea: { flex: 1, backgroundColor: colors.bg },
   modalScroll: { flex: 1 },
   modalContent: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.md },
