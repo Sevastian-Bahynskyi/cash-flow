@@ -3,9 +3,7 @@ import { Keyboard, Platform } from 'react-native';
 import type { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { runDetached } from '@/lib/async';
 import {
-  fetchSuggestionHistory,
-  resolveGuaranteedBatchCategoryResults,
-  resolveLocalSuggestedCategory,
+  resolveBatchCategoryResults,
   type ImportCategorySuggestionRow,
   type SuggestCategoryCandidate,
 } from '@/features/transactions/suggestions';
@@ -34,6 +32,12 @@ const toBatchSuggestionRow = (row: ImportedTransactionDraft): ImportCategorySugg
   kind: row.kind,
   name: row.name.trim(),
   comment: row.comment.trim().length > 0 ? row.comment.trim() : null,
+  rawText: row.rawText.trim().length > 0 ? row.rawText.trim() : row.name.trim(),
+  message: row.message.trim().length > 0 ? row.message.trim() : null,
+  transactionType: row.transactionType.trim().length > 0 ? row.transactionType.trim() : null,
+  sender: row.sender.trim().length > 0 ? row.sender.trim() : null,
+  receiver: row.receiver.trim().length > 0 ? row.receiver.trim() : null,
+  bankCategory: row.bankCategory.trim().length > 0 ? row.bankCategory.trim() : null,
 });
 
 type Args = {
@@ -135,51 +139,29 @@ export function useImportReviewState({ visible, rows, categoryOptions, onChangeR
 
     runDetached(
       (async () => {
-        const historyRows = await fetchSuggestionHistory(undefined, 120);
+        const results = await resolveBatchCategoryResults({
+          rows: uncategorizedRows.map(toBatchSuggestionRow),
+          candidates: categoryCandidates,
+        });
         if (runId !== categorizationRunId.current) return;
 
-        const deterministicAssignments = new Map<string, string>();
-        for (const row of uncategorizedRows) {
-          const lookupText = row.name.trim().length >= 2 ? row.name.trim() : row.comment.trim();
-          if (lookupText.length < 2) continue;
-
-          const localResult = await resolveLocalSuggestedCategory({
-            kind: row.kind,
-            name: lookupText,
-            candidates: categoryCandidates,
-            historyRows: historyRows.filter((historyRow) => !historyRow.kind || historyRow.kind === row.kind),
-          });
-          if (runId !== categorizationRunId.current) return;
-          if (localResult?.categoryId) {
-            deterministicAssignments.set(row.id, localResult.categoryId);
-          }
-        }
-
-        const remainingRows = uncategorizedRows.filter((row) => !deterministicAssignments.has(row.id));
-        const combinedAssignments = new Map(deterministicAssignments);
-
-        if (remainingRows.length > 0) {
-          const batchResults = await resolveGuaranteedBatchCategoryResults({
-            rows: remainingRows.map(toBatchSuggestionRow),
-            candidates: categoryCandidates,
-            historyRows,
-          });
-          if (runId !== categorizationRunId.current) return;
-
-          for (const result of batchResults) {
-            combinedAssignments.set(result.id, result.categoryId);
-          }
-        }
+        const combinedAssignments = new Map(results.map((result) => [result.id, result]));
 
         for (const row of uncategorizedRows) {
-          const categoryId = combinedAssignments.get(row.id);
-          if (!categoryId) continue;
+          const suggestion = combinedAssignments.get(row.id);
+          if (!suggestion) continue;
 
           const currentRow = rowsRef.current.find((candidate) => candidate.id === row.id);
           if (!currentRow || currentRow.categoryId) continue;
           if (buildRowSignature(currentRow) !== initialSignatures.get(row.id)) continue;
 
-          onChangeRow(row.id, { categoryId });
+          onChangeRow(row.id, {
+            categoryId: suggestion.categoryId,
+            normalizedMerchant: suggestion.normalizedMerchant,
+            categorySource: suggestion.source,
+            categoryConfidence: suggestion.confidence,
+            suggestedSharedTopup: suggestion.isSharedTopup,
+          });
         }
 
         const stillMissing = uncategorizedRows.some((row) => {

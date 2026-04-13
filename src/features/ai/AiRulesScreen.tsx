@@ -19,24 +19,22 @@ import { formatDateLabel } from '@/lib/format';
 import { ScreenHeader } from '@/ui/ScreenHeader';
 import { SkeletonBlock, SkeletonCard } from '@/ui/Skeleton';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
-
-type AiRuleRow = {
-  id: string;
-  user_id: string;
-  pattern_key: string;
-  category_id: string | null;
-  is_blocked: boolean;
-  updated_at: string;
-};
+import {
+  deleteMerchantRule,
+  fetchMerchantRules,
+  type MerchantRuleRow,
+} from '@/features/transactions/suggestions';
 
 type RuleDraft = {
   id: string;
-  pattern_key: string;
+  pattern: string;
+  kind: 'expense' | 'income';
   category_id: string | null;
   is_blocked: boolean;
+  is_shared_topup: boolean;
 };
 
-function AiRulesSkeleton() {
+function MerchantRulesSkeleton() {
   return (
     <>
       <SkeletonCard style={styles.skeletonHeroCard}>
@@ -62,7 +60,7 @@ function AiRulesSkeleton() {
 
 export default function AiRulesScreen() {
   const overview = useOverview();
-  const [rules, setRules] = useState<AiRuleRow[]>([]);
+  const [rules, setRules] = useState<MerchantRuleRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasLoadedRules, setHasLoadedRules] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -74,13 +72,7 @@ export default function AiRulesScreen() {
   const loadRules = async (): Promise<void> => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('ai_category_rules')
-        .select('id, user_id, pattern_key, category_id, is_blocked, updated_at')
-        .order('updated_at', { ascending: false });
-      if (!error) {
-        setRules((data ?? []) as AiRuleRow[]);
-      }
+      setRules(await fetchMerchantRules());
     } finally {
       setLoading(false);
       setHasLoadedRules(true);
@@ -90,7 +82,7 @@ export default function AiRulesScreen() {
   const isInitialLoading = overview.isInitialLoading || (loading && !hasLoadedRules);
 
   useEffect(() => {
-    runDetached(loadRules(), 'aiRules.load');
+    runDetached(loadRules(), 'merchantRules.load');
   }, []);
 
   const onRefresh = async (): Promise<void> => {
@@ -105,10 +97,11 @@ export default function AiRulesScreen() {
   const saveDraft = async (): Promise<void> => {
     if (!draft) return;
     const { error } = await supabase
-      .from('ai_category_rules')
+      .from('merchant_category_rules')
       .update({
         category_id: draft.is_blocked ? null : draft.category_id,
         is_blocked: draft.is_blocked,
+        is_shared_topup: draft.is_shared_topup,
       })
       .eq('id', draft.id);
     if (!error) {
@@ -117,9 +110,9 @@ export default function AiRulesScreen() {
     }
   };
 
-  const deleteRule = async (ruleId: string): Promise<void> => {
-    const { error } = await supabase.from('ai_category_rules').delete().eq('id', ruleId);
-    if (!error) {
+  const removeRule = async (ruleId: string): Promise<void> => {
+    const ok = await deleteMerchantRule(ruleId);
+    if (ok) {
       await loadRules();
       setDraft(null);
     }
@@ -130,61 +123,72 @@ export default function AiRulesScreen() {
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.text} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              runDetached(onRefresh(), 'merchantRules.refresh');
+            }}
+            tintColor={colors.text}
+          />
+        }
       >
-        <ScreenHeader back title="Smart Assist" subtitle="Correction memory and blocked suggestions" />
+        <ScreenHeader back title="Merchant Rules" subtitle="Manual overrides, blocks, and shared top-ups" />
 
-        {isInitialLoading ? <AiRulesSkeleton /> : null}
+        {isInitialLoading ? <MerchantRulesSkeleton /> : null}
 
         {!isInitialLoading ? (
           <>
-        <View style={styles.hero}>
-          <Text style={styles.heroTitle}>Learning stays simple</Text>
-          <Text style={styles.heroBody}>
-            Every rule is just a normalized merchant pattern. You can map it to a category or block suggestions entirely, and nothing here ever blocks saving a transaction.
-          </Text>
-        </View>
+            <View style={styles.hero}>
+              <Text style={styles.heroTitle}>Deterministic beats mysterious</Text>
+              <Text style={styles.heroBody}>
+                Each rule matches a normalized merchant and decides whether we categorize it, block it, or mark it as a shared top-up. These rules are checked before fuzzy memory and before the fallback AI.
+              </Text>
+            </View>
 
-        <View style={styles.section}>
-          {loading ? (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>Loading...</Text>
-            </View>
-          ) : rules.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>No saved correction memory yet. It will appear here once you override or block a suggestion.</Text>
-            </View>
-          ) : (
-            rules.map((rule) => (
-              <Pressable
-                key={rule.id}
-                style={({ pressed }) => [styles.ruleCard, pressed && styles.rowPressed]}
-                onPress={() =>
-                  setDraft({
-                    id: rule.id,
-                    pattern_key: rule.pattern_key,
-                    category_id: rule.category_id,
-                    is_blocked: rule.is_blocked,
-                  })
-                }
-              >
-                <View style={styles.ruleHead}>
-                  <Text style={styles.rulePattern}>{rule.pattern_key}</Text>
-                  <Text style={styles.ruleDate}>
-                    {formatDateLabel(rule.updated_at.slice(0, 10))}
-                  </Text>
+            <View style={styles.section}>
+              {loading ? (
+                <View style={styles.emptyCard}>
+                  <Text style={styles.emptyText}>Loading...</Text>
                 </View>
-                <Text style={styles.ruleMeta}>
-                  {rule.is_blocked
-                    ? 'Suggestions blocked'
-                    : rule.category_id
-                      ? `Mapped to ${categoryMeta[rule.category_id]?.label ?? 'category'}`
-                      : 'No mapped category'}
-                </Text>
-              </Pressable>
-            ))
-          )}
-        </View>
+              ) : rules.length === 0 ? (
+                <View style={styles.emptyCard}>
+                  <Text style={styles.emptyText}>No merchant rules yet. They will appear here as you correct or block suggestions.</Text>
+                </View>
+              ) : (
+                rules.map((rule) => (
+                  <Pressable
+                    key={rule.id}
+                    style={({ pressed }) => [styles.ruleCard, pressed && styles.rowPressed]}
+                    onPress={() =>
+                      setDraft({
+                        id: rule.id,
+                        pattern: rule.pattern,
+                        kind: rule.kind,
+                        category_id: rule.category_id,
+                        is_blocked: rule.is_blocked,
+                        is_shared_topup: rule.is_shared_topup,
+                      })
+                    }
+                  >
+                    <View style={styles.ruleHead}>
+                      <Text style={styles.rulePattern}>{rule.pattern}</Text>
+                      <Text style={styles.ruleDate}>{formatDateLabel(rule.updated_at.slice(0, 10))}</Text>
+                    </View>
+                    <Text style={styles.ruleMeta}>
+                      {rule.kind === 'income' ? 'Income' : 'Expense'}
+                      {' · '}
+                      {rule.is_blocked
+                        ? 'Blocked'
+                        : rule.category_id
+                          ? categoryMeta[rule.category_id]?.label ?? 'Mapped category'
+                          : 'No category'}
+                    </Text>
+                    {rule.is_shared_topup ? <Text style={styles.ruleHint}>Marks matching expenses as shared top-ups.</Text> : null}
+                  </Pressable>
+                ))
+              )}
+            </View>
           </>
         ) : null}
       </ScrollView>
@@ -199,9 +203,9 @@ export default function AiRulesScreen() {
           <ScreenHeader
             back
             onBack={() => setDraft(null)}
-            title="Edit Rule"
-            subtitle={draft?.pattern_key}
-            actions={[{ icon: 'check', onPress: () => runDetached(saveDraft(), 'aiRules.saveDraft') }]}
+            title="Edit Merchant Rule"
+            subtitle={draft?.pattern}
+            actions={[{ icon: 'check', onPress: () => runDetached(saveDraft(), 'merchantRules.saveDraft') }]}
           />
           <View style={styles.modalBody}>
             <Pressable
@@ -211,7 +215,7 @@ export default function AiRulesScreen() {
               <View style={styles.actionCopy}>
                 <Text style={styles.actionTitle}>Block suggestions</Text>
                 <Text style={styles.actionMeta}>
-                  When blocked, the app stops auto-suggesting for this merchant pattern.
+                  When blocked, the merchant no longer auto-suggests a category.
                 </Text>
               </View>
               <MaterialCommunityIcons
@@ -235,11 +239,34 @@ export default function AiRulesScreen() {
               <MaterialCommunityIcons name="chevron-right" size={22} color={colors.textMuted} />
             </Pressable>
 
+            {draft?.kind === 'expense' ? (
+              <Pressable
+                style={({ pressed }) => [styles.actionRow, pressed && styles.rowPressed]}
+                onPress={() =>
+                  setDraft((current) =>
+                    current ? { ...current, is_shared_topup: !current.is_shared_topup } : current,
+                  )
+                }
+              >
+                <View style={styles.actionCopy}>
+                  <Text style={styles.actionTitle}>Mark as shared top-up</Text>
+                  <Text style={styles.actionMeta}>
+                    Matching expenses will default to the shared top-up flow.
+                  </Text>
+                </View>
+                <MaterialCommunityIcons
+                  name={draft?.is_shared_topup ? 'check-circle' : 'checkbox-blank-circle-outline'}
+                  size={22}
+                  color={draft?.is_shared_topup ? colors.accent : colors.textMuted}
+                />
+              </Pressable>
+            ) : null}
+
             <Pressable
               style={({ pressed }) => [styles.destructiveButton, pressed && styles.rowPressed]}
               onPress={() => {
                 if (!draft) return;
-                runDetached(deleteRule(draft.id), 'aiRules.deleteRule');
+                runDetached(removeRule(draft.id), 'merchantRules.deleteRule');
               }}
             >
               <Text style={styles.destructiveButtonText}>Delete rule</Text>
@@ -262,56 +289,66 @@ export default function AiRulesScreen() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.bg },
   container: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingBottom: spacing.xxl * 3, gap: spacing.lg },
+  content: { padding: spacing.lg, gap: spacing.lg },
   hero: {
-    marginHorizontal: spacing.lg,
-    padding: spacing.lg,
-    borderRadius: radius.lg,
     backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
     gap: spacing.sm,
   },
-  skeletonHeroCard: { marginHorizontal: spacing.lg },
   heroTitle: { ...typography.h2, color: colors.text },
   heroBody: { ...typography.body, color: colors.textMuted },
-  section: { paddingHorizontal: spacing.lg, gap: spacing.sm },
-  skeletonRuleHead: { flexDirection: 'row', gap: spacing.md, alignItems: 'center', justifyContent: 'space-between' },
+  section: { gap: spacing.sm },
   emptyCard: {
-    padding: spacing.lg,
-    borderRadius: radius.lg,
     backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
   },
   emptyText: { ...typography.body, color: colors.textMuted },
   ruleCard: {
-    padding: spacing.md,
-    borderRadius: radius.lg,
     backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.md,
     gap: spacing.xs,
   },
-  rowPressed: { opacity: 0.86 },
-  ruleHead: { flexDirection: 'row', gap: spacing.md, alignItems: 'center' },
-  rulePattern: { ...typography.body, color: colors.text, flex: 1, fontWeight: '600' },
-  ruleDate: { ...typography.label, color: colors.textMuted },
-  ruleMeta: { ...typography.label, color: colors.textMuted },
-  modalSafeArea: { flex: 1, backgroundColor: colors.bg },
-  modalBody: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, gap: spacing.md },
-  actionRow: {
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
+  ruleHead: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  rulePattern: { ...typography.body, color: colors.text, fontWeight: '700', flex: 1 },
+  ruleDate: { ...typography.label, color: colors.textMuted },
+  ruleMeta: { ...typography.label, color: colors.textMuted },
+  ruleHint: { ...typography.label, color: colors.accent },
+  modalSafeArea: { flex: 1, backgroundColor: colors.bg },
+  modalBody: { flex: 1, padding: spacing.lg, gap: spacing.sm },
+  actionRow: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     gap: spacing.md,
   },
   actionCopy: { flex: 1, gap: spacing.xs },
-  actionTitle: { ...typography.body, color: colors.text, fontWeight: '600' },
-  actionMeta: { ...typography.label, color: colors.textMuted },
+  actionTitle: { ...typography.body, color: colors.text, fontWeight: '700' },
+  actionMeta: { ...typography.body, color: colors.textMuted },
   destructiveButton: {
     marginTop: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.danger,
+    borderRadius: radius.lg,
     paddingVertical: spacing.md,
     alignItems: 'center',
+    backgroundColor: `${colors.danger}12`,
   },
-  destructiveButtonText: { ...typography.body, color: colors.danger, fontWeight: '600' },
+  destructiveButtonText: { ...typography.body, color: colors.danger, fontWeight: '700' },
+  rowPressed: { opacity: 0.86 },
+  skeletonHeroCard: { gap: spacing.sm },
+  skeletonRuleHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
 });

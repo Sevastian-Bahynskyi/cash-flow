@@ -39,8 +39,10 @@ import {
   fetchFrequentCategoryIds,
   fetchRecentCategoryIds,
   fetchRecentTransactionSuggestions,
+  formatMerchantCategorySource,
   resolveSuggestedCategory,
-  upsertAiRule,
+  saveMerchantMemoryObservation,
+  upsertMerchantRule,
   type SuggestedCategoryResult,
 } from './suggestions';
 import { convertToDkk } from '@/lib/currency';
@@ -64,7 +66,7 @@ import {
   type ImportedTransactionDraft,
   type SkippedImportedTransaction,
 } from './imageImport';
-import { shouldAutoMarkSharedTopup } from './categorizationRules';
+import { shouldAutoMarkSharedTopup } from './merchantIntelligence';
 import { isCsvImportFile, readCsvImportText, type CsvImportFile, type PendingImport } from './importFiles';
 import type { TransactionDraft, TransactionInsert, TransactionKind, TransactionRow } from './types';
 
@@ -568,6 +570,9 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
     const shouldApply = !userTouchedCategory && (forceApply || result.confidence > 0);
     if (shouldApply) {
       setCategory(match);
+      if (kind === 'expense') {
+        setIsSharedTopup((current) => current || result.isSharedTopup);
+      }
       autoAppliedCategoryId.current = match.id;
     }
   };
@@ -577,12 +582,16 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
 
     autoAppliedCategoryId.current = null;
     setCategory(suggestion.category);
+    setIsSharedTopup((current) => (kind === 'expense' ? current || suggestion.isSharedTopup : current));
     setUserTouchedCategory(true);
 
-    const saved = await upsertAiRule({
-      patternKey: suggestion.patternKey,
+    const saved = await upsertMerchantRule({
+      kind,
+      pattern: suggestion.normalizedMerchant,
       categoryId: suggestion.category.id,
+      canonicalMerchant: suggestion.canonicalMerchant,
       isBlocked: false,
+      isSharedTopup: suggestion.isSharedTopup,
     });
     if (!saved) {
       setValidationMessage('Could not save this category preference right now.');
@@ -598,10 +607,13 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
   const blockSuggestion = async (): Promise<void> => {
     if (!suggestion) return;
 
-    const saved = await upsertAiRule({
-      patternKey: suggestion.patternKey,
+    const saved = await upsertMerchantRule({
+      kind,
+      pattern: suggestion.normalizedMerchant,
       categoryId: null,
+      canonicalMerchant: suggestion.canonicalMerchant,
       isBlocked: true,
+      isSharedTopup: false,
     });
     if (!saved) {
       setValidationMessage('Could not save this block right now.');
@@ -788,6 +800,22 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
       }
 
       const payloads: TransactionInsert[] = [];
+      const memoryObservations: {
+        context: {
+          kind: TransactionKind;
+          name: string;
+          comment: string | null;
+          rawText: string | null;
+          message: string | null;
+          transactionType: string | null;
+          sender: string | null;
+          receiver: string | null;
+          bankCategory: string | null;
+        };
+        categoryId: string;
+        isSharedTopup: boolean;
+        occurredOn: string;
+      }[] = [];
       for (const row of imageImportDrafts) {
         const normalizedName = row.name.trim();
         if (normalizedName.length === 0) {
@@ -834,10 +862,12 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
             : await convertToDkk(originalAmountMinor, row.currencyCode, row.occurredOn.trim());
         const isSharedTopup =
           row.kind === 'expense' &&
-          shouldAutoMarkSharedTopup({
-            name: normalizedName,
-            comment: row.comment,
-          });
+          (row.suggestedSharedTopup ||
+            shouldAutoMarkSharedTopup({
+              name: normalizedName,
+              comment: row.comment,
+              rawText: row.rawText,
+            }));
 
         payloads.push({
           user_id: userData.user.id,
@@ -858,6 +888,23 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
           converted_amount_minor: conversion.convertedMinor,
           fx_rate: conversion.rate,
         });
+
+        memoryObservations.push({
+          context: {
+            kind: row.kind,
+            name: normalizedName,
+            comment: row.comment.trim().length > 0 ? row.comment.trim() : null,
+            rawText: row.rawText.trim().length > 0 ? row.rawText.trim() : normalizedName,
+            message: row.message.trim().length > 0 ? row.message.trim() : null,
+            transactionType: row.transactionType.trim().length > 0 ? row.transactionType.trim() : null,
+            sender: row.sender.trim().length > 0 ? row.sender.trim() : null,
+            receiver: row.receiver.trim().length > 0 ? row.receiver.trim() : null,
+            bankCategory: row.bankCategory.trim().length > 0 ? row.bankCategory.trim() : null,
+          },
+          categoryId: resolvedCategory.id,
+          isSharedTopup,
+          occurredOn: row.occurredOn.trim(),
+        });
       }
 
       const { error } = await supabase.from('transactions').insert(payloads);
@@ -866,6 +913,17 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         return;
       }
+
+      await Promise.all(
+        memoryObservations.map((observation) =>
+          saveMerchantMemoryObservation({
+            context: observation.context,
+            categoryId: observation.categoryId,
+            isSharedTopup: observation.isSharedTopup,
+            occurredOn: observation.occurredOn,
+          }),
+        ),
+      );
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       onSaved();
@@ -968,12 +1026,32 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
       }
 
       if (suggestion && userTouchedCategory && resolvedCategory.id !== suggestion.category.id) {
-        await upsertAiRule({
-          patternKey: suggestion.patternKey,
+        await upsertMerchantRule({
+          kind,
+          pattern: suggestion.normalizedMerchant,
           categoryId: resolvedCategory.id,
+          canonicalMerchant: suggestion.canonicalMerchant,
           isBlocked: false,
+          isSharedTopup,
         });
       }
+
+      await saveMerchantMemoryObservation({
+        context: {
+          kind,
+          name: name.trim(),
+          comment: comment.trim().length > 0 ? comment.trim() : null,
+          rawText: name.trim(),
+          message: null,
+          transactionType: null,
+          sender: null,
+          receiver: null,
+          bankCategory: null,
+        },
+        categoryId: resolvedCategory.id,
+        isSharedTopup,
+        occurredOn: date,
+      });
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       onSaved();
@@ -1174,6 +1252,10 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
                 </Text>
                 <Text style={styles.suggestionConfidence}>{Math.round(suggestion.confidence * 100)}%</Text>
               </View>
+              <Text style={styles.suggestionMeta}>
+                {formatMerchantCategorySource(suggestion.source)}
+                {suggestion.normalizedMerchant ? ` · ${suggestion.normalizedMerchant}` : ''}
+              </Text>
               <View style={styles.actionRow}>
                 <Pressable
                   style={({ pressed }) => [styles.smallAction, pressed && styles.rowPressed]}
@@ -1668,6 +1750,7 @@ const styles = StyleSheet.create({
   suggestionHead: { flexDirection: 'row', gap: spacing.md, alignItems: 'center' },
   suggestionTitle: { ...typography.body, color: colors.text, flex: 1, fontWeight: '600' },
   suggestionConfidence: { ...typography.label, color: colors.accent, fontWeight: '700' },
+  suggestionMeta: { ...typography.label, color: colors.textMuted },
   actionRow: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
   smallAction: {
     paddingHorizontal: spacing.md,

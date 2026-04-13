@@ -1,4 +1,9 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import {
+  normalizeMerchantContext,
+  resolveCuratedCategoryId,
+  type Candidate,
+} from "../_shared/merchant-intelligence";
 
 declare const Deno: {
   env: {
@@ -11,12 +16,6 @@ declare const console: {
   info: (...args: unknown[]) => void;
   warn: (...args: unknown[]) => void;
   error: (...args: unknown[]) => void;
-};
-
-type Candidate = {
-  id: string;
-  parent: string;
-  name: string;
 };
 
 type Body = {
@@ -34,6 +33,15 @@ type ParsedTransaction = {
   categoryId: string | null;
   comment: string | null;
   occurredOn: string;
+  rawText: string | null;
+  message: string | null;
+  transactionType: string | null;
+  sender: string | null;
+  receiver: string | null;
+  bankCategory: string | null;
+  normalizedMerchant: string | null;
+  suggestedSharedTopup: boolean;
+  categorySource: "curated" | "llm" | null;
 };
 
 type ResponseBody = {
@@ -63,7 +71,7 @@ const normalizeCurrencyCode = (value: unknown): string => {
   return /^[A-Z]{3}$/.test(text) ? text : "DKK";
 };
 
-const normalizeComment = (value: unknown): string | null => {
+const normalizeNullableText = (value: unknown): string | null => {
   const text = typeof value === "string" ? value.trim() : "";
   return text.length > 0 ? text : null;
 };
@@ -72,14 +80,6 @@ const normalizeName = (value: unknown): string | null => {
   const text = typeof value === "string" ? value.trim() : "";
   return text.length > 0 ? text : null;
 };
-
-const normalizeHeaderKey = (value: string): string =>
-  value
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
 
 const parseSignedLocalizedAmount = (value: string): number | null => {
   const trimmed = value.trim();
@@ -151,32 +151,16 @@ const parseDateValue = (value: string): string | null => {
     return `${year}-${month}-${day}`;
   }
 
-  const compactIsoMatch = trimmed.match(/^(\d{4})(\d{2})(\d{2})$/);
-  if (compactIsoMatch) {
-    const [, year, month, day] = compactIsoMatch;
-    return `${year}-${month}-${day}`;
-  }
-
-  const cleaned = trimmed.split(" ")[0]?.trim() ?? trimmed;
-  const parts = cleaned.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})$/);
+  const parts = trimmed.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})$/);
   if (!parts) return null;
 
-  let first = Number(parts[1]);
-  let second = Number(parts[2]);
+  let day = Number(parts[1]);
+  let month = Number(parts[2]);
   let year = Number(parts[3]);
 
   if (year < 100) {
     year += year >= 70 ? 1900 : 2000;
   }
-
-  let day = first;
-  let month = second;
-  if (first <= 12 && second > 12) {
-    day = second;
-    month = first;
-  }
-
-  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
 
   const date = new Date(Date.UTC(year, month - 1, day));
   if (
@@ -266,40 +250,112 @@ const detectDelimiter = (text: string): string => {
   return bestDelimiter;
 };
 
-const headerAliases = {
-  date: [
+const normalizeHeaderKey = (value: string): string =>
+  value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+const parseBankExport = (
+  csvText: string,
+  fallbackDate: string,
+  candidates: readonly Candidate[],
+): ParsedTransaction[] => {
+  const rows = parseCsvRows(csvText, detectDelimiter(csvText));
+  const headers = rows[0] ?? [];
+  const normalizedHeaders = headers.map(normalizeHeaderKey);
+  const requiredHeaders = [
     "date",
-    "booking date",
-    "booked",
-    "posted date",
-    "value date",
-    "transaction date",
-    "dato",
-    "transaktionsdato",
-    "bogforingsdato",
-    "foringsdato",
-    "valutadato",
-  ],
+    "date of posting",
+    "text",
+    "message",
+    "transaction type",
+    "amount",
+    "currency",
+    "sender",
+    "receiver",
+    "note",
+    "category",
+  ];
+
+  if (!requiredHeaders.every((header) => normalizedHeaders.includes(header))) {
+    return [];
+  }
+
+  const headerIndex = new Map(headers.map((header, index) => [normalizeHeaderKey(header), index]));
+  const bodyRows = rows.slice(1);
+  const parsed: ParsedTransaction[] = [];
+
+  for (const row of bodyRows) {
+    const rawText = row[headerIndex.get("text") ?? -1] ?? "";
+    const amountRaw = row[headerIndex.get("amount") ?? -1] ?? "";
+    const occurredOnRaw = row[headerIndex.get("date") ?? -1] ?? row[headerIndex.get("date of posting") ?? -1] ?? "";
+    const signedAmount = parseSignedLocalizedAmount(amountRaw);
+    if (!rawText.trim() || signedAmount === null) continue;
+
+    const kind = signedAmount < 0 ? "expense" : "income";
+    const amount = Math.round(Math.abs(signedAmount) * 100) / 100;
+    const message = normalizeNullableText(row[headerIndex.get("message") ?? -1] ?? "");
+    const note = normalizeNullableText(row[headerIndex.get("note") ?? -1] ?? "");
+    const transactionType = normalizeNullableText(row[headerIndex.get("transaction type") ?? -1] ?? "");
+    const sender = normalizeNullableText(row[headerIndex.get("sender") ?? -1] ?? "");
+    const receiver = normalizeNullableText(row[headerIndex.get("receiver") ?? -1] ?? "");
+    const bankCategory = normalizeNullableText(row[headerIndex.get("category") ?? -1] ?? "");
+    const occurredOn = normalizeDate(parseDateValue(occurredOnRaw), fallbackDate);
+    const currencyCode = normalizeCurrencyCode(row[headerIndex.get("currency") ?? -1] ?? "");
+    const normalizedMerchant = normalizeMerchantContext({
+      kind,
+      name: rawText,
+      comment: note,
+      rawText,
+      message,
+      sender,
+    });
+    const deterministicCurated = resolveCuratedCategoryId({
+      context: {
+        kind,
+        name: rawText,
+        comment: note,
+        rawText,
+        message,
+        sender,
+      },
+      candidates,
+    });
+
+    parsed.push({
+      kind,
+      name: normalizeName(rawText) ?? "Imported transaction",
+      amount,
+      currencyCode,
+      categoryId: deterministicCurated?.categoryId ?? null,
+      comment: [note, message].filter(Boolean).join(" · ") || null,
+      occurredOn,
+      rawText,
+      message,
+      transactionType,
+      sender,
+      receiver,
+      bankCategory,
+      normalizedMerchant: normalizedMerchant || null,
+      suggestedSharedTopup: kind === "expense" && normalizedMerchant === "revolut",
+      categorySource: deterministicCurated ? "curated" : null,
+    });
+  }
+
+  return parsed;
+};
+
+const headerAliases = {
+  date: ["date", "booking date", "booked", "posted date", "value date", "transaction date", "dato"],
   amount: ["amount", "belob", "beløb", "sum", "value", "net amount", "transaction amount"],
   debit: ["debit", "withdrawal", "outflow", "debet", "paid out", "ud"],
   credit: ["credit", "deposit", "inflow", "kredit", "paid in", "ind"],
   currency: ["currency", "valuta", "ccy"],
   balance: ["balance", "saldo", "running balance", "available balance"],
-  description: [
-    "description",
-    "details",
-    "text",
-    "memo",
-    "narrative",
-    "merchant",
-    "payee",
-    "counterparty",
-    "recipient",
-    "sender",
-    "beskrivelse",
-    "tekst",
-    "navn",
-  ],
+  description: ["description", "details", "text", "memo", "merchant", "payee", "counterparty", "recipient", "sender"],
   reference: ["reference", "message", "note", "comment", "remittance", "info", "reference text"],
   direction: ["type", "direction", "transaction type", "entry type"],
 } as const;
@@ -368,32 +424,13 @@ const findBestColumnIndex = (
   return bestScore > 0 ? bestIndex : -1;
 };
 
-const looksLikeNoiseDescription = (value: string): boolean => {
-  const normalized = normalizeHeaderKey(value);
-  if (!normalized) return true;
-  return [
-    "opening balance",
-    "closing balance",
-    "running balance",
-    "available balance",
-    "saldo",
-    "total",
-    "subtotal",
-    "balance",
-  ].some((noise) => normalized.includes(noise));
-};
-
 const inferKindFromDirection = (value: string): "expense" | "income" | null => {
   const normalized = normalizeHeaderKey(value);
   if (!normalized) return null;
-  if (
-    ["credit", "deposit", "incoming", "received", "in", "kredit"].some((part) => normalized.includes(part))
-  ) {
+  if (["credit", "deposit", "incoming", "received", "in", "kredit"].some((part) => normalized.includes(part))) {
     return "income";
   }
-  if (
-    ["debit", "withdrawal", "outgoing", "sent", "out", "debet"].some((part) => normalized.includes(part))
-  ) {
+  if (["debit", "withdrawal", "outgoing", "sent", "out", "debet"].some((part) => normalized.includes(part))) {
     return "expense";
   }
   return null;
@@ -407,11 +444,6 @@ const inferTransactionsHeuristically = (
   const rows = parseCsvRows(csvText, delimiter);
   const headerRowIndex = inferHeaderRowIndex(rows);
   if (rows.length < 2 || headerRowIndex < 0 || headerRowIndex >= rows.length - 1) {
-    console.info("[parse-transaction-csv] Heuristic parser could not infer a usable header row.", {
-      rowCount: rows.length,
-      headerRowIndex,
-      delimiter,
-    });
     return [];
   }
 
@@ -429,39 +461,15 @@ const inferTransactionsHeuristically = (
   const currencyIndex = findBestColumnIndex(headers, ["currency"]);
   const directionIndex = findBestColumnIndex(headers, ["direction"]);
 
-  const preferredDescriptionIndexes = headers
-    .map((header, index) => ({ index, score: Math.max(scoreHeaderForSemantic(header, "description"), scoreHeaderForSemantic(header, "reference")) }))
-    .filter(({ score, index }) => score > 0 && index !== dateIndex && index !== amountIndex && index !== debitIndex && index !== creditIndex)
+  const descriptionIndexes = headers
+    .map((header, index) => ({
+      index,
+      score: Math.max(scoreHeaderForSemantic(header, "description"), scoreHeaderForSemantic(header, "reference")),
+    }))
+    .filter(({ score, index }) => score > 0 && !excluded.has(index))
     .sort((left, right) => right.score - left.score)
-    .map(({ index }) => index);
-
-  const fallbackDescriptionIndexes = headers
-    .map((header, index) => ({ header, index }))
-    .filter(({ index, header }) =>
-      index !== dateIndex &&
-      index !== amountIndex &&
-      index !== debitIndex &&
-      index !== creditIndex &&
-      index !== currencyIndex &&
-      scoreHeaderForSemantic(header, "balance") === 0,
-    )
-    .map(({ index }) => index);
-
-  const descriptionIndexes = [...new Set([...preferredDescriptionIndexes, ...fallbackDescriptionIndexes])].slice(0, 3);
-
-  console.info("[parse-transaction-csv] Heuristic parser inferred CSV structure.", {
-    delimiter,
-    rowCount: rows.length,
-    headerRowIndex,
-    headers,
-    dateIndex,
-    amountIndex,
-    debitIndex,
-    creditIndex,
-    currencyIndex,
-    directionIndex,
-    descriptionIndexes,
-  });
+    .map(({ index }) => index)
+    .slice(0, 3);
 
   const transactions: ParsedTransaction[] = [];
   for (const row of dataRows) {
@@ -481,20 +489,10 @@ const inferTransactionsHeuristically = (
     } else if (credit !== null && debit === null) {
       amount = credit;
       kind = "income";
-    } else if (debit !== null && credit !== null) {
-      if (credit > debit) {
-        amount = credit - debit;
-        kind = "income";
-      } else if (debit > credit) {
-        amount = debit - credit;
-        kind = "expense";
-      }
     } else if (signedAmount !== null) {
       amount = Math.abs(signedAmount);
       kind = signedAmount < 0 ? "expense" : "income";
-    }
-
-    if (amount === null || !kind) {
+    } else {
       const directionKind = directionIndex >= 0 ? inferKindFromDirection(row[directionIndex] ?? "") : null;
       if (signedAmount !== null && directionKind) {
         amount = Math.abs(signedAmount);
@@ -507,24 +505,30 @@ const inferTransactionsHeuristically = (
     const nameParts = descriptionIndexes
       .map((index) => row[index] ?? "")
       .map((value) => value.trim())
-      .filter((value) => value.length > 0 && !looksLikeNoiseDescription(value));
+      .filter(Boolean);
     const name = nameParts[0] ?? "";
     if (!name) continue;
 
     const comment = nameParts.slice(1).join(" · ") || null;
-    const currencyCode =
-      currencyIndex >= 0
-        ? normalizeCurrencyCode(row[currencyIndex] ?? "")
-        : "DKK";
+    const normalizedMerchant = normalizeMerchantContext({ kind, name, comment });
 
     transactions.push({
       kind,
       name,
       amount: Math.round(amount * 100) / 100,
-      currencyCode,
+      currencyCode: currencyIndex >= 0 ? normalizeCurrencyCode(row[currencyIndex] ?? "") : "DKK",
       categoryId: null,
       comment,
       occurredOn: normalizeDate(occurredOn, fallbackDate),
+      rawText: name,
+      message: null,
+      transactionType: directionIndex >= 0 ? normalizeNullableText(row[directionIndex] ?? "") : null,
+      sender: null,
+      receiver: null,
+      bankCategory: null,
+      normalizedMerchant: normalizedMerchant || null,
+      suggestedSharedTopup: kind === "expense" && normalizedMerchant === "revolut",
+      categorySource: null,
     });
   }
 
@@ -566,6 +570,17 @@ const parseTransactions = (
           ? objectRow.categoryId
           : null;
       const kind = objectRow.kind === "income" ? "income" : "expense";
+      const rawText = normalizeNullableText(objectRow.rawText) ?? name;
+      const message = normalizeNullableText(objectRow.message);
+      const comment = normalizeNullableText(objectRow.comment);
+      const normalizedMerchant = normalizeMerchantContext({
+        kind,
+        name,
+        comment,
+        rawText,
+        message,
+        sender: normalizeNullableText(objectRow.sender),
+      });
 
       return {
         kind,
@@ -573,8 +588,20 @@ const parseTransactions = (
         amount,
         currencyCode: normalizeCurrencyCode(objectRow.currencyCode),
         categoryId,
-        comment: normalizeComment(objectRow.comment),
+        comment,
         occurredOn: normalizeDate(objectRow.occurredOn, fallbackDate),
+        rawText,
+        message,
+        transactionType: normalizeNullableText(objectRow.transactionType),
+        sender: normalizeNullableText(objectRow.sender),
+        receiver: normalizeNullableText(objectRow.receiver),
+        bankCategory: normalizeNullableText(objectRow.bankCategory),
+        normalizedMerchant: normalizedMerchant || null,
+        suggestedSharedTopup:
+          typeof objectRow.suggestedSharedTopup === "boolean"
+            ? objectRow.suggestedSharedTopup
+            : kind === "expense" && normalizedMerchant === "revolut",
+        categorySource: categoryId ? "llm" : null,
       };
     })
     .filter((row): row is ParsedTransaction => Boolean(row));
@@ -595,7 +622,6 @@ Deno.serve(async (req: Request) => {
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
   const authHeader = req.headers.get("Authorization");
   if (!supabaseUrl || !anonKey || !authHeader) {
-    console.warn("[parse-transaction-csv] Missing auth configuration or Authorization header.");
     return errorJson("Unauthorized", 401);
   }
 
@@ -606,23 +632,13 @@ Deno.serve(async (req: Request) => {
     },
   }).catch(() => null);
   if (!authResponse?.ok) {
-    console.warn("[parse-transaction-csv] Auth validation failed.", {
-      status: authResponse?.status ?? null,
-    });
     return errorJson("Unauthorized", 401);
-  }
-
-  const key = Deno.env.get("GROQ_API_KEY");
-  if (!key) {
-    console.error("[parse-transaction-csv] GROQ_API_KEY is missing.");
-    return errorJson("AI provider is not configured", 503);
   }
 
   let body: Body;
   try {
     body = await req.json();
   } catch {
-    console.warn("[parse-transaction-csv] Invalid JSON body.");
     return errorJson("Invalid request body", 400);
   }
 
@@ -632,40 +648,45 @@ Deno.serve(async (req: Request) => {
   const today = typeof body.today === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.today) ? body.today : "1970-01-01";
 
   if (!csvText || candidates.length === 0) {
-    console.warn("[parse-transaction-csv] Missing required input.");
     return errorJson("CSV contents and category options are required", 400);
   }
 
-  const validCategoryIds = new Set(candidates.map((candidate) => candidate.id));
+  const bankExportTransactions = parseBankExport(csvText, today, candidates);
+  if (bankExportTransactions.length > 0) {
+    console.info("[parse-transaction-csv] Parsed dedicated bank export format.", {
+      count: bankExportTransactions.length,
+      fileName,
+    });
+    return json({ transactions: bankExportTransactions });
+  }
+
   const heuristicTransactions = inferTransactionsHeuristically(csvText, today);
   if (heuristicTransactions.length > 0) {
     console.info("[parse-transaction-csv] Returning heuristic CSV parse result.", {
       count: heuristicTransactions.length,
+      fileName,
     });
     return json({ transactions: heuristicTransactions });
+  }
+
+  const key = Deno.env.get("GROQ_API_KEY");
+  if (!key) {
+    return errorJson("AI provider is not configured", 503);
   }
 
   const candidateList = candidates
     .map((candidate, index) => `${index + 1}. ${candidate.parent} / ${candidate.name} [${candidate.id}]`)
     .join("\n");
+  const validCategoryIds = new Set(candidates.map((candidate) => candidate.id));
 
   const prompt = [
-    "You are parsing a bank statement CSV into actual app transactions.",
-    "Read the CSV carefully and create one transaction per completed statement row.",
-    "Ignore balance-only rows, opening/closing balance rows, headers, totals, empty lines, and duplicate summary rows.",
-    "Bank CSVs may use comma, semicolon, tab, or pipe delimiters.",
-    "Dates may be ISO, DD/MM/YYYY, DD-MM-YYYY, or similar localized formats.",
-    "Amounts may be signed in one column or split into debit and credit columns.",
-    "Treat money received as income and money spent as expense.",
-    "Return positive amounts only. Determine kind from the statement direction/sign.",
-    "Prefer the merchant/payee/description for the transaction name.",
-    "If a note or reference is useful, put it into comment, otherwise return null.",
+    "You are parsing a bank statement CSV into app transactions.",
+    "Prefer deterministic extraction from the CSV. Do not invent rows or aggregate balances.",
     "Return strict JSON only with this shape:",
-    '{"transactions":[{"kind":"expense","name":"string","amount":12.34,"currencyCode":"DKK","categoryId":"uuid-or-null","comment":"string-or-null","occurredOn":"YYYY-MM-DD"}]}',
-    "Use only category ids from the candidate list.",
-    "If the category is unclear for an expense, return null for categoryId.",
-    "If the CSV date is unclear, use the provided fallback date.",
-    "If the currency is not present, infer it from the statement if obvious, otherwise use DKK.",
+    '{"transactions":[{"kind":"expense","name":"string","amount":12.34,"currencyCode":"DKK","categoryId":"uuid-or-null","comment":"string-or-null","occurredOn":"YYYY-MM-DD","rawText":"string-or-null","message":"string-or-null","transactionType":"string-or-null","sender":"string-or-null","receiver":"string-or-null","bankCategory":"string-or-null","suggestedSharedTopup":false}]}',
+    "If the expense category is unclear, return null for categoryId.",
+    "If the row is an obvious salary, interest, benefit, or transfer income, you may set categoryId.",
+    "Keep rawText equal to the bank's original merchant/description text when available.",
     `Fallback date: ${today}`,
     fileName ? `Filename: ${fileName}` : "Filename: unknown.csv",
     `Candidate categories:\n${candidateList}`,
@@ -674,10 +695,6 @@ Deno.serve(async (req: Request) => {
   ].join("\n\n");
 
   try {
-    console.info("[parse-transaction-csv] Invoking Groq.", {
-      candidateCount: candidates.length,
-      csvChars: csvText.length,
-    });
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -687,12 +704,12 @@ Deno.serve(async (req: Request) => {
       body: JSON.stringify({
         model: "meta-llama/llama-4-scout-17b-16e-instruct",
         temperature: 0,
-        max_tokens: 1400,
+        max_tokens: 1600,
         messages: [
           {
             role: "system",
             content:
-              'Return strict JSON only in the shape {"transactions":[{"kind":"expense","name":"string","amount":12.34,"currencyCode":"DKK","categoryId":"uuid-or-null","comment":"string-or-null","occurredOn":"YYYY-MM-DD"}]}.',
+              'Return strict JSON only in the shape {"transactions":[{"kind":"expense","name":"string","amount":12.34,"currencyCode":"DKK","categoryId":"uuid-or-null","comment":"string-or-null","occurredOn":"YYYY-MM-DD","rawText":"string-or-null","message":"string-or-null","transactionType":"string-or-null","sender":"string-or-null","receiver":"string-or-null","bankCategory":"string-or-null","suggestedSharedTopup":false}]}.',
           },
           {
             role: "user",
@@ -715,9 +732,6 @@ Deno.serve(async (req: Request) => {
     const payload = await response.json();
     const text: string = payload?.choices?.[0]?.message?.content ?? "";
     const transactions = parseTransactions(text, today, validCategoryIds);
-    console.info("[parse-transaction-csv] Groq returned transactions.", {
-      count: transactions.length,
-    });
     return json({ transactions });
   } catch (error) {
     console.error("[parse-transaction-csv] Unexpected Groq error.", error);

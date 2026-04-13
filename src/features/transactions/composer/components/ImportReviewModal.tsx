@@ -1,11 +1,11 @@
-import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ScreenHeader } from '@/ui/ScreenHeader';
 import { CategorySheet } from '@/features/categories/CategorySheet';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
-import { findOtherIncomeCategoryOption } from '@/features/categories/rules';
+import { findOtherIncomeCategoryOption, normalizeIncomeCategoryOption } from '@/features/categories/rules';
 import type { CategoryOption } from '@/features/categories/types';
 import type { ImportedTransactionDraft, SkippedImportedTransaction } from '@/features/transactions/imageImport';
 import { useImportReviewState } from '@/features/transactions/composer/hooks/useImportReviewState';
@@ -14,6 +14,25 @@ import { ImportReviewTransactionCard } from './ImportReviewTransactionCard';
 type BudgetIndicator = {
   tone: 'neutral' | 'warning' | 'critical';
   label: string;
+};
+
+const hasValidImportedAmount = (value: string): boolean => {
+  const normalized = value.trim().replace(',', '.');
+  if (!normalized) return false;
+  const numeric = Number(normalized);
+  return Number.isFinite(numeric) && numeric > 0;
+};
+
+const isReadyToSaveRow = (row: ImportedTransactionDraft, categoryOptions: readonly CategoryOption[]): boolean => {
+  if (row.name.trim().length === 0) return false;
+  if (!hasValidImportedAmount(row.amount)) return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(row.occurredOn.trim())) return false;
+
+  const selectedCategory = categoryOptions.find((option) => option.id === row.categoryId) ?? null;
+  const resolvedCategory =
+    row.kind === 'income' ? normalizeIncomeCategoryOption(selectedCategory, categoryOptions) : selectedCategory;
+
+  return resolvedCategory !== null;
 };
 
 type Props = {
@@ -49,7 +68,7 @@ export function ImportReviewModal({
   onChangeRow,
   onRemoveRow,
 }: Props) {
-  const canSave = rows.length > 0 && !saving;
+  const hasRows = rows.length > 0;
   const visibleSkippedDuplicates = skippedDuplicates.slice(0, 4);
   const incomeFallbackCategoryId = findOtherIncomeCategoryOption(categoryOptions)?.id ?? null;
   const {
@@ -74,7 +93,7 @@ export function ImportReviewModal({
     categoryOptions,
     onChangeRow,
   });
-  const canSaveImport = canSave && !isCategorizing;
+  const canSaveImport = hasRows && !saving && !isCategorizing && rows.every((row) => isReadyToSaveRow(row, categoryOptions));
   const visibleErrorMessage = errorMessage ?? categorizationErrorMessage;
 
   return (
@@ -85,7 +104,7 @@ export function ImportReviewModal({
           onBack={onClose}
           title="Review import"
           subtitle={`${rows.length} ${rows.length === 1 ? 'transaction' : 'transactions'}`}
-          actions={[{ icon: 'check', onPress: onSave, disabled: !canSaveImport }]}
+          actions={[{ icon: 'check', onPress: onSave, disabled: !canSaveImport, tone: canSaveImport ? 'accent' : 'default' }]}
         />
 
         <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -93,7 +112,7 @@ export function ImportReviewModal({
 
           {isCategorizing ? (
             <View style={styles.statusNotice}>
-              <MaterialCommunityIcons name="creation-outline" size={18} color={colors.textMuted} />
+              <ActivityIndicator size="small" color={colors.textMuted} />
               <Text style={styles.statusNoticeText}>Categorizing transactions...</Text>
             </View>
           ) : null}
@@ -154,13 +173,13 @@ export function ImportReviewModal({
           <Pressable
             style={({ pressed }) => [
               styles.saveButton,
-              (!canSaveImport || pressed) && styles.rowPressed,
-              !canSaveImport && styles.saveButtonDisabled,
+              canSaveImport ? styles.saveButtonReady : styles.saveButtonDisabled,
+              canSaveImport && pressed && styles.rowPressed,
             ]}
             onPress={onSave}
             disabled={!canSaveImport}
           >
-            <Text style={styles.saveButtonText}>
+            <Text style={[styles.saveButtonText, !canSaveImport && styles.saveButtonTextDisabled]}>
               {saving
                 ? 'Saving...'
                 : isCategorizing
@@ -258,12 +277,20 @@ const styles = StyleSheet.create({
   saveButton: {
     marginTop: spacing.sm,
     borderRadius: radius.pill,
-    backgroundColor: colors.accent,
+    borderWidth: 1,
     paddingVertical: spacing.lg,
     alignItems: 'center',
   },
-  saveButtonDisabled: { opacity: 0.55 },
+  saveButtonReady: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  saveButtonDisabled: {
+    backgroundColor: colors.surfaceAlt,
+    borderColor: colors.border,
+  },
   saveButtonText: { ...typography.body, color: colors.text, fontWeight: '700' },
+  saveButtonTextDisabled: { color: colors.textMuted },
   rowPressed: { opacity: 0.86 },
   pickerOverlay: {
     flex: 1,

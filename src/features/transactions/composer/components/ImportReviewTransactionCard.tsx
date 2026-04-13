@@ -1,12 +1,12 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { NumericKeypad } from '@/ui/NumericKeypad';
-import { SkeletonBlock } from '@/ui/Skeleton';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 import { formatDateLabel } from '@/lib/format';
 import { getCategoryDisplayColor } from '@/features/categories/helpers';
 import { isAllowedIncomeCategoryOption, isIncomeCategoryOption } from '@/features/categories/rules';
 import type { CategoryOption } from '@/features/categories/types';
+import { formatMerchantCategorySource } from '@/features/transactions/suggestions';
 import type { ImportedTransactionDraft } from '@/features/transactions/imageImport';
 import {
   TransactionCurrencySelector,
@@ -98,10 +98,10 @@ export function ImportReviewTransactionCard({
       <TransactionFieldLabel>Category</TransactionFieldLabel>
       {categoryLoading ? (
         <View style={styles.categorySkeletonField}>
-          <View style={styles.categorySkeletonLeading}>
-            <SkeletonBlock width={18} height={18} radius={radius.pill} />
+          <View style={styles.categorySpinnerLeading}>
+            <ActivityIndicator size="small" color={colors.textMuted} />
           </View>
-          <SkeletonBlock width="54%" height={14} radius={radius.sm} />
+          <Text style={styles.categoryLoadingText}>Categorizing...</Text>
         </View>
       ) : (
         <TransactionPickerField
@@ -114,6 +114,14 @@ export function ImportReviewTransactionCard({
           onPress={onOpenCategoryPicker}
         />
       )}
+      {!categoryLoading && category && row.categorySource ? (
+        <Text style={styles.categoryMeta}>
+          {formatMerchantCategorySource(row.categorySource)}
+          {typeof row.categoryConfidence === 'number'
+            ? ` · ${Math.round(row.categoryConfidence * 100)}%`
+            : ''}
+        </Text>
+      ) : null}
 
       <TransactionFieldLabel>Amount</TransactionFieldLabel>
       <TransactionPickerField
@@ -219,7 +227,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
-  categorySkeletonLeading: {
+  categorySpinnerLeading: {
     width: 28,
     height: 28,
     borderRadius: radius.pill,
@@ -227,6 +235,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  categoryLoadingText: { ...typography.body, color: colors.textMuted },
   noteInput: { minHeight: 76, textAlignVertical: 'top' },
+  categoryMeta: { ...typography.label, color: colors.textMuted, marginTop: -spacing.xs },
   rowPressed: { opacity: 0.86 },
 });

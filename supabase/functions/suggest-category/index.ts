@@ -1,11 +1,11 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {
-  findMobilePayCategoryId,
-  isMobilePayCategoryId,
-  resolveHardcodedCategoryId,
+  normalizeAsciiText,
+  normalizeMerchantContext,
+  resolveCuratedCategoryId,
   type Candidate,
   type TransactionKind,
-} from "./categorization";
+} from "../_shared/merchant-intelligence";
 
 declare const Deno: {
   env: {
@@ -20,45 +20,60 @@ declare const console: {
   error: (...args: unknown[]) => void;
 };
 
-type HistoryItem = {
-  name?: string;
+type RankedCandidate = {
   categoryId?: string;
-  kind?: TransactionKind;
+  source?: "rule" | "memory_exact" | "memory_fuzzy";
+  confidence?: number;
+  canonicalMerchant?: string | null;
+  matchedPattern?: string | null;
+  similarity?: number | null;
+  observationCount?: number | null;
+  supportRatio?: number | null;
+  isSharedTopup?: boolean;
 };
 
 type BatchInputRow = {
   id?: string;
+  kind?: TransactionKind;
   name?: string;
   comment?: string | null;
-  kind?: TransactionKind;
+  rawText?: string | null;
+  message?: string | null;
+  transactionType?: string | null;
+  sender?: string | null;
+  receiver?: string | null;
+  bankCategory?: string | null;
+  normalizedMerchant?: string | null;
+  deterministicCandidates?: RankedCandidate[];
 };
 
 type Body = {
+  kind?: TransactionKind;
   name?: string;
   comment?: string | null;
+  rawText?: string | null;
+  message?: string | null;
+  transactionType?: string | null;
+  sender?: string | null;
+  receiver?: string | null;
+  bankCategory?: string | null;
+  normalizedMerchant?: string | null;
+  deterministicCandidates?: RankedCandidate[];
   rows?: BatchInputRow[];
   candidates?: Candidate[];
-  history?: HistoryItem[];
 };
 
 type SuggestResult = {
   categoryId: string | null;
   confidence: number;
+  isSharedTopup: boolean;
 };
 
 type BatchSuggestResult = {
   id: string;
   categoryId: string;
   confidence: number;
-};
-
-type SuggestErrorBody = SuggestResult & {
-  error?: string;
-};
-
-type BatchResponseBody = {
-  results: BatchSuggestResult[];
-  error?: string;
+  isSharedTopup: boolean;
 };
 
 type GroqResponsePayload = {
@@ -69,7 +84,14 @@ type GroqResponsePayload = {
   }[];
 };
 
-type NormalizedBatchRow = Required<Pick<BatchInputRow, "id" | "name" | "comment" | "kind">>;
+type NormalizedBatchRow = Required<
+  Pick<
+    BatchInputRow,
+    "id" | "kind" | "name" | "comment" | "rawText" | "message" | "transactionType" | "sender" | "receiver" | "bankCategory" | "normalizedMerchant"
+  >
+> & {
+  deterministicCandidates: RankedCandidate[];
+};
 
 const jsonSingle = (body: SuggestResult, init?: ResponseInit): Response =>
   new Response(JSON.stringify(body), {
@@ -80,7 +102,7 @@ const jsonSingle = (body: SuggestResult, init?: ResponseInit): Response =>
     },
   });
 
-const jsonBatch = (body: BatchResponseBody, init?: ResponseInit): Response =>
+const jsonBatch = (body: { results: BatchSuggestResult[]; error?: string }, init?: ResponseInit): Response =>
   new Response(JSON.stringify(body), {
     ...init,
     headers: {
@@ -90,7 +112,7 @@ const jsonBatch = (body: BatchResponseBody, init?: ResponseInit): Response =>
   });
 
 const errorJsonSingle = (message: string, status: number): Response =>
-  new Response(JSON.stringify({ categoryId: null, confidence: 0, error: message } satisfies SuggestErrorBody), {
+  new Response(JSON.stringify({ categoryId: null, confidence: 0, isSharedTopup: false, error: message }), {
     status,
     headers: {
       "Content-Type": "application/json",
@@ -102,104 +124,28 @@ const clamp = (value: number): number => Math.max(0, Math.min(1, value));
 const wait = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
-const normalizeLookupPattern = (value: string): string =>
-  value
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[æÆ]/g, "ae")
-    .replace(/[øØ]/g, "o")
-    .replace(/[åÅ]/g, "a")
-    .toLowerCase()
-    .replace(/\bmobilepay\b/g, " ")
-    .replace(/\bmob\s*pay\b/g, " ")
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .replace(/[0-9]+/g, "#")
-    .replace(/\s+/g, " ")
-    .trim();
+const mentionMobilePay = (value: string): boolean =>
+  /\bmobilepay\b|\bmob pay\b|\bmp\b/.test(normalizeAsciiText(value));
 
-const mentionMobilePay = (value: string): boolean => {
-  const normalized = value
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-  return /mobilepay|mob\s*\.?\s*pay|\bmp\b/.test(normalized);
-};
+const findMobilePayCategoryId = (candidates: readonly Candidate[]): string | null =>
+  candidates.find(
+    (candidate) =>
+      candidate.parent.trim().toLowerCase() === "transfers" &&
+      candidate.name.trim().toLowerCase() === "mobilepay",
+  )?.id ?? null;
 
-const invokeGroq = async ({
-  key,
-  prompt,
-  maxTokens,
-  model = "meta-llama/llama-4-scout-17b-16e-instruct",
-  timeoutMs = 5200,
-}: {
-  key: string;
-  prompt: string;
-  maxTokens: number;
-  model?: string;
-  timeoutMs?: number;
-}): Promise<{ text: string | null; degraded: boolean }> => {
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const attemptTimeoutMs = attempt === 0 ? timeoutMs : Math.round(timeoutMs * 1.4);
+const isMobilePayCategoryId = (
+  categoryId: string | null | undefined,
+  candidates: readonly Candidate[],
+): boolean => categoryId === findMobilePayCategoryId(candidates);
 
-    try {
-      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${key}`,
-        },
-        body: JSON.stringify({
-          model,
-          temperature: 0,
-          max_tokens: maxTokens,
-          messages: [
-            {
-              role: "system",
-              content: "Return strict JSON only.",
-            },
-            { role: "user", content: prompt },
-          ],
-        }),
-        signal: AbortSignal.timeout(attemptTimeoutMs),
-      });
-
-      if (!response.ok) {
-        const responseText = await response.text().catch(() => "");
-        console.error("[suggest-category] Groq request failed.", {
-          attempt: attempt + 1,
-          status: response.status,
-          statusText: response.statusText,
-          body: responseText.slice(0, 400),
-        });
-
-        if (attempt === 0 && response.status >= 500) {
-          await wait(120);
-          continue;
-        }
-
-        return { text: null, degraded: true };
-      }
-
-      const payload = (await response.json()) as GroqResponsePayload;
-      return {
-        text: payload?.choices?.[0]?.message?.content ?? "",
-        degraded: false,
-      };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error("[suggest-category] Unexpected Groq error.", {
-        attempt: attempt + 1,
-        message,
-      });
-
-      if (attempt === 0) {
-        await wait(120);
-        continue;
-      }
-    }
+const toNumber = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
   }
-
-  return { text: null, degraded: true };
+  return null;
 };
 
 const parseSingleResult = (text: string, candidates: readonly Candidate[]): SuggestResult => {
@@ -214,22 +160,13 @@ const parseSingleResult = (text: string, candidates: readonly Candidate[]): Sugg
         typeof parsed.categoryId === "string" && candidates.some((candidate) => candidate.id === parsed.categoryId)
           ? parsed.categoryId
           : null;
-      const confidence =
-        typeof parsed.confidence === "number" && Number.isFinite(parsed.confidence)
-          ? clamp(parsed.confidence)
-          : 0;
-      return { categoryId, confidence: categoryId ? confidence : 0 };
+      const confidence = clamp(toNumber(parsed.confidence) ?? 0);
+      return { categoryId, confidence: categoryId ? confidence : 0, isSharedTopup: false };
     } catch {
-      // Fall through to regex parsing.
+      return { categoryId: null, confidence: 0, isSharedTopup: false };
     }
   }
-
-  const idMatch = text.match(/\[([0-9a-f-]{36})\]/i);
-  const categoryId = idMatch?.[1] ?? null;
-  if (!categoryId || !candidates.some((candidate) => candidate.id === categoryId)) {
-    return { categoryId: null, confidence: 0 };
-  }
-  return { categoryId, confidence: 0.6 };
+  return { categoryId: null, confidence: 0, isSharedTopup: false };
 };
 
 const parseBatchResults = (text: string, validCategoryIds: Set<string>): BatchSuggestResult[] => {
@@ -264,271 +201,206 @@ const parseBatchResults = (text: string, validCategoryIds: Set<string>): BatchSu
     parsed.push({
       id,
       categoryId,
-      confidence:
-        typeof objectRow.confidence === "number" && Number.isFinite(objectRow.confidence)
-          ? clamp(objectRow.confidence)
-          : 0.4,
+      confidence: clamp(toNumber(objectRow.confidence) ?? 0),
+      isSharedTopup: Boolean(objectRow.isSharedTopup),
     });
   }
 
   return parsed;
 };
 
-const chooseBestCategoryId = (counts: Map<string, number>): string | null => {
-  let bestCategoryId: string | null = null;
-  let bestCount = 0;
-
-  for (const [categoryId, count] of counts) {
-    if (count > bestCount) {
-      bestCategoryId = categoryId;
-      bestCount = count;
-    }
-  }
-
-  return bestCategoryId;
-};
-
-const findHistoryMatchCategoryId = ({
-  name,
-  comment,
-  kind,
-  history,
-  validCategoryIds,
+const invokeGroq = async ({
+  key,
+  prompt,
+  maxTokens,
+  model = "meta-llama/llama-4-scout-17b-16e-instruct",
+  timeoutMs = 5200,
 }: {
-  name: string;
-  comment?: string | null;
-  kind: TransactionKind;
-  history: HistoryItem[];
-  validCategoryIds: Set<string>;
-}): string | null => {
-  const query = normalizeLookupPattern([name, comment ?? ""].join(" "));
-  if (query.length < 2) return null;
-
-  const exactCounts = new Map<string, number>();
-  const fuzzyCounts = new Map<string, number>();
-
-  for (const row of history) {
-    const categoryId = typeof row.categoryId === "string" ? row.categoryId : null;
-    if (!categoryId || !validCategoryIds.has(categoryId)) continue;
-    if (row.kind && row.kind !== kind) continue;
-
-    const historyName = typeof row.name === "string" ? row.name : "";
-    const historyPattern = normalizeLookupPattern(historyName);
-    if (!historyPattern) continue;
-
-    if (historyPattern === query) {
-      exactCounts.set(categoryId, (exactCounts.get(categoryId) ?? 0) + 1);
-    }
-    if (historyPattern.includes(query) || query.includes(historyPattern)) {
-      fuzzyCounts.set(categoryId, (fuzzyCounts.get(categoryId) ?? 0) + 1);
-    }
-  }
-
-  return chooseBestCategoryId(exactCounts) ?? chooseBestCategoryId(fuzzyCounts);
-};
-
-const shouldRejectMobilePayProposal = ({
-  name,
-  comment,
-  categoryId,
-  confidence,
-  candidates,
-}: {
-  name: string;
-  comment?: string | null;
-  categoryId: string | null;
-  confidence: number;
-  candidates: readonly Candidate[];
-}): boolean => {
-  if (!isMobilePayCategoryId(categoryId, candidates)) return false;
-
-  const fullText = [name, comment ?? ""].join(" ").trim();
-  if (!mentionMobilePay(fullText)) return true;
-
-  return confidence < 0.7;
-};
-
-const acceptSuggestion = ({
-  name,
-  comment,
-  kind,
-  parsed,
-  candidates,
-  history,
-}: {
-  name: string;
-  comment?: string | null;
-  kind: TransactionKind;
-  parsed: SuggestResult | null;
-  candidates: readonly Candidate[];
-  history: readonly HistoryItem[];
-}): SuggestResult => {
-  const hardcoded = resolveHardcodedCategoryId({ kind, name, comment, candidates });
-  if (hardcoded) {
-    return { categoryId: hardcoded.categoryId, confidence: hardcoded.confidence };
-  }
-
-  const validCategoryIds = new Set(candidates.map((candidate) => candidate.id));
-  const historyMatchCategoryId = findHistoryMatchCategoryId({
-    name,
-    comment,
-    kind,
-    history: [...history],
-    validCategoryIds,
-  });
-
-  if (
-    parsed?.categoryId &&
-    !shouldRejectMobilePayProposal({
-      name,
-      comment,
-      categoryId: parsed.categoryId,
-      confidence: parsed.confidence,
-      candidates,
-    }) &&
-    (parsed.confidence >= 0.58 || historyMatchCategoryId === parsed.categoryId)
-  ) {
-    return {
-      categoryId: parsed.categoryId,
-      confidence: historyMatchCategoryId === parsed.categoryId ? Math.max(parsed.confidence, 0.78) : parsed.confidence,
-    };
-  }
-
-  if (historyMatchCategoryId) {
-    return { categoryId: historyMatchCategoryId, confidence: 0.72 };
-  }
-
-  return { categoryId: null, confidence: 0 };
-};
-
-const repairBatchResults = ({
-  rows,
-  parsedResults,
-  candidates,
-  history,
-}: {
-  rows: NormalizedBatchRow[];
-  parsedResults: BatchSuggestResult[];
-  candidates: readonly Candidate[];
-  history: readonly HistoryItem[];
-}): BatchSuggestResult[] => {
-  const validCategoryIds = new Set(candidates.map((candidate) => candidate.id));
-  const parsedById = new Map(parsedResults.map((result) => [result.id, result]));
-
-  return rows
-    .map((row): BatchSuggestResult | null => {
-      const hardcoded = resolveHardcodedCategoryId({
-        kind: row.kind,
-        name: row.name,
-        comment: row.comment,
-        candidates,
+  key: string;
+  prompt: string;
+  maxTokens: number;
+  model?: string;
+  timeoutMs?: number;
+}): Promise<{ text: string | null; degraded: boolean }> => {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${key}`,
+        },
+        body: JSON.stringify({
+          model,
+          temperature: 0,
+          max_tokens: maxTokens,
+          messages: [
+            {
+              role: "system",
+              content: "Return strict JSON only.",
+            },
+            { role: "user", content: prompt },
+          ],
+        }),
+        signal: AbortSignal.timeout(attempt === 0 ? timeoutMs : Math.round(timeoutMs * 1.4)),
       });
-      if (hardcoded) {
-        return {
-          id: row.id,
-          categoryId: hardcoded.categoryId,
-          confidence: hardcoded.confidence,
-        };
-      }
 
-      const parsed = parsedById.get(row.id);
-      if (
-        parsed &&
-        validCategoryIds.has(parsed.categoryId) &&
-        !shouldRejectMobilePayProposal({
-          name: row.name,
-          comment: row.comment,
-          categoryId: parsed.categoryId,
-          confidence: parsed.confidence,
-          candidates,
-        })
-      ) {
-        const historyMatchCategoryId = findHistoryMatchCategoryId({
-          name: row.name,
-          comment: row.comment,
-          kind: row.kind,
-          history: [...history],
-          validCategoryIds,
+      if (!response.ok) {
+        const responseText = await response.text().catch(() => "");
+        console.error("[suggest-category] Groq request failed.", {
+          attempt: attempt + 1,
+          status: response.status,
+          body: responseText.slice(0, 400),
         });
-        if (parsed.confidence >= 0.58 || historyMatchCategoryId === parsed.categoryId) {
-          return {
-            id: row.id,
-            categoryId: parsed.categoryId,
-            confidence:
-              historyMatchCategoryId === parsed.categoryId
-                ? Math.max(parsed.confidence, 0.78)
-                : parsed.confidence,
-          };
+        if (attempt === 0 && response.status >= 500) {
+          await wait(120);
+          continue;
         }
+        return { text: null, degraded: true };
       }
 
-      const historyMatchCategoryId = findHistoryMatchCategoryId({
-        name: row.name,
-        comment: row.comment,
-        kind: row.kind,
-        history: [...history],
-        validCategoryIds,
-      });
-      if (!historyMatchCategoryId) return null;
-
+      const payload = (await response.json()) as GroqResponsePayload;
       return {
-        id: row.id,
-        categoryId: historyMatchCategoryId,
-        confidence: 0.72,
+        text: payload?.choices?.[0]?.message?.content ?? "",
+        degraded: false,
       };
-    })
-    .filter((row): row is BatchSuggestResult => Boolean(row));
+    } catch (error) {
+      console.error("[suggest-category] Unexpected Groq error.", {
+        attempt: attempt + 1,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      if (attempt === 0) {
+        await wait(120);
+        continue;
+      }
+    }
+  }
+
+  return { text: null, degraded: true };
 };
 
-const buildHistoryList = (history: readonly HistoryItem[], candidates: readonly Candidate[], limit: number): string =>
-  history
-    .map((item) => {
-      const historyName = (item.name ?? "").trim();
-      const categoryId = typeof item.categoryId === "string" ? item.categoryId : "";
-      const match = candidates.find((candidate) => candidate.id === categoryId);
-      if (!historyName || !match) return null;
-      const kindLabel = item.kind ? ` (${item.kind})` : "";
-      return `- ${historyName}${kindLabel} -> ${match.parent} / ${match.name} [${match.id}]`;
+const formatDeterministicCandidates = (
+  deterministicCandidates: readonly RankedCandidate[],
+  candidates: readonly Candidate[],
+): string => {
+  if (deterministicCandidates.length === 0) return "(none)";
+
+  return deterministicCandidates
+    .slice(0, 4)
+    .map((item, index) => {
+      const category = candidates.find((candidate) => candidate.id === item.categoryId);
+      if (!category) return null;
+      const details = [
+        `source=${item.source ?? "unknown"}`,
+        typeof item.confidence === "number" ? `confidence=${item.confidence.toFixed(2)}` : null,
+        typeof item.similarity === "number" ? `similarity=${item.similarity.toFixed(2)}` : null,
+        typeof item.supportRatio === "number" ? `support=${item.supportRatio.toFixed(2)}` : null,
+        typeof item.observationCount === "number" ? `seen=${item.observationCount}` : null,
+      ]
+        .filter(Boolean)
+        .join(", ");
+      return `${index + 1}. ${category.parent} / ${category.name} [${category.id}] (${details})`;
     })
     .filter((item): item is string => Boolean(item))
-    .slice(0, limit)
     .join("\n");
+};
 
-const buildBatchPrompt = ({
-  rows,
+const buildSinglePrompt = ({
+  row,
   candidates,
-  history,
 }: {
-  rows: readonly NormalizedBatchRow[];
+  row: Omit<NormalizedBatchRow, "id">;
   candidates: readonly Candidate[];
-  history: readonly HistoryItem[];
 }): string => {
   const candidateList = candidates
     .map((candidate, index) => `${index + 1}. ${candidate.parent} / ${candidate.name} [${candidate.id}]`)
     .join("\n");
-  const historyList = buildHistoryList(history, candidates, 24);
+
+  return [
+    "You categorize financial transactions that already passed a deterministic merchant rules engine.",
+    'Return strict JSON only: {"categoryId":"uuid-or-null","confidence":0.0,"isSharedTopup":false}',
+    "You are only handling unresolved leftovers. Be strict and return null when unsure.",
+    "Use the merchant or service brand as the primary clue, not the payment rail.",
+    "Anti-patterns you must avoid:",
+    "1. Do not assign MobilePay just because text contains MobilePay or Mob.Pay.",
+    "2. If a clear merchant exists, categorize the merchant, not the rail.",
+    "3. Apple.com/BILL is an Apple subscription or bill, not MobilePay.",
+    "4. Easy Park is parking.",
+    "5. OiSTER and Lebara are phone providers.",
+    "6. Banken Food Hall is a restaurant expense.",
+    "7. Revolut, Monobank, and TransferGo are transfers, not MobilePay.",
+    "8. LONOVERFORSEL is salary income. SU is benefits. Interest is interest income.",
+    `Kind: ${row.kind}`,
+    `Name: ${row.name}`,
+    `Raw text: ${row.rawText || "(none)"}`,
+    `Comment: ${row.comment || "(none)"}`,
+    `Message: ${row.message || "(none)"}`,
+    `Transaction type: ${row.transactionType || "(none)"}`,
+    `Sender: ${row.sender || "(none)"}`,
+    `Receiver: ${row.receiver || "(none)"}`,
+    `Bank category hint: ${row.bankCategory || "(none)"}`,
+    `Normalized merchant: ${row.normalizedMerchant || "(none)"}`,
+    `Top deterministic candidates:\n${formatDeterministicCandidates(row.deterministicCandidates, candidates)}`,
+    `Allowed categories:\n${candidateList}`,
+  ].join("\n\n");
+};
+
+const buildSingleVerifierPrompt = ({
+  row,
+  draft,
+  candidates,
+}: {
+  row: Omit<NormalizedBatchRow, "id">;
+  draft: SuggestResult;
+  candidates: readonly Candidate[];
+}): string => {
+  const category = draft.categoryId ? candidates.find((candidate) => candidate.id === draft.categoryId) ?? null : null;
+  const proposedLabel = category ? `${category.parent} / ${category.name} [${category.id}]` : "null";
+
+  return [
+    "You are verifying one draft category assignment for a bank transaction.",
+    'Return strict JSON only: {"categoryId":"uuid-or-null","confidence":0.0,"isSharedTopup":false}',
+    "Keep correct assignments, fix obvious mistakes, or return null if it still looks uncertain.",
+    "Be especially strict with MobilePay. It is only correct for real peer-to-peer MobilePay transfers.",
+    `Name: ${row.name}`,
+    `Raw text: ${row.rawText || "(none)"}`,
+    `Message: ${row.message || "(none)"}`,
+    `Transaction type: ${row.transactionType || "(none)"}`,
+    `Sender: ${row.sender || "(none)"}`,
+    `Receiver: ${row.receiver || "(none)"}`,
+    `Bank category hint: ${row.bankCategory || "(none)"}`,
+    `Normalized merchant: ${row.normalizedMerchant || "(none)"}`,
+    `Draft assignment: ${proposedLabel}; confidence=${draft.confidence.toFixed(2)}`,
+  ].join("\n\n");
+};
+
+const buildBatchPrompt = ({
+  rows,
+  candidates,
+}: {
+  rows: readonly NormalizedBatchRow[];
+  candidates: readonly Candidate[];
+}): string => {
+  const candidateList = candidates
+    .map((candidate, index) => `${index + 1}. ${candidate.parent} / ${candidate.name} [${candidate.id}]`)
+    .join("\n");
+
   const rowList = rows
     .map(
       (row, index) =>
-        `${index + 1}. id=${row.id}; kind=${row.kind}; name=${row.name || "(empty)"}; comment=${row.comment || "(none)"}`,
+        `${index + 1}. id=${row.id}; kind=${row.kind}; name=${row.name}; rawText=${row.rawText || "(none)"}; message=${row.message || "(none)"}; type=${row.transactionType || "(none)"}; sender=${row.sender || "(none)"}; receiver=${row.receiver || "(none)"}; bankCategory=${row.bankCategory || "(none)"}; normalizedMerchant=${row.normalizedMerchant || "(none)"}; candidates=${formatDeterministicCandidates(row.deterministicCandidates, candidates)}`,
     )
-    .join("\n");
-  const mobilePayId = findMobilePayCategoryId(candidates);
+    .join("\n\n");
 
   return [
-    "You categorize imported financial transactions.",
-    'Return strict JSON only: {"results":[{"id":"row-id","categoryId":"uuid","confidence":0.0}]}',
-    "Only include rows you can classify with reasonable confidence. Omit uncertain rows entirely.",
-    "Use the merchant or service name as the primary clue. History is supporting context, not the only signal.",
-    "Do not assign MobilePay just because a string contains MobilePay or Mob.Pay. MobilePay is only for actual peer-to-peer MobilePay transfers.",
-    "If a clear merchant or brand is present, categorize the merchant, not the payment rail.",
-    "Salary descriptors like LONOVERFORSEL or LONOVERFOERSEL belong to Income / Salary.",
-    "Easy Park is parking. Oister is a phone provider. Apple.com/BILL is a merchant bill, not MobilePay. Banken Food Hall is Food / Restaurants. Monobank or Revolut transfers belong to Transfers / Transfer when available.",
-    mobilePayId ? `MobilePay category id: ${mobilePayId}` : "MobilePay category id: (not available)",
+    "You categorize unresolved financial transactions after deterministic merchant intelligence already ran.",
+    'Return strict JSON only: {"results":[{"id":"row-id","categoryId":"uuid","confidence":0.0,"isSharedTopup":false}]}',
+    "Only include rows you can classify with very high confidence.",
+    "Never use MobilePay for merchants or service bills.",
+    "Easy Park is parking. OiSTER and Lebara are phone providers. Apple is subscriptions. Banken Food Hall is restaurants. Revolut, Monobank, and TransferGo are transfers.",
     `Rows:\n${rowList}`,
-    `Past categorized examples:\n${historyList || "(none)"}`,
-    `Candidates:\n${candidateList}`,
-  ].join("\n");
+    `Allowed categories:\n${candidateList}`,
+  ].join("\n\n");
 };
 
 const buildBatchVerifierPrompt = ({
@@ -542,84 +414,120 @@ const buildBatchVerifierPrompt = ({
 }): string => {
   const candidateById = new Map(candidates.map((candidate) => [candidate.id, candidate]));
   const draftList = draftResults
-    .map((result, index) => {
+    .map((result) => {
       const row = rows.find((item) => item.id === result.id);
       const category = candidateById.get(result.categoryId);
       if (!row || !category) return null;
-      return `${index + 1}. id=${row.id}; kind=${row.kind}; name=${row.name}; comment=${row.comment || "(none)"}; proposed=${category.parent} / ${category.name} [${category.id}]; confidence=${result.confidence.toFixed(2)}`;
+      return `id=${row.id}; name=${row.name}; rawText=${row.rawText || "(none)"}; normalizedMerchant=${row.normalizedMerchant}; proposed=${category.parent} / ${category.name} [${category.id}]; confidence=${result.confidence.toFixed(2)}`;
     })
     .filter((item): item is string => Boolean(item))
     .join("\n");
 
   return [
-    "You are verifying draft category assignments for imported financial transactions.",
-    'Return strict JSON only: {"results":[{"id":"row-id","categoryId":"uuid","confidence":0.0}]}',
-    "Keep correct assignments, fix obvious mistakes, and omit any row that still looks uncertain.",
-    "Be especially strict with MobilePay: keep it only for actual peer-to-peer MobilePay transfers, never for merchants or service bills that happened to be paid through MobilePay.",
-    "Easy Park must be parking. Oister must be Household / Phone. Apple.com/BILL is not MobilePay. Banken Food Hall is Food / Restaurants. Monobank and Revolut transfers are Transfers / Transfer when available. Salary descriptors are Income / Salary.",
+    "You are verifying draft category assignments for unresolved bank transactions.",
+    'Return strict JSON only: {"results":[{"id":"row-id","categoryId":"uuid","confidence":0.0,"isSharedTopup":false}]}',
+    "Keep correct assignments, fix obvious mistakes, and omit any row that is still uncertain.",
+    "Be very conservative with MobilePay. It only belongs to real person-to-person transfers.",
     `Draft assignments:\n${draftList || "(none)"}`,
-  ].join("\n");
+  ].join("\n\n");
 };
 
-const buildSinglePrompt = ({
-  name,
-  comment,
-  candidates,
-  history,
-}: {
-  name: string;
-  comment: string;
-  candidates: readonly Candidate[];
-  history: readonly HistoryItem[];
-}): string => {
-  const candidateList = candidates
-    .map((candidate, index) => `${index + 1}. ${candidate.parent} / ${candidate.name} [${candidate.id}]`)
-    .join("\n");
-  const historyList = buildHistoryList(history, candidates, 12);
-  const mobilePayId = findMobilePayCategoryId(candidates);
-
-  return [
-    "You categorize spending transactions.",
-    'Return strict JSON only: {"categoryId":"uuid-or-null","confidence":0.0}',
-    "Return null when the category is not clear enough.",
-    "Use the merchant or service name as the primary clue. History is supporting context.",
-    "Do not assign MobilePay just because the text contains MobilePay or Mob.Pay. MobilePay is only for actual peer-to-peer MobilePay transfers.",
-    "If a clear merchant or brand is present, categorize the merchant, not the payment rail.",
-    "Salary descriptors like LONOVERFORSEL or LONOVERFOERSEL belong to Income / Salary.",
-    "Easy Park is parking. Oister is a phone provider. Apple.com/BILL is a merchant bill, not MobilePay. Banken Food Hall is Food / Restaurants. Monobank or Revolut transfers belong to Transfers / Transfer when available.",
-    mobilePayId ? `MobilePay category id: ${mobilePayId}` : "MobilePay category id: (not available)",
-    `Transaction name: ${name}`,
-    `Comment: ${comment || "(none)"}`,
-    `Past categorized examples:\n${historyList || "(none)"}`,
-    `Candidates:\n${candidateList}`,
-  ].join("\n");
-};
-
-const buildSingleVerifierPrompt = ({
-  name,
-  comment,
-  draft,
+const shouldRejectMobilePayProposal = ({
+  row,
+  categoryId,
+  confidence,
   candidates,
 }: {
-  name: string;
-  comment: string;
-  draft: SuggestResult;
+  row: Omit<NormalizedBatchRow, "id">;
+  categoryId: string | null;
+  confidence: number;
   candidates: readonly Candidate[];
-}): string => {
-  const category = draft.categoryId ? candidates.find((candidate) => candidate.id === draft.categoryId) ?? null : null;
-  const proposedLabel = category ? `${category.parent} / ${category.name} [${category.id}]` : "null";
+}): boolean => {
+  if (!isMobilePayCategoryId(categoryId, candidates)) return false;
 
-  return [
-    "You are verifying one draft category assignment for a transaction.",
-    'Return strict JSON only: {"categoryId":"uuid-or-null","confidence":0.0}',
-    "Keep correct assignments, fix obvious mistakes, and return null if it still looks uncertain.",
-    "Be especially strict with MobilePay: keep it only for actual peer-to-peer MobilePay transfers, never for merchants or service bills.",
-    "Easy Park must be parking. Oister must be Household / Phone. Apple.com/BILL is not MobilePay. Banken Food Hall is Food / Restaurants. Monobank and Revolut transfers are Transfers / Transfer when available. Salary descriptors are Income / Salary.",
-    `Transaction name: ${name}`,
-    `Comment: ${comment || "(none)"}`,
-    `Draft assignment: ${proposedLabel}; confidence=${draft.confidence.toFixed(2)}`,
-  ].join("\n");
+  const combinedText = [row.name, row.rawText, row.message, row.comment].filter(Boolean).join(" ");
+  if (!mentionMobilePay(combinedText)) return true;
+  if (row.normalizedMerchant && row.normalizedMerchant !== "mobilepay") return true;
+
+  return confidence < 0.92;
 };
+
+const finalizeSuggestion = ({
+  row,
+  parsed,
+  candidates,
+}: {
+  row: Omit<NormalizedBatchRow, "id">;
+  parsed: SuggestResult | null;
+  candidates: readonly Candidate[];
+}): SuggestResult => {
+  const curated = resolveCuratedCategoryId({
+    context: {
+      kind: row.kind,
+      name: row.name,
+      comment: row.comment,
+      rawText: row.rawText,
+      message: row.message,
+      sender: row.sender,
+    },
+    candidates,
+  });
+  if (curated) {
+    return {
+      categoryId: curated.categoryId,
+      confidence: curated.confidence,
+      isSharedTopup: row.normalizedMerchant === "revolut",
+    };
+  }
+
+  if (!parsed?.categoryId) {
+    return { categoryId: null, confidence: 0, isSharedTopup: false };
+  }
+
+  if (shouldRejectMobilePayProposal({ row, categoryId: parsed.categoryId, confidence: parsed.confidence, candidates })) {
+    return { categoryId: null, confidence: 0, isSharedTopup: false };
+  }
+
+  const topDeterministic = row.deterministicCandidates[0];
+  if (
+    topDeterministic?.categoryId &&
+    parsed.categoryId !== topDeterministic.categoryId &&
+    (topDeterministic.confidence ?? 0) >= 0.8 &&
+    parsed.confidence < 0.96
+  ) {
+    return { categoryId: null, confidence: 0, isSharedTopup: false };
+  }
+
+  return {
+    categoryId: parsed.categoryId,
+    confidence: clamp(parsed.confidence),
+    isSharedTopup: parsed.isSharedTopup ?? row.normalizedMerchant === "revolut",
+  };
+};
+
+const normalizeSingleRow = (body: Body): Omit<NormalizedBatchRow, "id"> => ({
+  kind: body.kind === "income" ? "income" : "expense",
+  name: typeof body.name === "string" ? body.name.trim() : "",
+  comment: typeof body.comment === "string" ? body.comment.trim() : "",
+  rawText: typeof body.rawText === "string" && body.rawText.trim().length > 0 ? body.rawText.trim() : typeof body.name === "string" ? body.name.trim() : "",
+  message: typeof body.message === "string" ? body.message.trim() : "",
+  transactionType: typeof body.transactionType === "string" ? body.transactionType.trim() : "",
+  sender: typeof body.sender === "string" ? body.sender.trim() : "",
+  receiver: typeof body.receiver === "string" ? body.receiver.trim() : "",
+  bankCategory: typeof body.bankCategory === "string" ? body.bankCategory.trim() : "",
+  normalizedMerchant:
+    typeof body.normalizedMerchant === "string" && body.normalizedMerchant.trim().length > 0
+      ? body.normalizedMerchant.trim()
+      : normalizeMerchantContext({
+          kind: body.kind === "income" ? "income" : "expense",
+          name: typeof body.name === "string" ? body.name.trim() : "",
+          comment: typeof body.comment === "string" ? body.comment.trim() : "",
+          rawText: typeof body.rawText === "string" ? body.rawText.trim() : typeof body.name === "string" ? body.name.trim() : "",
+          message: typeof body.message === "string" ? body.message.trim() : "",
+          sender: typeof body.sender === "string" ? body.sender.trim() : "",
+        }),
+  deterministicCandidates: Array.isArray(body.deterministicCandidates) ? body.deterministicCandidates : [],
+});
 
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") {
@@ -630,7 +538,6 @@ Deno.serve(async (req: Request) => {
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
   const authHeader = req.headers.get("Authorization");
   if (!supabaseUrl || !anonKey || !authHeader) {
-    console.warn("[suggest-category] Missing auth configuration or Authorization header.");
     return errorJsonSingle("Unauthorized", 401);
   }
 
@@ -641,9 +548,6 @@ Deno.serve(async (req: Request) => {
     },
   }).catch(() => null);
   if (!authResponse?.ok) {
-    console.warn("[suggest-category] Auth validation failed.", {
-      status: authResponse?.status ?? null,
-    });
     return errorJsonSingle("Unauthorized", 401);
   }
 
@@ -651,59 +555,55 @@ Deno.serve(async (req: Request) => {
   try {
     body = await req.json();
   } catch {
-    console.warn("[suggest-category] Invalid JSON body.");
     return errorJsonSingle("Invalid request body", 400);
   }
 
   const candidates = Array.isArray(body.candidates) ? body.candidates : [];
-  const history = Array.isArray(body.history) ? body.history : [];
   if (candidates.length === 0) {
-    console.warn("[suggest-category] Missing candidate categories.");
     return errorJsonSingle("Candidates are required", 400);
   }
+
+  const key = Deno.env.get("GROQ_API_KEY");
 
   const batchRows: NormalizedBatchRow[] = Array.isArray(body.rows)
     ? body.rows
         .map((row): NormalizedBatchRow => ({
           id: typeof row.id === "string" ? row.id : "",
+          kind: row.kind === "income" ? "income" : "expense",
           name: typeof row.name === "string" ? row.name.trim() : "",
           comment: typeof row.comment === "string" ? row.comment.trim() : "",
-          kind: row.kind === "income" ? "income" : "expense",
+          rawText: typeof row.rawText === "string" && row.rawText.trim().length > 0 ? row.rawText.trim() : typeof row.name === "string" ? row.name.trim() : "",
+          message: typeof row.message === "string" ? row.message.trim() : "",
+          transactionType: typeof row.transactionType === "string" ? row.transactionType.trim() : "",
+          sender: typeof row.sender === "string" ? row.sender.trim() : "",
+          receiver: typeof row.receiver === "string" ? row.receiver.trim() : "",
+          bankCategory: typeof row.bankCategory === "string" ? row.bankCategory.trim() : "",
+          normalizedMerchant:
+            typeof row.normalizedMerchant === "string" && row.normalizedMerchant.trim().length > 0
+              ? row.normalizedMerchant.trim()
+              : normalizeMerchantContext({
+                  kind: row.kind === "income" ? "income" : "expense",
+                  name: typeof row.name === "string" ? row.name.trim() : "",
+                  comment: typeof row.comment === "string" ? row.comment.trim() : "",
+                  rawText: typeof row.rawText === "string" ? row.rawText.trim() : typeof row.name === "string" ? row.name.trim() : "",
+                  message: typeof row.message === "string" ? row.message.trim() : "",
+                  sender: typeof row.sender === "string" ? row.sender.trim() : "",
+                }),
+          deterministicCandidates: Array.isArray(row.deterministicCandidates) ? row.deterministicCandidates : [],
         }))
-        .filter((row) => row.id.length > 0)
+        .filter((row) => row.id.length > 0 && row.name.length > 0)
     : [];
-
-  const key = Deno.env.get("GROQ_API_KEY");
 
   if (batchRows.length > 0) {
     if (!key) {
-      console.warn("[suggest-category] GROQ_API_KEY is missing for batch mode. Returning deterministic-only results.");
-      return jsonBatch({
-        results: repairBatchResults({
-          rows: batchRows,
-          parsedResults: [],
-          candidates,
-          history,
-        }),
-      });
+      return jsonBatch({ results: [] });
     }
 
     try {
-      console.info("[suggest-category] Invoking Groq batch categorization.", {
-        candidateCount: candidates.length,
-        historyCount: history.length,
-        rowCount: batchRows.length,
-      });
-
-      const firstPassPrompt = buildBatchPrompt({
-        rows: batchRows,
-        candidates,
-        history,
-      });
       const firstPass = await invokeGroq({
         key,
-        prompt: firstPassPrompt,
-        maxTokens: 720,
+        prompt: buildBatchPrompt({ rows: batchRows, candidates }),
+        maxTokens: 900,
         timeoutMs: 6200,
       });
       const firstPassResults =
@@ -711,119 +611,114 @@ Deno.serve(async (req: Request) => {
           ? parseBatchResults(firstPass.text, new Set(candidates.map((candidate) => candidate.id)))
           : [];
 
-      const verifierPrompt = buildBatchVerifierPrompt({
-        rows: batchRows,
-        draftResults: firstPassResults,
-        candidates,
-      });
-      const secondPass = await invokeGroq({
-        key,
-        prompt: verifierPrompt,
-        maxTokens: 720,
-        timeoutMs: 6200,
-      });
-      const hasSecondPassResults = !secondPass.degraded && secondPass.text !== null;
-      const secondPassResults = hasSecondPassResults
-        ? parseBatchResults(secondPass.text!, new Set(candidates.map((candidate) => candidate.id)))
-        : [];
+      const allHighConfidence =
+        firstPassResults.length > 0 &&
+        firstPassResults.length >= batchRows.length &&
+        firstPassResults.every((r) => r.confidence >= 0.96);
 
-      const repairedResults = repairBatchResults({
-        rows: batchRows,
-        parsedResults: hasSecondPassResults ? secondPassResults : firstPassResults,
-        candidates,
-        history,
-      });
+      const verifiedResults = allHighConfidence
+        ? firstPassResults
+        : await (async () => {
+            const secondPass = await invokeGroq({
+              key,
+              prompt: buildBatchVerifierPrompt({ rows: batchRows, draftResults: firstPassResults, candidates }),
+              maxTokens: 900,
+              timeoutMs: 6200,
+            });
+            return !secondPass.degraded && secondPass.text !== null
+              ? parseBatchResults(secondPass.text, new Set(candidates.map((candidate) => candidate.id)))
+              : firstPassResults;
+          })();
 
-      return jsonBatch({ results: repairedResults });
+      const finalized = batchRows
+        .map((row) => {
+          const parsed = verifiedResults.find((result) => result.id === row.id) ?? null;
+          const finalizedSingle = finalizeSuggestion({
+            row,
+            parsed,
+            candidates,
+          });
+          if (!finalizedSingle.categoryId || finalizedSingle.confidence < 0.92) return null;
+          return {
+            id: row.id,
+            categoryId: finalizedSingle.categoryId,
+            confidence: finalizedSingle.confidence,
+            isSharedTopup: finalizedSingle.isSharedTopup ?? row.normalizedMerchant === "revolut",
+          };
+        })
+        .filter((row): row is BatchSuggestResult => Boolean(row));
+
+      return jsonBatch({ results: finalized });
     } catch (error) {
       console.error("[suggest-category] Unexpected batch Groq error.", error);
-      return jsonBatch({
-        results: repairBatchResults({
-          rows: batchRows,
-          parsedResults: [],
-          candidates,
-          history,
-        }),
-      });
+      return jsonBatch({ results: [] });
     }
   }
 
-  const name = (body.name ?? "").trim();
-  const comment = (body.comment ?? "").trim();
-  if (name.length === 0) {
-    console.warn("[suggest-category] Missing required input.", {
-      hasName: false,
-      candidateCount: candidates.length,
-    });
-    return jsonSingle({ categoryId: null, confidence: 0 });
+  const row = normalizeSingleRow(body);
+  if (!row.name) {
+    return jsonSingle({ categoryId: null, confidence: 0, isSharedTopup: false });
   }
 
-  const hardcoded = resolveHardcodedCategoryId({
-    kind: "expense",
-    name,
-    comment,
+  const curated = resolveCuratedCategoryId({
+    context: {
+      kind: row.kind,
+      name: row.name,
+      comment: row.comment,
+      rawText: row.rawText,
+      message: row.message,
+      sender: row.sender,
+    },
     candidates,
   });
-  if (hardcoded) {
+  if (curated) {
     return jsonSingle({
-      categoryId: hardcoded.categoryId,
-      confidence: hardcoded.confidence,
+      categoryId: curated.categoryId,
+      confidence: curated.confidence,
+      isSharedTopup: row.normalizedMerchant === "revolut",
     });
   }
 
   if (!key) {
-    console.error("[suggest-category] GROQ_API_KEY is missing.");
     return errorJsonSingle("AI provider is not configured", 503);
   }
 
   try {
-    console.info("[suggest-category] Invoking Groq.", {
-      candidateCount: candidates.length,
-      historyCount: history.length,
-      hasComment: comment.length > 0,
-      nameLength: name.length,
-    });
-
-    const firstPassPrompt = buildSinglePrompt({
-      name,
-      comment,
-      candidates,
-      history,
-    });
     const firstPass = await invokeGroq({
       key,
-      prompt: firstPassPrompt,
-      maxTokens: 180,
+      prompt: buildSinglePrompt({ row, candidates }),
+      maxTokens: 220,
       timeoutMs: 4200,
     });
     const firstPassResult =
       !firstPass.degraded && firstPass.text !== null ? parseSingleResult(firstPass.text, candidates) : null;
 
-    const secondPassPrompt = buildSingleVerifierPrompt({
-      name,
-      comment,
-      draft: firstPassResult ?? { categoryId: null, confidence: 0 },
+    const skipVerifier = firstPassResult !== null && firstPassResult.confidence >= 0.96;
+
+    const secondPassResult = skipVerifier
+      ? firstPassResult
+      : await (async () => {
+          const secondPass = await invokeGroq({
+            key,
+            prompt: buildSingleVerifierPrompt({
+              row,
+              draft: firstPassResult ?? { categoryId: null, confidence: 0, isSharedTopup: false },
+              candidates,
+            }),
+            maxTokens: 220,
+            timeoutMs: 4200,
+          });
+          return !secondPass.degraded && secondPass.text !== null
+            ? parseSingleResult(secondPass.text, candidates)
+            : firstPassResult;
+        })();
+
+    const finalized = finalizeSuggestion({
+      row,
+      parsed: secondPassResult,
       candidates,
     });
-    const secondPass = await invokeGroq({
-      key,
-      prompt: secondPassPrompt,
-      maxTokens: 180,
-      timeoutMs: 4200,
-    });
-    const hasSecondPassResult = !secondPass.degraded && secondPass.text !== null;
-    const secondPassResult = hasSecondPassResult ? parseSingleResult(secondPass.text!, candidates) : null;
-
-    const accepted = acceptSuggestion({
-      name,
-      comment,
-      kind: "expense",
-      parsed: hasSecondPassResult ? secondPassResult : firstPassResult,
-      candidates,
-      history,
-    });
-
-    return jsonSingle(accepted);
+    return jsonSingle(finalized);
   } catch (error) {
     console.error("[suggest-category] Unexpected Groq error.", error);
     return errorJsonSingle("AI provider request failed", 502);

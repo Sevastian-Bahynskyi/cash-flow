@@ -1,4 +1,5 @@
 import { supabase, supabaseFunctionsUrl, supabasePublishableKey } from '@/lib/supabase';
+import type { MerchantCategorySource } from './merchantIntelligence';
 import type { TransactionKind } from './types';
 
 export type ImportedTransactionDraft = {
@@ -10,6 +11,16 @@ export type ImportedTransactionDraft = {
   categoryId: string | null;
   comment: string;
   occurredOn: string;
+  rawText: string;
+  message: string;
+  transactionType: string;
+  sender: string;
+  receiver: string;
+  bankCategory: string;
+  normalizedMerchant: string;
+  categorySource: MerchantCategorySource | null;
+  categoryConfidence: number | null;
+  suggestedSharedTopup: boolean;
 };
 
 export type SkippedImportedTransaction = {
@@ -30,6 +41,15 @@ type ImportResponse = {
     categoryId?: unknown;
     comment?: unknown;
     occurredOn?: unknown;
+    rawText?: unknown;
+    message?: unknown;
+    transactionType?: unknown;
+    sender?: unknown;
+    receiver?: unknown;
+    bankCategory?: unknown;
+    normalizedMerchant?: unknown;
+    suggestedSharedTopup?: unknown;
+    categorySource?: unknown;
   }[];
   error?: string;
 };
@@ -201,6 +221,9 @@ const normalizeName = (value: unknown): string => {
 const normalizeComment = (value: unknown): string =>
   typeof value === 'string' ? value.trim() : '';
 
+const normalizeOptionalText = (value: unknown): string =>
+  typeof value === 'string' ? value.trim() : '';
+
 const toAmountMinor = (value: string): number | null => {
   const numeric = Number(value);
   if (!Number.isFinite(numeric) || numeric <= 0) return null;
@@ -232,12 +255,13 @@ const buildDrafts = ({
           ? row.categoryId
           : null;
       const suggestedCategory = suggestedCategoryId ? categoriesById.get(suggestedCategoryId) ?? null : null;
+      const parserCategorySource = typeof row.categorySource === 'string' ? row.categorySource : null;
       const categoryId =
         normalizeKind(row.kind) === 'income'
           ? suggestedCategory && isAllowedIncomeCategoryCandidate(suggestedCategory)
             ? suggestedCategory.id
             : otherIncomeCategoryId
-          : trustExpenseCategorySuggestions
+          : trustExpenseCategorySuggestions || parserCategorySource === 'curated'
             ? suggestedCategoryId
             : null;
       return {
@@ -249,6 +273,16 @@ const buildDrafts = ({
         categoryId,
         comment: normalizeComment(row.comment),
         occurredOn: normalizeOccurredOn(row.occurredOn, fallbackDate),
+        rawText: normalizeOptionalText(row.rawText) || normalizeName(row.name),
+        message: normalizeOptionalText(row.message),
+        transactionType: normalizeOptionalText(row.transactionType),
+        sender: normalizeOptionalText(row.sender),
+        receiver: normalizeOptionalText(row.receiver),
+        bankCategory: normalizeOptionalText(row.bankCategory),
+        normalizedMerchant: normalizeOptionalText(row.normalizedMerchant),
+        categorySource: categoryId ? 'rule' : null,
+        categoryConfidence: categoryId ? 0.99 : null,
+        suggestedSharedTopup: Boolean(row.suggestedSharedTopup),
       };
     })
     .filter((row): row is ImportedTransactionDraft => Boolean(row));
