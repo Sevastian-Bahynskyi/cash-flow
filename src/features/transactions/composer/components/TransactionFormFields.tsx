@@ -14,9 +14,14 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { CategoryIcon } from '@/ui/CategoryIcon';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 import { currencyOptions } from '@/lib/currency';
-import type { TransactionKind } from '@/features/transactions/types';
+import type { SharedParticipant, TransactionKind } from '@/features/transactions/types';
 
 type FieldVariant = 'page' | 'card';
+
+const sharedTopupParticipantOptions: readonly { value: SharedParticipant; label: string }[] = [
+  { value: 'me', label: 'Me' },
+  { value: 'gf', label: 'GF' },
+] as const;
 
 const fieldBackgroundColor = (variant: FieldVariant): string =>
   variant === 'page' ? colors.surface : colors.bg;
@@ -32,15 +37,18 @@ export function TransactionKindSelector({
   value,
   onChange,
   variant = 'page',
+  incomeDisabled = false,
 }: {
   value: TransactionKind;
   onChange: (value: TransactionKind) => void;
   variant?: FieldVariant;
+  incomeDisabled?: boolean;
 }) {
   return (
     <View style={styles.kindRow}>
       {(['expense', 'income'] as const).map((option) => {
         const active = value === option;
+        const disabled = option === 'income' && incomeDisabled;
         return (
           <Pressable
             key={option}
@@ -49,10 +57,21 @@ export function TransactionKindSelector({
               { backgroundColor: chipBackgroundColor(variant) },
               active && styles.kindChipActive,
               pressed && styles.rowPressed,
+              disabled && styles.kindChipDisabled,
             ]}
-            onPress={() => onChange(option)}
+            disabled={disabled}
+            onPress={() => {
+              if (disabled) return;
+              onChange(option);
+            }}
           >
-            <Text style={[styles.kindChipText, active && styles.kindChipTextActive]}>
+            <Text
+              style={[
+                styles.kindChipText,
+                active && styles.kindChipTextActive,
+                disabled && styles.kindChipTextDisabled,
+              ]}
+            >
               {option === 'expense' ? 'Expense' : 'Income'}
             </Text>
           </Pressable>
@@ -134,7 +153,7 @@ export function TransactionCurrencySelector({
 
   return (
     <>
-      <View style={styles.currencySelectorWrap}>
+      <View style={[styles.currencySelectorWrap, appearance === 'pill' && styles.currencySelectorWrapPill]}>
         <Pressable
           ref={triggerRef}
           style={({ pressed }) => [
@@ -208,6 +227,152 @@ export function TransactionCurrencySelector({
                       <Text style={styles.currencyOptionFlag}>{currency.flag}</Text>
                       <Text style={[styles.currencyOptionText, active && styles.currencyOptionTextActive]}>
                         {currency.label}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
+    </>
+  );
+}
+
+/** Me / GF picker for shared top-ups; same overlay pattern as `TransactionCurrencySelector`. */
+export function SharedTopupParticipantSelector({
+  value,
+  onChange,
+  onBeforeOpen,
+  variant = 'page',
+  appearance = 'inline',
+  dimmed = false,
+  active = false,
+  labelPrefix,
+}: {
+  value: SharedParticipant;
+  onChange: (value: SharedParticipant) => void;
+  onBeforeOpen?: () => void;
+  variant?: FieldVariant;
+  appearance?: 'pill' | 'inline';
+  dimmed?: boolean;
+  active?: boolean;
+  labelPrefix?: string;
+}) {
+  const triggerRef = useRef<View | null>(null);
+  const [open, setOpen] = useState(false);
+  const [anchor, setAnchor] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+
+  const selected = useMemo(() => {
+    const match = sharedTopupParticipantOptions.find((o) => o.value === value);
+    if (match) return match;
+    return sharedTopupParticipantOptions[0] as { value: SharedParticipant; label: string };
+  }, [value]);
+
+  useEffect(() => {
+    if (!open) return;
+    triggerRef.current?.measureInWindow((x, y, width, height) => {
+      setAnchor({ x, y, width, height });
+    });
+  }, [open]);
+
+  useEffect(() => {
+    setOpen(false);
+  }, [value]);
+
+  const openMenu = (): void => {
+    onBeforeOpen?.();
+    triggerRef.current?.measureInWindow((x, y, width, height) => {
+      setAnchor({ x, y, width, height });
+      setOpen(true);
+    });
+  };
+
+  const estimatedMenuWidth = 128;
+  const menuLeft = Math.max(
+    spacing.lg,
+    Math.min(anchor.x, screenWidth - estimatedMenuWidth - spacing.lg),
+  );
+  const menuTopBase = anchor.y + anchor.height + spacing.xs;
+  const estimatedMenuHeight = Math.min(sharedTopupParticipantOptions.length * 44 + spacing.sm * 2, 200);
+  const menuTop =
+    menuTopBase + estimatedMenuHeight <= screenHeight - spacing.lg
+      ? menuTopBase
+      : Math.max(spacing.lg, anchor.y - estimatedMenuHeight - spacing.xs);
+
+  return (
+    <>
+      <View style={[styles.currencySelectorWrap, appearance === 'pill' && styles.currencySelectorWrapPill]}>
+        <Pressable
+          ref={triggerRef}
+          style={({ pressed }) => [
+            appearance === 'inline'
+              ? [styles.currencyInlineTrigger, dimmed && styles.sharedTopupTriggerDimmed]
+              : [
+                  styles.currencyTrigger,
+                  { backgroundColor: chipBackgroundColor(variant) },
+                  (open || active) && styles.currencyTriggerOpen,
+                ],
+            pressed && styles.rowPressed,
+          ]}
+          onPress={openMenu}
+        >
+          <Text
+            style={[
+              appearance === 'inline' ? styles.currencyInlineTriggerText : styles.currencyTriggerText,
+              (open || active) && appearance === 'inline' && styles.currencyInlineTriggerTextOpen,
+              dimmed && appearance === 'inline' && styles.sharedTopupTriggerTextDimmed,
+            ]}
+          >
+            {labelPrefix ? `${labelPrefix}: ${selected.label}` : selected.label}
+          </Text>
+          <MaterialCommunityIcons
+            name={open ? 'chevron-up' : 'chevron-down'}
+            size={appearance === 'inline' ? 14 : 16}
+            color={(open || active) && appearance === 'inline' ? colors.text : colors.textMuted}
+          />
+        </Pressable>
+      </View>
+
+      <Modal transparent visible={open} animationType="fade" onRequestClose={() => setOpen(false)}>
+        <Pressable style={styles.currencyMenuBackdrop} onPress={() => setOpen(false)}>
+          <View
+            style={[
+              styles.currencyMenu,
+              {
+                top: menuTop,
+                left: menuLeft,
+                maxWidth: screenWidth - menuLeft - spacing.lg,
+                maxHeight: Math.max(120, screenHeight - menuTop - spacing.lg),
+              },
+            ]}
+          >
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.currencyMenuContent}
+            >
+              {sharedTopupParticipantOptions.map((option) => {
+                const active = value === option.value;
+                return (
+                  <Pressable
+                    key={option.value}
+                    style={({ pressed }) => [styles.currencyOptionPressable, pressed && styles.rowPressed]}
+                    onPress={() => {
+                      onChange(option.value);
+                      setOpen(false);
+                    }}
+                  >
+                    <View
+                      style={[
+                        styles.currencyOptionChip,
+                        { backgroundColor: chipBackgroundColor(variant) },
+                        active && styles.currencyOptionChipActive,
+                      ]}
+                    >
+                      <Text style={[styles.currencyOptionText, active && styles.currencyOptionTextActive]}>
+                        {labelPrefix ? `${labelPrefix}: ${option.label}` : option.label}
                       </Text>
                     </View>
                   </Pressable>
@@ -296,8 +461,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
   },
   kindChipActive: { backgroundColor: colors.accent },
+  kindChipDisabled: { opacity: 0.42 },
   kindChipText: { ...typography.label, color: colors.textMuted },
   kindChipTextActive: { color: colors.text },
+  kindChipTextDisabled: { color: colors.textMuted },
   input: {
     borderRadius: radius.md,
     paddingHorizontal: spacing.md,
@@ -306,6 +473,7 @@ const styles = StyleSheet.create({
     ...typography.body,
   },
   currencySelectorWrap: { alignSelf: 'flex-start', paddingVertical: spacing.xs },
+  currencySelectorWrapPill: { paddingVertical: 0 },
   currencyTrigger: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
@@ -384,6 +552,8 @@ const styles = StyleSheet.create({
   currencyOptionFlag: { fontSize: 14 },
   currencyOptionText: { ...typography.label, color: colors.textMuted },
   currencyOptionTextActive: { color: colors.text },
+  sharedTopupTriggerDimmed: { opacity: 0.72 },
+  sharedTopupTriggerTextDimmed: { color: colors.textMuted },
   fieldCard: {
     borderRadius: radius.md,
     paddingHorizontal: spacing.md,

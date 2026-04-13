@@ -102,7 +102,9 @@ function TransactionRowCard({
             <Text style={styles.name} numberOfLines={1}>
               {row.name}
             </Text>
-            <Text style={styles.amount}>{displayAmount}</Text>
+            <Text style={[styles.amount, row.kind === 'income' ? styles.amountIncome : styles.amountExpense]}>
+              {row.kind === 'income' ? '+' : '-'}{displayAmount}
+            </Text>
           </View>
           <View style={styles.rowMetaWrap}>
             <Text style={styles.meta} numberOfLines={1}>
@@ -111,12 +113,18 @@ function TransactionRowCard({
             <View style={styles.chips}>
               {row.shared ? (
                 <View style={styles.chip}>
-                  <Text style={styles.chipText}>Shared {row.shared_participant?.toUpperCase() ?? ''}</Text>
+                  <Text style={styles.chipText}>
+                    Shared expense
+                    {row.shared_participant ? ` · ${row.shared_participant === 'gf' ? 'GF' : 'Me'}` : ''}
+                  </Text>
                 </View>
               ) : null}
               {row.is_shared_topup ? (
                 <View style={styles.chip}>
-                  <Text style={styles.chipText}>Top-up</Text>
+                  <Text style={styles.chipText}>
+                    Shared top-up
+                    {row.shared_participant ? ` · ${row.shared_participant === 'gf' ? 'GF' : 'Me'}` : ''}
+                  </Text>
                 </View>
               ) : null}
             </View>
@@ -249,6 +257,8 @@ const styles = StyleSheet.create({
   rowTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   name: { ...typography.body, color: colors.text, flex: 1, fontWeight: '600' },
   amount: { ...typography.body, color: colors.text },
+  amountIncome: { color: colors.success, fontWeight: '700' },
+  amountExpense: { color: colors.danger, fontWeight: '700' },
   rowMetaWrap: { gap: 6 },
   meta: { ...typography.label, color: colors.textMuted },
   chips: { flexDirection: 'row', gap: spacing.xs, flexWrap: 'wrap' },

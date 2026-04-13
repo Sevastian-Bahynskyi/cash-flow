@@ -28,6 +28,7 @@ import type { CategoryOption } from '@/features/categories/types';
 import {
   findSalaryCategoryOption,
   findOtherIncomeCategoryOption,
+  findSharedTopupCategoryOption,
   normalizeIncomeCategoryOption,
   isAllowedIncomeCategoryOption,
   isIncomeCategoryOption,
@@ -55,6 +56,7 @@ import { fetchTransferPeople, normalizeTransferPersonName } from '@/features/tra
 import type { TransferPersonRow } from '@/features/transfers/types';
 import { ImportReviewModal } from '@/features/transactions/composer/components/ImportReviewModal';
 import {
+  SharedTopupParticipantSelector,
   TransactionCurrencySelector,
   TransactionFieldLabel,
   TransactionKindSelector,
@@ -297,6 +299,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
   );
 
   const editing = Boolean(draft?.id);
+  const sharedFlowLocked = Boolean(draft?.from_shared_screen && !draft?.id);
   const amountDisplayState = useMemo(() => highlightedAmount(amount), [amount]);
   const selectedIsSalary = isSalaryCategoryOption(category);
   const selectedIsMobilePay = isMobilePayCategoryOption(category);
@@ -372,9 +375,26 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
     setCountryPickerOpen(false);
     setKeypadOpen(true);
     setRecurring(nextDraft?.recurring ?? false);
-    setShared(nextDraft?.shared ?? false);
-    setSharedParticipant(nextDraft?.shared_participant ?? 'me');
-    setIsSharedTopup(nextDraft?.is_shared_topup ?? false);
+    const fromSharedCreate = Boolean(nextDraft?.from_shared_screen && !nextDraft?.id);
+    let nextShared = nextDraft?.shared ?? false;
+    let nextTopup = nextDraft?.is_shared_topup ?? false;
+    if (fromSharedCreate) {
+      if (nextDraft?.is_shared_topup) {
+        nextTopup = true;
+        nextShared = false;
+      } else if (nextDraft?.shared) {
+        nextShared = true;
+        nextTopup = false;
+      } else {
+        nextTopup = true;
+        nextShared = false;
+      }
+    }
+    setShared(nextShared);
+    setIsSharedTopup(nextTopup);
+    setSharedParticipant(
+      fromSharedCreate && nextShared && !nextTopup ? 'me' : (nextDraft?.shared_participant ?? 'me'),
+    );
     setPickerOpen(false);
     setValidationMessage(null);
     setUserTouchedCategory(Boolean(nextDraft?.category_id));
@@ -438,6 +458,14 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
       }
     }
   }, [categoryOptions, draft?.category, draft?.category_id, visible]);
+
+  useEffect(() => {
+    if (!visible || !isSharedTopup || categoryOptions.length === 0) return;
+    const next = findSharedTopupCategoryOption(categoryOptions);
+    if (!next) return;
+    setCategory(next);
+    setUserTouchedCategory(true);
+  }, [visible, isSharedTopup, categoryOptions]);
 
   useEffect(() => {
     if (!visible) return;
@@ -513,6 +541,11 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
     preferRemote?: boolean;
   } = {}): Promise<void> => {
     if (!visible || categoryOptions.length === 0) {
+      setSuggestion(null);
+      setIsSuggestingCategory(false);
+      return;
+    }
+    if (isSharedTopup) {
       setSuggestion(null);
       setIsSuggestingCategory(false);
       return;
@@ -965,8 +998,12 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
   };
 
   const handleSave = async (): Promise<void> => {
-    const resolvedCategory =
+    const baseResolved =
       kind === 'income' ? normalizeIncomeCategoryOption(category, categoryOptions) : category;
+    const resolvedCategory =
+      kind === 'expense' && isSharedTopup
+        ? findSharedTopupCategoryOption(categoryOptions) ?? baseResolved
+        : baseResolved;
 
     const originalAmountMinor = parseAmountMinor(amount);
     if (originalAmountMinor === null) {
@@ -1015,7 +1052,13 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
         recurring,
         shared: kind === 'expense' && !isSharedTopup ? shared : false,
         shared_participant:
-          kind === 'expense' && !isSharedTopup && shared ? sharedParticipant : null,
+          kind === 'expense' && isSharedTopup
+            ? sharedParticipant
+            : kind === 'expense' && shared
+              ? sharedFlowLocked
+                ? 'me'
+                : sharedParticipant
+              : null,
         is_salary: kind === 'income' && isSalaryCategoryOption(resolvedCategory),
         is_shared_topup: kind === 'expense' ? isSharedTopup : false,
         currency_code: currencyCode,
@@ -1076,9 +1119,15 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
         occurred_on: date,
         recurring,
         shared,
-        shared_participant: shared ? sharedParticipant : null,
+        shared_participant:
+          isSharedTopup || shared
+            ? shared && !isSharedTopup && sharedFlowLocked
+              ? 'me'
+              : sharedParticipant
+            : null,
         is_salary: kind === 'income' && isSalaryCategoryOption(resolvedCategory),
         is_shared_topup: isSharedTopup,
+        from_shared_screen: sharedFlowLocked ? true : undefined,
         country_iso: normalizeCountryIso(countryIso),
       };
 
@@ -1142,7 +1191,9 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
 
   const visibleCategoryLabel = category ? `${category.parentName} · ${category.name}` : 'Pick a category';
   const showSuggestionCard = Boolean(
-    suggestion && (!userTouchedCategory || !category || category.id !== suggestion.category.id),
+    !isSharedTopup &&
+      suggestion &&
+      (!userTouchedCategory || !category || category.id !== suggestion.category.id),
   );
 
   return (
@@ -1161,25 +1212,27 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
         </View>
 
         <View style={styles.amountHero}>
-          <TransactionKindSelector
-            value={kind}
-            onChange={(value) => {
-              if (value === 'expense') {
-                setKind('expense');
-                if (category && isIncomeCategoryOption(category)) {
-                  autoAppliedCategoryId.current = null;
-                  setCategory(null);
-                  setUserTouchedCategory(false);
+          {!sharedFlowLocked ? (
+            <TransactionKindSelector
+              value={kind}
+              onChange={(value) => {
+                if (value === 'expense') {
+                  setKind('expense');
+                  if (category && isIncomeCategoryOption(category)) {
+                    autoAppliedCategoryId.current = null;
+                    setCategory(null);
+                    setUserTouchedCategory(false);
+                  }
+                  return;
                 }
-                return;
-              }
 
-              setKind('income');
-              setShared(false);
-              setIsSharedTopup(false);
-              setCategory((current) => normalizeIncomeCategoryOption(current, categoryOptions));
-            }}
-          />
+                setKind('income');
+                setShared(false);
+                setIsSharedTopup(false);
+                setCategory((current) => normalizeIncomeCategoryOption(current, categoryOptions));
+              }}
+            />
+          ) : null}
           <Pressable
             style={({ pressed }) => [styles.amountFieldButton, pressed && styles.rowPressed]}
             onPress={toggleKeypad}
@@ -1230,8 +1283,9 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
           <TransactionFieldLabel>Category</TransactionFieldLabel>
           <TransactionPickerField
             text={category ? visibleCategoryLabel : ''}
-            placeholder="Pick a category"
+            placeholder={isSharedTopup ? 'Transfers · Top up' : 'Pick a category'}
             onPress={() => {
+              if (isSharedTopup) return;
               autoAppliedCategoryId.current = null;
               if (kind === 'income') {
                 setCategory((current) => normalizeIncomeCategoryOption(current, categoryOptions));
@@ -1344,44 +1398,47 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
             multiline
           />
 
-          <Text style={styles.label}>Options</Text>
-          <View style={styles.actionRow}>
-            <Pressable
-              style={({ pressed }) => [styles.toggleChip, recurring && styles.toggleChipActive, pressed && styles.rowPressed]}
-              onPress={() => setRecurring((current) => !current)}
-            >
-              <Text style={styles.toggleChipText}>Recurring</Text>
-            </Pressable>
-            {kind === 'expense' ? (
-              <>
+          {kind === 'expense' && sharedFlowLocked ? (
+            <>
+              <Text style={styles.label}>Options</Text>
+              <View style={styles.actionRow}>
                 <Pressable
-                  style={({ pressed }) => [styles.toggleChip, shared && styles.toggleChipActive, pressed && styles.rowPressed]}
+                  style={({ pressed }) => [
+                    styles.toggleChip,
+                    shared && !isSharedTopup && styles.toggleChipActive,
+                    pressed && styles.rowPressed,
+                  ]}
                   onPress={() => {
-                    setShared((current) => {
-                      const next = !current;
-                      if (next) setIsSharedTopup(false);
-                      return next;
-                    });
+                    setShared(true);
+                    setIsSharedTopup(false);
+                    setSharedParticipant('me');
+                    autoAppliedCategoryId.current = null;
+                    setCategory(null);
+                    setUserTouchedCategory(false);
                   }}
                 >
                   <Text style={styles.toggleChipText}>Shared expense</Text>
                 </Pressable>
-                <Pressable
-                  style={({ pressed }) => [styles.toggleChip, isSharedTopup && styles.toggleChipActive, pressed && styles.rowPressed]}
-                  onPress={() => {
-                    setIsSharedTopup((current) => {
-                      const next = !current;
-                      if (next) setShared(false);
-                      return next;
-                    });
+                <SharedTopupParticipantSelector
+                  value={sharedParticipant}
+                  active={isSharedTopup}
+                  appearance="pill"
+                  variant="card"
+                  labelPrefix="Top-up"
+                  onBeforeOpen={() => {
+                    setShared(false);
+                    setIsSharedTopup(true);
                   }}
-                >
-                  <Text style={styles.toggleChipText}>Shared top-up</Text>
-                </Pressable>
-              </>
-            ) : null}
-          </View>
-          {!editing ? (
+                  onChange={(next) => {
+                    setSharedParticipant(next);
+                    setShared(false);
+                    setIsSharedTopup(true);
+                  }}
+                />
+              </View>
+            </>
+          ) : null}
+          {!editing && !sharedFlowLocked ? (
             <View style={styles.importStack}>
               <Text style={[styles.label, { color: colors.accentAlt }]}>Import</Text>
               <Pressable
@@ -1424,7 +1481,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
             </View>
           ) : null}
 
-          {kind === 'expense' && shared && !isSharedTopup ? (
+          {kind === 'expense' && shared && !isSharedTopup && !sharedFlowLocked ? (
             <>
               <Text style={styles.label}>Shared participant</Text>
               <View style={styles.actionRow}>
@@ -1634,6 +1691,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
                           shared_participant: saveState.lastDraft.shared_participant,
                           is_salary: saveState.lastDraft.is_salary,
                           is_shared_topup: saveState.lastDraft.is_shared_topup,
+                          from_shared_screen: saveState.lastDraft.from_shared_screen,
                           country_iso: saveState.lastDraft.country_iso,
                         })
                       }
@@ -1797,8 +1855,15 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderRadius: radius.pill,
     backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  toggleChipActive: { backgroundColor: 'rgba(124,92,255,0.18)' },
+  toggleChipActive: {
+    backgroundColor: 'rgba(124,92,255,0.18)',
+    borderColor: colors.accent,
+  },
   toggleChipText: { ...typography.label, color: colors.text },
   validation: { ...typography.label, color: colors.danger, marginTop: spacing.sm },
   datePickerOverlay: {
