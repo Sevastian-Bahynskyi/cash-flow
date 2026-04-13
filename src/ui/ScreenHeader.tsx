@@ -9,6 +9,7 @@ type Action = {
   icon: string;
   onPress: () => void;
   disabled?: boolean;
+  tone?: 'default' | 'accent';
 };
 
 export function ScreenHeader({
@@ -69,7 +70,11 @@ export function ScreenHeader({
               hitSlop={12}
               style={[styles.iconButton, action.disabled && styles.iconButtonDisabled]}
             >
-              <MaterialCommunityIcons name={action.icon as never} size={20} color={colors.text} />
+              <MaterialCommunityIcons
+                name={action.icon as never}
+                size={20}
+                color={action.tone === 'accent' && !action.disabled ? colors.accent : colors.text}
+              />
             </Pressable>
           </MotionView>
         ))}

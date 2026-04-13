@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
@@ -8,6 +8,7 @@ import { useOverview, type BudgetAlert } from '@/features/overview/useOverview';
 import { useComposer } from '@/features/transactions/composer/context/ComposerContext';
 import { TransactionList } from '@/features/transactions/TransactionList';
 import { buildCategoryMeta, getCategoryMetaDisplayColor } from '@/features/categories/helpers';
+import { runDetached } from '@/lib/async';
 import { MotionScope } from '@/ui/MotionScope';
 import { MotionView } from '@/ui/MotionView';
 import { ProgressBar } from '@/ui/ProgressBar';
@@ -107,11 +108,13 @@ export default function HomeScreen() {
   const [filter, setFilter] = useState<RangeFilter>('cycle');
   const [selectedCycleId, setSelectedCycleId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [recentSelectionMode, setRecentSelectionMode] = useState(false);
+  const [selectedRecentIds, setSelectedRecentIds] = useState<string[]>([]);
   const [motionRun, setMotionRun] = useState(0);
   const currentYear = new Date().getFullYear();
 
   useEffect(() => {
-    if (composer.refreshKey > 0) void data.reload();
+    if (composer.refreshKey > 0) runDetached(data.reload(), 'home.reload');
     // reload is stable via useCallback
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [composer.refreshKey]);
@@ -191,6 +194,7 @@ export default function HomeScreen() {
     () => data.transactions.some((row) => !row.shared),
     [data.transactions],
   );
+  const selectedRecentCount = selectedRecentIds.length;
 
   const categorySpend = useMemo(() => {
     const totals = new Map<string, number>();
@@ -242,6 +246,60 @@ export default function HomeScreen() {
     await Haptics.selectionAsync();
     const { error } = await supabase.from('transactions').delete().eq('id', row.id);
     if (!error) composer.bumpRefresh();
+  };
+
+  const deleteSelectedRecentTransactions = async (): Promise<void> => {
+    if (selectedRecentIds.length === 0) return;
+    await Haptics.selectionAsync();
+    const { error } = await supabase.from('transactions').delete().in('id', selectedRecentIds);
+    if (!error) {
+      setSelectedRecentIds([]);
+      setRecentSelectionMode(false);
+      composer.bumpRefresh();
+    }
+  };
+
+  const visibleRecentIdKey = recentItems.map((item) => item.row.id).join(',');
+  useEffect(() => {
+    const visibleRecentIds = new Set(visibleRecentIdKey.split(','));
+    setSelectedRecentIds((current) => current.filter((id) => visibleRecentIds.has(id)));
+  }, [visibleRecentIdKey]);
+
+  useEffect(() => {
+    if (!recentSelectionMode) {
+      setSelectedRecentIds([]);
+    }
+  }, [recentSelectionMode]);
+
+  useEffect(() => {
+    if (recentItems.length === 0 && recentSelectionMode) {
+      setRecentSelectionMode(false);
+    }
+  }, [recentItems.length, recentSelectionMode]);
+
+  const toggleRecentSelection = (row: TransactionRow): void => {
+    setSelectedRecentIds((current) =>
+      current.includes(row.id) ? current.filter((id) => id !== row.id) : [...current, row.id],
+    );
+  };
+
+  const confirmDeleteSelectedRecentTransactions = (): void => {
+    if (selectedRecentIds.length === 0) return;
+
+    Alert.alert(
+      `Delete ${selectedRecentIds.length} transaction${selectedRecentIds.length === 1 ? '' : 's'}?`,
+      'This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            runDetached(deleteSelectedRecentTransactions(), 'home.delete-selected-recent');
+          },
+        },
+      ],
+    );
   };
 
   const currentCycleLabel =
@@ -479,10 +537,31 @@ export default function HomeScreen() {
         <View style={[styles.section, styles.sectionFlush]}>
           <TransactionList
             title="Recent personal activity"
-            actionLabel={hasAnyPersonalHistory ? 'See more' : undefined}
-            onActionPress={hasAnyPersonalHistory ? () => router.push('/personal-history' as never) : undefined}
+            actions={
+              recentSelectionMode
+                ? [
+                    { label: 'Cancel', onPress: () => setRecentSelectionMode(false), tone: 'muted' },
+                    {
+                      label: selectedRecentCount > 0 ? `Delete ${selectedRecentCount}` : 'Delete',
+                      onPress: confirmDeleteSelectedRecentTransactions,
+                      tone: 'danger',
+                      disabled: selectedRecentCount === 0,
+                    },
+                  ]
+                : [
+                    ...(hasAnyPersonalHistory
+                      ? [{ label: 'See more', onPress: () => router.push('/personal-history' as never), tone: 'accent' as const }]
+                      : []),
+                    ...(recentItems.length > 0
+                      ? [{ label: 'Select', onPress: () => setRecentSelectionMode(true), tone: 'muted' as const }]
+                      : []),
+                  ]
+            }
             items={recentItems}
             emptyLabel="Log the first transaction to start building your personal history."
+            selectionMode={recentSelectionMode}
+            selectedIds={selectedRecentIds}
+            onToggleSelect={toggleRecentSelection}
             onEdit={(row) => composer.openEdit(row)}
             onDuplicate={(row) => {
               composer.openCreate({
@@ -503,7 +582,7 @@ export default function HomeScreen() {
               });
             }}
             onDelete={(row) => {
-              void deleteTransaction(row);
+              runDetached(deleteTransaction(row), 'home.delete-transaction');
             }}
           />
         </View>
