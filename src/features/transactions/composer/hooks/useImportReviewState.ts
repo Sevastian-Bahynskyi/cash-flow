@@ -3,6 +3,7 @@ import { Keyboard, Platform } from 'react-native';
 import type { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { runDetached } from '@/lib/async';
 import {
+  AI_AUTO_APPLY_CONFIDENCE,
   resolveBatchCategoryResults,
   type ImportCategorySuggestionRow,
   type SuggestCategoryCandidate,
@@ -167,6 +168,16 @@ export function useImportReviewState({ visible, rows, categoryOptions, transferP
           if (!currentRow || currentRow.categoryId) continue;
           if (buildRowSignature(currentRow) !== initialSignatures.get(row.id)) continue;
 
+          if (suggestion.source === 'ai' && suggestion.confidence < AI_AUTO_APPLY_CONFIDENCE) {
+            onChangeRow(row.id, {
+              normalizedMerchant: suggestion.normalizedMerchant,
+              categorySource: suggestion.source,
+              categoryConfidence: suggestion.confidence,
+              suggestedSharedTopup: suggestion.isSharedTopup,
+            });
+            continue;
+          }
+
           onChangeRow(row.id, {
             categoryId: suggestion.categoryId,
             normalizedMerchant: suggestion.normalizedMerchant,
@@ -177,13 +188,22 @@ export function useImportReviewState({ visible, rows, categoryOptions, transferP
         }
 
         const stillMissing = uncategorizedRows.some((row) => {
-          if (combinedAssignments.has(row.id)) return false;
           const currentRow = rowsRef.current.find((candidate) => candidate.id === row.id);
-          return Boolean(
-            currentRow &&
-              !currentRow.categoryId &&
-              buildRowSignature(currentRow) === initialSignatures.get(row.id),
-          );
+          if (!currentRow || buildRowSignature(currentRow) !== initialSignatures.get(row.id)) {
+            return false;
+          }
+
+          if (currentRow.categoryId) return false;
+
+          const suggestion = combinedAssignments.get(row.id);
+          if (!suggestion) return true;
+
+          // Low-confidence AI suggestions only attach metadata and keep category unset.
+          if (suggestion.source === 'ai' && suggestion.confidence < AI_AUTO_APPLY_CONFIDENCE) {
+            return true;
+          }
+
+          return false;
         });
 
         if (stillMissing && runId === categorizationRunId.current) {

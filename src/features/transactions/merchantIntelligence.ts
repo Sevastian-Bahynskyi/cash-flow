@@ -155,6 +155,7 @@ const publicTransitPaths: readonly CategoryPath[] = [{ parent: 'Transport', name
 const restaurantsPaths: readonly CategoryPath[] = [{ parent: 'Food', name: 'Restaurants' }];
 const groceriesPaths: readonly CategoryPath[] = [{ parent: 'Food', name: 'Groceries' }];
 const subscriptionsPaths: readonly CategoryPath[] = [{ parent: 'Entertainment', name: 'Subscriptions' }];
+const hobbyCreativePaths: readonly CategoryPath[] = [{ parent: 'Entertainment', name: 'Hobby/Creative' }];
 const fitnessPaths: readonly CategoryPath[] = [{ parent: 'Health', name: 'Fitness' }];
 const personalCarePaths: readonly CategoryPath[] = [{ parent: 'Shopping', name: 'Personal care' }];
 const travelPaths: readonly CategoryPath[] = [
@@ -171,6 +172,7 @@ const merchantAliases: readonly MerchantAliasDefinition[] = [
   { canonical: 'banken food hall', patterns: [/\bbanken food hall\b/, /\blivet i byen\b/] },
   { canonical: 'bilka', patterns: [/\bbilka\b/] },
   { canonical: 'bs ab albo', patterns: [/\bbs ab albo\b/, /\baarhus bolig\b/] },
+  { canonical: 'ceramics', patterns: [/\bceramic\b/, /\bceramics\b/, /\bpottery\b/, /\bclay studio\b/] },
   { canonical: 'citybee', patterns: [/\bcitybee\b/] },
   { canonical: 'claude', patterns: [/\bclaude\b/] },
   { canonical: 'circle k', patterns: [/\bcircle k\b/] },
@@ -234,6 +236,7 @@ const curatedCategories: readonly CuratedCategoryDefinition[] = [
   { canonical: 'banken food hall', expense: restaurantsPaths, confidence: 0.99 },
   { canonical: 'bilka', expense: groceriesPaths, confidence: 0.98 },
   { canonical: 'bs ab albo', expense: rentPaths, confidence: 0.99 },
+  { canonical: 'ceramics', expense: hobbyCreativePaths, confidence: 0.9 },
   { canonical: 'claude', expense: subscriptionsPaths, confidence: 0.99 },
   { canonical: 'coop 365', expense: groceriesPaths, confidence: 0.97 },
   { canonical: 'dazn', expense: subscriptionsPaths, confidence: 0.97 },

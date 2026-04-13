@@ -23,6 +23,8 @@ export type SuggestedCategoryResult = {
   isSharedTopup: boolean;
 };
 
+export const AI_AUTO_APPLY_CONFIDENCE = 0.92;
+
 export type SuggestCategoryCandidate = MerchantCategoryCandidate;
 
 export type ImportCategorySuggestionRow = MerchantSuggestionContext & {
@@ -389,7 +391,6 @@ const remoteSuggestCategory = async ({
     const data = (await response.json()) as SuggestFunctionResponse;
     if (!data?.categoryId) return null;
     const confidence = clampConfidence(data.confidence ?? 0);
-    if (confidence < 0.92) return null;
     return {
       categoryId: data.categoryId,
       confidence,
@@ -450,9 +451,7 @@ const batchRemoteSuggestCategories = async ({
     }
 
     const payload = (await response.json()) as BatchSuggestFunctionResponse;
-    return parseBatchSuggestResults(payload, validCategoryIds(candidates)).filter(
-      (row) => row.confidence >= 0.92,
-    );
+    return parseBatchSuggestResults(payload, validCategoryIds(candidates));
   } catch (error) {
     reportDevError('suggest-category.batch.unexpected', error, { rowCount: rows.length });
     return null;

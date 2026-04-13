@@ -40,6 +40,7 @@ import {
   fetchRecentCategoryIds,
   fetchRecentTransactionSuggestions,
   formatMerchantCategorySource,
+  AI_AUTO_APPLY_CONFIDENCE,
   resolveSuggestedCategory,
   saveMerchantMemoryObservation,
   upsertMerchantRule,
@@ -508,10 +509,8 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
 
   const runCategorySuggestion = async ({
     preferRemote = false,
-    forceApply = false,
   }: {
     preferRemote?: boolean;
-    forceApply?: boolean;
   } = {}): Promise<void> => {
     if (!visible || categoryOptions.length === 0) {
       setSuggestion(null);
@@ -567,7 +566,9 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
 
     setSuggestion({ ...result, category: match });
 
-    const shouldApply = !userTouchedCategory && (forceApply || result.confidence > 0);
+    const shouldApply =
+      !userTouchedCategory &&
+      (result.source !== 'ai' || result.confidence >= AI_AUTO_APPLY_CONFIDENCE);
     if (shouldApply) {
       setCategory(match);
       if (kind === 'expense') {
@@ -1211,7 +1212,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
             onChangeText={setName}
             onFocus={closeKeypad}
             onEndEditing={() => {
-              void runCategorySuggestion({ preferRemote: true, forceApply: true });
+              void runCategorySuggestion({ preferRemote: true });
             }}
             placeholder="What was it?"
             returnKeyType="done"
@@ -1328,7 +1329,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
             onChangeText={setComment}
             onFocus={closeKeypad}
             onEndEditing={() => {
-              void runCategorySuggestion({ preferRemote: true, forceApply: true });
+              void runCategorySuggestion({ preferRemote: true });
             }}
             placeholder="Optional"
             style={styles.input}
