@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import {
   applyCategoryOverrides,
@@ -34,6 +34,7 @@ import { colors, radius, spacing, typography } from '@/ui/tokens';
 const PAGE_SIZE = 40;
 const DELETE_CHUNK_SIZE = 100;
 const SEARCH_DEBOUNCE_MS = 250;
+const DEBUG_BUILD_TAG = 'personal-history-v2-2026-04-13';
 const TRANSACTION_SELECT =
   'id, user_id, kind, amount_minor, occurred_on, name, comment, category_id, country_iso, recurring, shared, shared_participant, is_shared_topup, is_salary, currency_code, original_amount_minor, converted_amount_minor, fx_rate, created_at, updated_at';
 
@@ -47,6 +48,13 @@ type HistoryItem = {
 type HistorySection = {
   title: string;
   data: HistoryItem[];
+};
+
+type HistoryFilters = {
+  startOn: string | null;
+  endOnExclusive: string | null;
+  kind: 'income' | 'expense' | null;
+  parentLabel: string | null;
 };
 
 const pad2 = (value: string): string => value.padStart(2, '0');
@@ -103,20 +111,80 @@ const buildSearchTerms = (query: string): string[] => {
   return [...terms];
 };
 
-const buildTransactionSearchFilter = (query: string): string | null => {
+const buildTransactionSearchFilter = (
+  query: string,
+  matchedCategoryIds: readonly string[] = [],
+): string | null => {
   const terms = buildSearchTerms(query);
-  if (terms.length === 0) return null;
+  if (terms.length === 0 && matchedCategoryIds.length === 0) return null;
 
-  return terms
-    .flatMap((term) => {
-      const escaped = escapePostgrestValue(term);
-      return [
-        `name.ilike.%${escaped}%`,
-        `comment.ilike.%${escaped}%`,
-        `occurred_on.ilike.%${escaped}%`,
-      ];
-    })
-    .join(',');
+  const clauses: string[] = [];
+
+  if (matchedCategoryIds.length > 0) {
+    const ids = matchedCategoryIds
+      .filter((value) => /^[0-9a-fA-F-]{36}$/.test(value))
+      .slice(0, 25)
+      .join(',');
+    if (ids.length > 0) clauses.push(`category_id.in.(${ids})`);
+  }
+
+  for (const term of terms) {
+    const escaped = escapePostgrestValue(term);
+    clauses.push(`name.ilike.%${escaped}%`, `comment.ilike.%${escaped}%`);
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(term)) {
+      clauses.push(`occurred_on.eq.${term}`);
+      continue;
+    }
+
+    const yearPrefix = /^(\d{4})-$/.exec(term);
+    if (yearPrefix) {
+      const year = yearPrefix[1] ?? '';
+      const nextYear = String(Number(year) + 1);
+      clauses.push(`occurred_on.gte.${year}-01-01`, `occurred_on.lt.${nextYear}-01-01`);
+      continue;
+    }
+
+    const yearMonth = /^(\d{4})-(\d{2})$/.exec(term);
+    if (yearMonth) {
+      const year = yearMonth[1] ?? '';
+      const month = yearMonth[2] ?? '';
+      const monthNumber = Number(month);
+      if (Number.isFinite(monthNumber) && monthNumber >= 1 && monthNumber <= 12) {
+        const nextMonthNumber = monthNumber === 12 ? 1 : monthNumber + 1;
+        const nextMonthYear = monthNumber === 12 ? String(Number(year) + 1) : year;
+        const nextMonth = String(nextMonthNumber).padStart(2, '0');
+        clauses.push(`occurred_on.gte.${year}-${month}-01`, `occurred_on.lt.${nextMonthYear}-${nextMonth}-01`);
+      }
+    }
+  }
+
+  const filter = clauses.join(',');
+
+  // #region agent log
+  fetch('http://127.0.0.1:7401/ingest/3868ff3d-2d0f-4946-999c-a38c9c4e1bb0', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '41e759' },
+    body: JSON.stringify({
+      sessionId: '41e759',
+      runId: 'post-fix-candidate',
+      hypothesisId: 'H1',
+      location: 'PersonalHistoryScreen.tsx:buildTransactionSearchFilter',
+      message: 'Built search filter with date-safe clauses',
+      data: {
+        query,
+        termsCount: terms.length,
+        clausesCount: clauses.length,
+        hasOccurredOnEq: filter.includes('occurred_on.eq.'),
+        hasOccurredOnGte: filter.includes('occurred_on.gte.'),
+        hasOccurredOnLt: filter.includes('occurred_on.lt.'),
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
+
+  return filter;
 };
 
 const toDuplicateDraft = (row: TransactionRow): TransactionDraft => ({
@@ -175,37 +243,112 @@ const loadCategories = async (): Promise<CategoryRow[]> => {
   );
 };
 
-const applySearchFilter = <T,>(queryBuilder: T, searchQuery: string): T => {
-  const searchFilter = buildTransactionSearchFilter(searchQuery);
+const applySearchFilter = <T,>(
+  queryBuilder: T,
+  searchQuery: string,
+  matchedCategoryIds: readonly string[],
+): T => {
+  const searchFilter = buildTransactionSearchFilter(searchQuery, matchedCategoryIds);
   if (!searchFilter) return queryBuilder;
 
   return (queryBuilder as { or: (filter: string) => T }).or(searchFilter);
 };
 
-const loadTransactionPage = async (offset: number, searchQuery: string): Promise<TransactionRow[]> => {
+const applyBaseFilters = <T,>(queryBuilder: T, filters: HistoryFilters): T => {
+  let query = queryBuilder as unknown as {
+    gte: (col: string, value: string) => typeof queryBuilder;
+    lt: (col: string, value: string) => typeof queryBuilder;
+    eq: (col: string, value: string) => typeof queryBuilder;
+  };
+
+  if (filters.startOn) query = query.gte('occurred_on', filters.startOn) as unknown as typeof query;
+  if (filters.endOnExclusive) query = query.lt('occurred_on', filters.endOnExclusive) as unknown as typeof query;
+  if (filters.kind) query = query.eq('kind', filters.kind) as unknown as typeof query;
+
+  return query as unknown as T;
+};
+
+const loadTransactionPage = async (
+  offset: number,
+  searchQuery: string,
+  matchedCategoryIds: readonly string[],
+  filters: HistoryFilters,
+): Promise<TransactionRow[]> => {
+  const startedAt = Date.now();
   let query = supabase
     .from('transactions')
     .select(TRANSACTION_SELECT)
     .eq('shared', false);
 
-  query = applySearchFilter(query, searchQuery);
+  query = applyBaseFilters(query, filters);
+  query = applySearchFilter(query, searchQuery, matchedCategoryIds);
 
   const { data, error } = await query
     .order('occurred_on', { ascending: false })
     .order('updated_at', { ascending: false })
     .range(offset, offset + PAGE_SIZE - 1);
 
-  if (error) throw error;
+  if (error) {
+    // #region agent log
+    fetch('http://127.0.0.1:7401/ingest/3868ff3d-2d0f-4946-999c-a38c9c4e1bb0', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '41e759' },
+      body: JSON.stringify({
+        sessionId: '41e759',
+        runId: 'post-fix-candidate',
+        hypothesisId: 'H1',
+        location: 'PersonalHistoryScreen.tsx:loadTransactionPage:error',
+        message: 'Transaction page query failed',
+        data: {
+          offset,
+          searchQuery,
+          code: (error as { code?: string }).code ?? null,
+          message: (error as { message?: string }).message ?? null,
+          elapsedMs: Date.now() - startedAt,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+    throw error;
+  }
+
+  // #region agent log
+  fetch('http://127.0.0.1:7401/ingest/3868ff3d-2d0f-4946-999c-a38c9c4e1bb0', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '41e759' },
+    body: JSON.stringify({
+      sessionId: '41e759',
+      runId: 'post-fix-candidate',
+      hypothesisId: 'H3',
+      location: 'PersonalHistoryScreen.tsx:loadTransactionPage:success',
+      message: 'Transaction page query succeeded',
+      data: {
+        offset,
+        searchQueryLength: searchQuery.length,
+        rows: (data ?? []).length,
+        elapsedMs: Date.now() - startedAt,
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
+
   return (data ?? []) as TransactionRow[];
 };
 
-const loadMatchingTransactionIds = async (searchQuery: string): Promise<string[]> => {
+const loadMatchingTransactionIds = async (
+  searchQuery: string,
+  matchedCategoryIds: readonly string[],
+  filters: HistoryFilters,
+): Promise<string[]> => {
   let query = supabase
     .from('transactions')
     .select('id')
     .eq('shared', false);
 
-  query = applySearchFilter(query, searchQuery);
+  query = applyBaseFilters(query, filters);
+  query = applySearchFilter(query, searchQuery, matchedCategoryIds);
 
   const { data, error } = await query
     .order('occurred_on', { ascending: false })
@@ -307,7 +450,10 @@ function PersonalHistoryRow({
           <Text style={styles.name} numberOfLines={1}>
             {row.name}
           </Text>
-          <Text style={styles.amount}>{displayAmountForRow(row)}</Text>
+          <Text style={[styles.amount, row.kind === 'income' ? styles.amountIncome : styles.amountExpense]}>
+            {row.kind === 'income' ? '+' : '-'}
+            {displayAmountForRow(row)}
+          </Text>
         </View>
         <Text style={styles.meta} numberOfLines={1}>
           {item.categoryLabel}
@@ -328,9 +474,17 @@ function PersonalHistoryRow({
               <Text style={styles.chipText}>Recurring</Text>
             </View>
           ) : null}
+          {row.shared ? (
+            <View style={styles.chip}>
+              <Text style={styles.chipText}>Shared expense</Text>
+            </View>
+          ) : null}
           {row.is_shared_topup ? (
             <View style={styles.chip}>
-              <Text style={styles.chipText}>Top-up</Text>
+              <Text style={styles.chipText}>
+                Shared top-up
+                {row.shared_participant ? ` · ${row.shared_participant === 'gf' ? 'GF' : 'Me'}` : ''}
+              </Text>
             </View>
           ) : null}
         </View>
@@ -346,6 +500,12 @@ function PersonalHistoryRow({
 
 export default function PersonalHistoryScreen() {
   const composer = useComposer();
+  const params = useLocalSearchParams<{
+    startOn?: string;
+    endOnExclusive?: string;
+    kind?: string;
+    parentLabel?: string;
+  }>();
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [transactions, setTransactions] = useState<TransactionRow[]>([]);
   const [query, setQuery] = useState('');
@@ -359,9 +519,28 @@ export default function PersonalHistoryScreen() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [hasMore, setHasMore] = useState(true);
   const [nextOffset, setNextOffset] = useState(0);
+  const [resolvedRequestKey, setResolvedRequestKey] = useState<string | null>(null);
   const [motionRun, setMotionRun] = useState(0);
   const requestVersionRef = useRef(0);
   const hasLoadedOnceRef = useRef(false);
+
+  useEffect(() => {
+    // #region agent log
+    fetch('http://127.0.0.1:7401/ingest/3868ff3d-2d0f-4946-999c-a38c9c4e1bb0', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '41e759' },
+      body: JSON.stringify({
+        sessionId: '41e759',
+        runId: 'post-fix-verify',
+        hypothesisId: 'H6',
+        location: 'PersonalHistoryScreen.tsx:mount',
+        message: 'PersonalHistoryScreen mounted',
+        data: { tag: DEBUG_BUILD_TAG },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+  }, []);
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -373,10 +552,71 @@ export default function PersonalHistoryScreen() {
     };
   }, [query]);
 
+  const categoryMeta = useMemo(() => buildCategoryMeta(categories), [categories]);
+  const filters = useMemo<HistoryFilters>(() => {
+    const startOn = typeof params.startOn === 'string' && params.startOn.trim() ? params.startOn.trim() : null;
+    const endOnExclusive =
+      typeof params.endOnExclusive === 'string' && params.endOnExclusive.trim()
+        ? params.endOnExclusive.trim()
+        : null;
+    const kind =
+      params.kind === 'income' || params.kind === 'expense' ? (params.kind as 'income' | 'expense') : null;
+    const parentLabel =
+      typeof params.parentLabel === 'string' && params.parentLabel.trim() ? params.parentLabel.trim() : null;
+    return { startOn, endOnExclusive, kind, parentLabel };
+  }, [params.endOnExclusive, params.kind, params.parentLabel, params.startOn]);
+  const matchedCategoryIds = useMemo(() => {
+    const q = debouncedQuery.trim().toLowerCase();
+    if (q.length < 2) return [];
+
+    // Avoid treating pure date queries as category queries.
+    if (/^\d{4}(-\d{2}(-\d{2})?)?$/.test(q) || /^\d{1,2}\.\d{1,2}(\.\d{2,4})?$/.test(q)) {
+      return [];
+    }
+
+    const out: string[] = [];
+    for (const row of categories) {
+      const label = categoryMeta[row.id]?.label ?? row.name;
+      if (label.toLowerCase().includes(q)) out.push(row.id);
+    }
+    return out;
+  }, [categories, categoryMeta, debouncedQuery]);
+  const scopedCategoryIds = useMemo(() => {
+    if (!filters.parentLabel) return matchedCategoryIds;
+    const target = filters.parentLabel.trim().toLowerCase();
+    const ids: string[] = [];
+    for (const row of categories) {
+      const meta = categoryMeta[row.id];
+      const parentLabel = meta?.parentName?.trim() ? meta.parentName : meta?.name ?? row.name;
+      if (parentLabel.trim().toLowerCase() === target) ids.push(row.id);
+    }
+    return ids;
+  }, [categories, categoryMeta, filters.parentLabel, matchedCategoryIds]);
+  const requestKey = useMemo(
+    () =>
+      JSON.stringify({
+        query: debouncedQuery,
+        startOn: filters.startOn,
+        endOnExclusive: filters.endOnExclusive,
+        kind: filters.kind,
+        parentLabel: filters.parentLabel,
+        categoryIds: scopedCategoryIds,
+      }),
+    [
+      debouncedQuery,
+      filters.endOnExclusive,
+      filters.kind,
+      filters.parentLabel,
+      filters.startOn,
+      scopedCategoryIds,
+    ],
+  );
+
   const reload = useCallback(
     async (showSkeleton = false): Promise<void> => {
       const requestVersion = requestVersionRef.current + 1;
       requestVersionRef.current = requestVersion;
+      const activeRequestKey = requestKey;
       if (showSkeleton) setIsInitialLoading(true);
       setIsLoadingMore(false);
       setError(null);
@@ -384,7 +624,7 @@ export default function PersonalHistoryScreen() {
       try {
         const [nextCategories, firstPage] = await Promise.all([
           loadCategories(),
-          loadTransactionPage(0, debouncedQuery),
+          loadTransactionPage(0, debouncedQuery, scopedCategoryIds, filters),
         ]);
 
         if (requestVersionRef.current !== requestVersion) return;
@@ -393,6 +633,7 @@ export default function PersonalHistoryScreen() {
         setTransactions(firstPage);
         setNextOffset(firstPage.length);
         setHasMore(firstPage.length === PAGE_SIZE);
+        setResolvedRequestKey(activeRequestKey);
       } catch (loadError) {
         if (requestVersionRef.current !== requestVersion) return;
         reportDevError('personal-history.reload', loadError, {
@@ -402,13 +643,14 @@ export default function PersonalHistoryScreen() {
         setTransactions([]);
         setNextOffset(0);
         setHasMore(false);
+        setResolvedRequestKey(activeRequestKey);
       } finally {
         if (requestVersionRef.current === requestVersion && showSkeleton) {
           setIsInitialLoading(false);
         }
       }
     },
-    [debouncedQuery],
+    [debouncedQuery, filters, requestKey, scopedCategoryIds],
   );
 
   const loadMore = useCallback(async (): Promise<void> => {
@@ -418,7 +660,7 @@ export default function PersonalHistoryScreen() {
     setIsLoadingMore(true);
 
     try {
-      const page = await loadTransactionPage(startOffset, debouncedQuery);
+      const page = await loadTransactionPage(startOffset, debouncedQuery, scopedCategoryIds, filters);
       if (requestVersionRef.current !== requestVersion) return;
 
       setTransactions((current) => mergeUniqueTransactions(current, page));
@@ -436,7 +678,7 @@ export default function PersonalHistoryScreen() {
         setIsLoadingMore(false);
       }
     }
-  }, [debouncedQuery, hasMore, isInitialLoading, isLoadingMore, nextOffset]);
+  }, [debouncedQuery, filters, hasMore, isInitialLoading, isLoadingMore, nextOffset, scopedCategoryIds]);
 
   useEffect(() => {
     runDetached(
@@ -463,23 +705,27 @@ export default function PersonalHistoryScreen() {
       setMotionRun((current) => current + 1);
     }, []),
   );
-
-  const categoryMeta = useMemo(() => buildCategoryMeta(categories), [categories]);
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const hasQuery = debouncedQuery.length > 0;
   const isSearchPending = query.trim() !== debouncedQuery;
+  const shouldShowSkeleton = isInitialLoading || resolvedRequestKey !== requestKey;
 
   const sections = useMemo<HistorySection[]>(() => {
     const grouped = new Map<string, HistoryItem[]>();
     for (const row of transactions) {
+      const meta = row.category_id ? categoryMeta[row.category_id] : null;
+      const parentOnlyLabel =
+        meta?.parentName?.trim() ? meta.parentName : meta?.name?.trim() ? meta.name : null;
       const categoryLabel = row.category_id
-        ? categoryMeta[row.category_id]?.label ?? 'Uncategorized'
+        ? parentOnlyLabel ?? 'Uncategorized'
         : row.kind === 'income'
           ? 'Income'
           : 'Uncategorized';
       const categoryColor = row.category_id
         ? getCategoryMetaDisplayColor(categoryMeta[row.category_id], row.kind)
-        : colors.accent;
+        : row.kind === 'income'
+          ? colors.success
+          : colors.accent;
       const categoryIcon = row.category_id
         ? categoryMeta[row.category_id]?.icon ?? 'cash'
         : row.kind === 'income'
@@ -541,7 +787,7 @@ export default function PersonalHistoryScreen() {
   const selectAllMatching = async (): Promise<void> => {
     setIsSelectingAll(true);
     try {
-      const ids = await loadMatchingTransactionIds(debouncedQuery);
+      const ids = await loadMatchingTransactionIds(debouncedQuery, scopedCategoryIds, filters);
       setSelectedIds(ids);
     } catch (selectAllError) {
       reportDevError('personal-history.select-all', selectAllError, {
@@ -677,7 +923,7 @@ export default function PersonalHistoryScreen() {
           </View>
         ) : null}
 
-        {isInitialLoading ? (
+        {shouldShowSkeleton ? (
           <PersonalHistorySkeleton />
         ) : (
           <SectionList
@@ -831,6 +1077,8 @@ const styles = StyleSheet.create({
   rowTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   name: { ...typography.body, color: colors.text, flex: 1, fontWeight: '600' },
   amount: { ...typography.body, color: colors.text },
+  amountIncome: { color: colors.success, fontWeight: '700' },
+  amountExpense: { color: colors.danger, fontWeight: '700' },
   meta: { ...typography.label, color: colors.textMuted },
   comment: { ...typography.body, color: colors.textMuted },
   chips: { flexDirection: 'row', gap: spacing.xs, flexWrap: 'wrap' },

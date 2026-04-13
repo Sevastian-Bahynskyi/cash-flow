@@ -1,9 +1,20 @@
+import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Tabs } from 'expo-router';
+import { Tabs, usePathname } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, {
+  Easing,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import { useComposer } from '@/features/transactions/composer/context/ComposerContext';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
+
+const FAB_HIDE_TRANSLATE = 110;
+const FAB_TOGGLE_MS = 300;
 
 const iconForRoute = (name: string, focused: boolean): keyof typeof MaterialCommunityIcons.glyphMap => {
   switch (name) {
@@ -23,21 +34,43 @@ const iconForRoute = (name: string, focused: boolean): keyof typeof MaterialComm
 function GlobalAddButton() {
   const composer = useComposer();
   const insets = useSafeAreaInsets();
+  const pathname = usePathname();
+  const leaf = pathname.split('/').filter(Boolean).pop() ?? '';
+  const hidden = leaf === 'shared' || leaf === 'bank';
+
+  const visibility = useSharedValue(hidden ? 1 : 0);
+
+  useEffect(() => {
+    visibility.value = withTiming(hidden ? 1 : 0, {
+      duration: FAB_TOGGLE_MS,
+      easing: Easing.out(Easing.cubic),
+    });
+  }, [hidden, visibility]);
+
+  const fabMotion = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: interpolate(visibility.value, [0, 1], [0, FAB_HIDE_TRANSLATE]) },
+    ],
+    opacity: interpolate(visibility.value, [0, 1], [1, 0]),
+  }));
+
+  const bottom = Math.max(insets.bottom, spacing.md) + 56;
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Add transaction"
-      onPress={() => composer.openCreate()}
-      style={({ pressed }) => [
-        styles.fab,
-        { bottom: Math.max(insets.bottom, spacing.md) + 56 },
-        pressed && styles.fabPressed,
-      ]}
+    <Animated.View
+      style={[styles.fabOuter, { bottom, right: spacing.xl }, fabMotion]}
+      pointerEvents={hidden ? 'none' : 'box-none'}
     >
-      <MaterialCommunityIcons name="plus" size={30} color={colors.text} />
-      <Text style={styles.fabLabel}>Add</Text>
-    </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Add transaction"
+        onPress={() => composer.openCreate()}
+        style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
+      >
+        <MaterialCommunityIcons name="plus" size={30} color={colors.text} />
+        <Text style={styles.fabLabel}>Add</Text>
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -87,9 +120,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
   },
-  fab: {
+  fabOuter: {
     position: 'absolute',
-    right: spacing.xl,
+    width: 72,
+    height: 72,
+  },
+  fab: {
     width: 72,
     height: 72,
     borderRadius: radius.pill,

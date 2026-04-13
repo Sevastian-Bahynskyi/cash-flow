@@ -17,7 +17,11 @@ import Animated, {
 import { useOverview, type BudgetAlert } from '@/features/overview/useOverview';
 import { useComposer } from '@/features/transactions/composer/context/ComposerContext';
 import { TransactionList } from '@/features/transactions/TransactionList';
-import { buildCategoryMeta, getCategoryMetaDisplayColor } from '@/features/categories/helpers';
+import {
+  buildCategoryMeta,
+  getCategoryDisplayColor,
+  getCategoryMetaDisplayColor,
+} from '@/features/categories/helpers';
 import { runDetached } from '@/lib/async';
 import { MotionScope } from '@/ui/MotionScope';
 import { MotionView } from '@/ui/MotionView';
@@ -27,11 +31,11 @@ import { SkeletonBlock, SkeletonCard } from '@/ui/Skeleton';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 import { transactionBalance } from '@/lib/balance';
 import { formatMinor, formatPercent } from '@/lib/format';
-import { buildSalaryCycles, findCycleFor, type SalaryCycle } from '@/lib/cycles';
+import { buildNavigableCycles, findCycleFor, type SalaryCycle } from '@/lib/cycles';
 import type { TransactionRow } from '@/features/transactions/types';
 import { supabase } from '@/lib/supabase';
 
-type RangeFilter = 'cycle' | 'year' | 'all';
+type RangeFilter = 'month' | 'year' | 'all';
 
 const toLocalIsoDay = (date: Date): string => {
   const year = date.getFullYear();
@@ -122,18 +126,17 @@ export default function HomeScreen() {
   const router = useRouter();
   const data = useOverview();
   const composer = useComposer();
-  const [filter, setFilter] = useState<RangeFilter>('cycle');
+  const [filter, setFilter] = useState<RangeFilter>('month');
   const [selectedCycleId, setSelectedCycleId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [recentSelectionMode, setRecentSelectionMode] = useState(false);
   const [selectedRecentIds, setSelectedRecentIds] = useState<string[]>([]);
   const [motionRun, setMotionRun] = useState(0);
-  const previousStreakDays = useRef(0);
   const currentYear = new Date().getFullYear();
   const scrollY = useSharedValue(0);
   const heroPulse = useSharedValue(0);
-  const streakFloat = useSharedValue(0);
-  const streakSparkle = useSharedValue(0);
+  const heroPagerRef = useRef<ScrollView | null>(null);
+  const [heroPagerWidth, setHeroPagerWidth] = useState(0);
 
   useEffect(() => {
     if (composer.refreshKey > 0) runDetached(data.reload(), 'home.reload');
@@ -149,21 +152,15 @@ export default function HomeScreen() {
 
   useEffect(() => {
     cancelAnimation(heroPulse);
-    cancelAnimation(streakFloat);
-    cancelAnimation(streakSparkle);
     heroPulse.value = withRepeat(withTiming(1, { duration: 1600 }), -1, true);
-    streakFloat.value = withRepeat(withTiming(1, { duration: 1150 }), -1, true);
-    streakSparkle.value = withRepeat(withTiming(1, { duration: 1300 }), -1, true);
 
     return () => {
       cancelAnimation(heroPulse);
-      cancelAnimation(streakFloat);
-      cancelAnimation(streakSparkle);
     };
-  }, [heroPulse, streakFloat, streakSparkle]);
+  }, [heroPulse]);
 
   const cycles = useMemo(
-    () => buildSalaryCycles(data.transactions.filter((row) => row.is_salary)),
+    () => buildNavigableCycles(data.transactions),
     [data.transactions],
   );
   const cyclesWithTransactions = useMemo(
@@ -175,6 +172,7 @@ export default function HomeScreen() {
   );
 
   useEffect(() => {
+    const todayIsoDay = toLocalIsoDay(new Date());
     if (cyclesWithTransactions.length === 0) {
       setSelectedCycleId(null);
       return;
@@ -182,24 +180,38 @@ export default function HomeScreen() {
 
     setSelectedCycleId((current) => {
       if (current && cyclesWithTransactions.some((cycle) => cycle.id === current)) return current;
-      return data.activeCycle?.id ?? cyclesWithTransactions[0]?.id ?? null;
+      return findCycleFor(cyclesWithTransactions, todayIsoDay)?.id ?? cyclesWithTransactions[0]?.id ?? null;
     });
-  }, [cyclesWithTransactions, data.activeCycle?.id]);
+  }, [cyclesWithTransactions]);
 
   const selectedCycle =
     cyclesWithTransactions.find((cycle) => cycle.id === selectedCycleId) ??
-    (() => {
-      const activeCycle = data.activeCycle;
-      if (activeCycle && cyclesWithTransactions.some((cycle) => cycle.id === activeCycle.id)) {
-        return activeCycle;
-      }
-      return cyclesWithTransactions[0] ?? null;
-    })();
+    findCycleFor(cyclesWithTransactions, toLocalIsoDay(new Date())) ??
+    cyclesWithTransactions[0] ??
+    null;
   const categoryMeta = useMemo(() => buildCategoryMeta(data.categories), [data.categories]);
   const currentYearCycles = useMemo(
     () => cycles.filter((cycle) => cycle.label.endsWith(String(currentYear))),
     [currentYear, cycles],
   );
+  const selectedRange = useMemo(() => {
+    if (filter === 'month') {
+      return {
+        startOn: selectedCycle?.startOn ?? null,
+        endOnExclusive: selectedCycle?.endOnExclusive ?? null,
+      };
+    }
+    if (filter === 'year') {
+      return {
+        startOn: `${currentYear}-01-01`,
+        endOnExclusive: `${currentYear + 1}-01-01`,
+      };
+    }
+    return {
+      startOn: null,
+      endOnExclusive: null,
+    };
+  }, [currentYear, filter, selectedCycle?.endOnExclusive, selectedCycle?.startOn]);
   const rangeTransactions = useMemo(() => {
     if (filter === 'year') {
       return data.transactions.filter((row) => {
@@ -220,61 +232,114 @@ export default function HomeScreen() {
       return b.occurred_on.localeCompare(a.occurred_on);
     });
   }, [rangeTransactions]);
+  const personalSpendMinor = useMemo(
+    () =>
+      personalTransactions.reduce((sum, row) => {
+        if (row.kind !== 'expense' || row.is_shared_topup) return sum;
+        return sum + row.amount_minor;
+      }, 0),
+    [personalTransactions],
+  );
 
-  const recentItems = personalTransactions.slice(0, 8).map((row) => ({
-    row,
-    categoryLabel: row.category_id ? categoryMeta[row.category_id]?.label ?? 'Uncategorized' : row.kind === 'income' ? 'Income' : 'Uncategorized',
-    categoryColor: row.category_id ? getCategoryMetaDisplayColor(categoryMeta[row.category_id], row.kind) : colors.accent,
-    categoryIcon: row.category_id ? categoryMeta[row.category_id]?.icon ?? 'cash' : row.kind === 'income' ? 'bank-outline' : 'cash',
-  }));
+  const recentItems = personalTransactions.slice(0, 8).map((row) => {
+    const meta = row.category_id ? categoryMeta[row.category_id] : null;
+    const parentLabel =
+      meta?.parentName?.trim() ? meta.parentName : meta?.name?.trim() ? meta.name : null;
+    return {
+      row,
+      categoryLabel: row.category_id
+        ? parentLabel ?? 'Uncategorized'
+        : row.kind === 'income'
+          ? 'Income'
+          : 'Uncategorized',
+      categoryColor: row.category_id
+        ? getCategoryMetaDisplayColor(categoryMeta[row.category_id], row.kind)
+        : row.kind === 'income'
+          ? colors.success
+          : colors.accent,
+      categoryIcon: row.category_id
+        ? categoryMeta[row.category_id]?.icon ?? 'cash'
+        : row.kind === 'income'
+          ? 'bank-outline'
+          : 'cash',
+    };
+  });
   const hasAnyPersonalHistory = useMemo(
     () => data.transactions.some((row) => !row.shared),
     [data.transactions],
   );
   const selectedRecentCount = selectedRecentIds.length;
-  const dailyPersonalCount = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const row of data.transactions) {
-      if (row.shared) continue;
-      counts.set(row.occurred_on, (counts.get(row.occurred_on) ?? 0) + 1);
-    }
-    return counts;
-  }, [data.transactions]);
-  const streakDays = useMemo(() => {
-    let streak = 0;
-    const cursor = new Date();
-    cursor.setHours(0, 0, 0, 0);
-    while (dailyPersonalCount.has(toLocalIsoDay(cursor))) {
-      streak += 1;
-      cursor.setDate(cursor.getDate() - 1);
-    }
-    return streak;
-  }, [dailyPersonalCount]);
-  const streakProgress = Math.min(streakDays / 7, 1);
-  const streakTier = streakDays >= 14 ? 'Legend' : streakDays >= 7 ? 'On fire' : streakDays >= 3 ? 'Building' : 'Warm-up';
-  const todayCount = dailyPersonalCount.get(toLocalIsoDay(new Date())) ?? 0;
+  const topCategoryTotals = useMemo(() => {
+    const rowById = new Map(data.categories.map((row) => [row.id, row]));
+    const byParent = new Map<
+      string,
+      {
+        parentCategoryId: string | null;
+        label: string;
+        incomeMinor: number;
+        expenseMinor: number;
+        color: string;
+      }
+    >();
 
-  const categorySpend = useMemo(() => {
-    const totals = new Map<string, number>();
     for (const row of personalTransactions) {
-      if (row.kind !== 'expense' || row.is_shared_topup || !row.category_id) continue;
-      totals.set(row.category_id, (totals.get(row.category_id) ?? 0) + row.amount_minor);
-    }
-    return [...totals.entries()]
-      .map(([categoryId, spentMinor]) => ({
-        categoryId,
-        spentMinor,
-        label: categoryMeta[categoryId]?.label ?? 'Category',
-        color: getCategoryMetaDisplayColor(categoryMeta[categoryId], 'expense') ?? colors.accent,
-      }))
-      .sort((a, b) => b.spentMinor - a.spentMinor)
-      .slice(0, 5);
-  }, [personalTransactions, categoryMeta]);
+      if (row.is_shared_topup) continue;
 
-  const spendTotal = categorySpend.reduce((sum, item) => sum + item.spentMinor, 0);
+      const categoryId = row.category_id ?? null;
+      const parentId = categoryId ? (rowById.get(categoryId)?.parent_id ?? categoryId) : null;
+      const parentMeta = parentId ? categoryMeta[parentId] : null;
+      const label = parentMeta?.name?.trim()
+        ? parentMeta.name
+        : row.kind === 'income'
+          ? 'Income'
+          : 'Uncategorized';
+      const color = parentId
+        ? getCategoryMetaDisplayColor(parentMeta, row.kind)
+        : row.kind === 'income'
+          ? colors.success
+          : colors.accent;
+
+      const key = parentId ?? label;
+      const current =
+        byParent.get(key) ?? {
+          parentCategoryId: parentId,
+          label,
+          incomeMinor: 0,
+          expenseMinor: 0,
+          color,
+        };
+      if (row.kind === 'income') current.incomeMinor += row.amount_minor;
+      else current.expenseMinor += row.amount_minor;
+      byParent.set(key, current);
+    }
+
+      const items = [...byParent.values()].map((item) => {
+      const netMinor = item.incomeMinor - item.expenseMinor;
+      const absMinor = Math.abs(netMinor);
+      const tone = netMinor >= 0 ? ('income' as const) : ('expense' as const);
+      return {
+        parentCategoryId: item.parentCategoryId,
+        label: item.label,
+        netMinor,
+        absMinor,
+        tone,
+        color: getCategoryDisplayColor({
+          kind: tone,
+          parentName: item.label,
+          name: item.label,
+          parentColor: item.color,
+          color: item.color,
+        }),
+      };
+    });
+
+    return items.sort((a, b) => b.absMinor - a.absMinor).slice(0, 5);
+  }, [categoryMeta, personalTransactions]);
+
+  const spendTotal = topCategoryTotals.reduce((sum, item) => sum + item.absMinor, 0);
 
   const filteredBudgetAlerts: BudgetAlert[] = useMemo(() => {
-    if (filter !== 'cycle') return [];
+    if (filter !== 'month') return [];
     const targetCycle = selectedCycle;
     if (!targetCycle) return [];
     const totals = new Map<string, number>();
@@ -365,22 +430,17 @@ export default function HomeScreen() {
       ? 'All time'
       : filter === 'year'
         ? `${currentYear}`
-        : selectedCycle?.label ?? 'No salary cycle';
+        : selectedCycle?.label ?? 'No month';
 
   const heroEyebrow =
     filter === 'all'
       ? 'All-time balance'
       : filter === 'year'
         ? 'Current year balance'
-        : 'Cycle balance';
+        : 'Month balance';
 
   const yearChipLabel = currentYearCycles.length > 0 ? `Current year` : `Current year`;
-
-  const hints = [
-    data.transactions.length === 0 ? 'Log your first transaction to wake up Home.' : null,
-    data.budgets.length === 0 ? 'Set one budget to unlock warning states.' : null,
-    data.shared.userTopupTotal === 0 ? 'One shared top-up unlocks the fairness view.' : null,
-  ].filter((value): value is string => value !== null);
+  const heroRangeLabel = filter === 'year' || filter === 'all' ? 'Range' : 'Month';
 
   const onRefresh = async (): Promise<void> => {
     setRefreshing(true);
@@ -390,13 +450,6 @@ export default function HomeScreen() {
       setRefreshing(false);
     }
   };
-
-  useEffect(() => {
-    if (streakDays > previousStreakDays.current && streakDays >= 2) {
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    }
-    previousStreakDays.current = streakDays;
-  }, [streakDays]);
 
   const onScroll = useAnimatedScrollHandler({
     onScroll: (event) => {
@@ -413,20 +466,6 @@ export default function HomeScreen() {
 
   const heroGlowStyle = useAnimatedStyle(() => ({
     opacity: interpolate(heroPulse.value, [0, 1], [0.1, 0.32]),
-  }));
-
-  const streakIconStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: interpolate(streakFloat.value, [0, 1], [0, -7]) }],
-  }));
-
-  const streakSparkOneStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(streakSparkle.value, [0, 0.5, 1], [0.15, 0.8, 0.15]),
-    transform: [{ translateX: interpolate(streakSparkle.value, [0, 1], [-6, 8]) }],
-  }));
-
-  const streakSparkTwoStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(streakSparkle.value, [0, 0.5, 1], [0.7, 0.2, 0.7]),
-    transform: [{ translateY: interpolate(streakSparkle.value, [0, 1], [2, -6]) }],
   }));
 
   return (
@@ -454,73 +493,170 @@ export default function HomeScreen() {
         {!data.isInitialLoading ? (
           <>
         <MotionView direction="left" distance={210} delayMs={90} rotateFrom={-9}>
-          <Animated.View style={[styles.heroWrap, heroAnimatedStyle]}>
-            <LinearGradient colors={['#1F2438', '#101219', '#0B0B0F']} style={styles.hero}>
-              <Text style={styles.heroEyebrow}>{heroEyebrow}</Text>
-              <Text style={styles.heroAmount}>{formatMinor(snapshotMinor)}</Text>
-              <View style={styles.heroStats}>
-                <MotionView direction="up" distance={90} delayMs={220}>
-                  <View style={styles.heroStatChip}>
-                    <Text style={styles.heroStatLabel}>Cycle</Text>
-                    <Text style={styles.heroStatValue}>{currentCycleLabel}</Text>
-                  </View>
-                </MotionView>
-                <MotionView direction="right" distance={120} delayMs={280}>
-                  <View style={styles.heroStatChip}>
-                    <Text style={styles.heroStatLabel}>Spend</Text>
-                    <Text style={styles.heroStatValue}>
-                      {formatMinor(categorySpend.reduce((sum, item) => sum + item.spentMinor, 0))}
-                    </Text>
-                  </View>
-                </MotionView>
-              </View>
-            </LinearGradient>
-            <Animated.View pointerEvents="none" style={[styles.heroGlow, heroGlowStyle]} />
-          </Animated.View>
-        </MotionView>
+          <View
+            onLayout={(event) => {
+              const next = Math.round(event.nativeEvent.layout.width);
+              if (next > 0) setHeroPagerWidth(next);
+            }}
+          >
+            {filter === 'month' && cyclesWithTransactions.length > 0 ? (
+              <ScrollView
+                ref={(node) => {
+                  heroPagerRef.current = node;
+                }}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                scrollEventThrottle={16}
+                onMomentumScrollEnd={(event) => {
+                  if (heroPagerWidth <= 0) return;
+                  const index = Math.round(event.nativeEvent.contentOffset.x / heroPagerWidth);
+                  const cycle = cyclesWithTransactions[index];
+                  if (!cycle) return;
+                  setSelectedCycleId(cycle.id);
+                  void Haptics.selectionAsync();
+                }}
+              >
+                {cyclesWithTransactions.map((cycle) => {
+                  const cycleTxns = data.transactions.filter((row) => cycleMatch(row, cycle));
+                  const cycleBalance = transactionBalance(cycleTxns);
+                  const cyclePersonalSpend = cycleTxns.reduce((sum, row) => {
+                    if (row.kind !== 'expense') return sum;
+                    if (row.shared || row.is_shared_topup) return sum;
+                    return sum + row.amount_minor;
+                  }, 0);
+                  return (
+                    <Animated.View
+                      key={cycle.id}
+                      style={[styles.heroWrap, heroAnimatedStyle, heroPagerWidth > 0 ? { width: heroPagerWidth } : null]}
+                    >
+                      <Pressable
+                        style={({ pressed }) => [styles.heroPressable, pressed && styles.heroPressed]}
+                        onPress={() => {
+                          void Haptics.selectionAsync();
+                          const params = new URLSearchParams();
+                          params.set('startOn', cycle.startOn);
+                          if (cycle.endOnExclusive) params.set('endOnExclusive', cycle.endOnExclusive);
+                          router.push((`/personal-history?${params.toString()}`) as never);
+                        }}
+                      >
+                        <LinearGradient colors={['#1F2438', '#101219', '#0B0B0F']} style={styles.hero}>
+                          <Text style={styles.heroEyebrow}>Month balance</Text>
+                          <Text style={styles.heroAmount}>{formatMinor(cycleBalance)}</Text>
+                          <View style={styles.heroStats}>
+                            <MotionView direction="up" distance={90} delayMs={220}>
+                              <View style={styles.heroStatChip}>
+                                <Text style={styles.heroStatLabel}>Month</Text>
+                                <Text style={styles.heroStatValue}>{cycle.label}</Text>
+                              </View>
+                            </MotionView>
+                            <MotionView direction="right" distance={120} delayMs={280}>
+                              <View style={styles.heroStatChip}>
+                                <Text style={styles.heroStatLabel}>Spend</Text>
+                                <Text style={styles.heroStatValue}>{formatMinor(cyclePersonalSpend)}</Text>
+                              </View>
+                            </MotionView>
+                          </View>
+                        </LinearGradient>
+                        <Animated.View pointerEvents="none" style={[styles.heroGlow, heroGlowStyle]} />
+                      </Pressable>
+                    </Animated.View>
+                  );
+                })}
+              </ScrollView>
+            ) : (
+              <Animated.View style={[styles.heroWrap, heroAnimatedStyle]}>
+                <Pressable
+                  style={({ pressed }) => [styles.heroPressable, pressed && styles.heroPressed]}
+                  onPress={() => {
+                    void Haptics.selectionAsync();
+                    const params = new URLSearchParams();
+                    if (selectedRange.startOn) params.set('startOn', selectedRange.startOn);
+                    if (selectedRange.endOnExclusive) {
+                      params.set('endOnExclusive', selectedRange.endOnExclusive);
+                    }
+                    router.push((`/personal-history?${params.toString()}`) as never);
+                  }}
+                >
+                  <LinearGradient colors={['#1F2438', '#101219', '#0B0B0F']} style={styles.hero}>
+                    <Text style={styles.heroEyebrow}>{heroEyebrow}</Text>
+                    <Text style={styles.heroAmount}>{formatMinor(snapshotMinor)}</Text>
+                    <View style={styles.heroStats}>
+                      <MotionView direction="up" distance={90} delayMs={220}>
+                        <View style={styles.heroStatChip}>
+                          <Text style={styles.heroStatLabel}>{heroRangeLabel}</Text>
+                          <Text style={styles.heroStatValue}>{currentCycleLabel}</Text>
+                        </View>
+                      </MotionView>
+                      <MotionView direction="right" distance={120} delayMs={280}>
+                        <View style={styles.heroStatChip}>
+                          <Text style={styles.heroStatLabel}>Spend</Text>
+                          <Text style={styles.heroStatValue}>{formatMinor(personalSpendMinor)}</Text>
+                        </View>
+                      </MotionView>
+                    </View>
+                  </LinearGradient>
+                  <Animated.View pointerEvents="none" style={[styles.heroGlow, heroGlowStyle]} />
+                </Pressable>
+              </Animated.View>
+            )}
 
-        {cyclesWithTransactions.length > 0 ? (
-          <View style={styles.selectorBlock}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.cycleCarousel}
-            >
-              {cyclesWithTransactions.map((cycle, index) => {
-                const active = filter === 'cycle' && selectedCycle?.id === cycle.id;
-                return (
-                  <MotionView
-                    key={cycle.id}
-                    index={index}
-                    direction={active ? 'down' : 'up'}
-                    distance={70}
-                    delayMs={120}
-                    stepMs={55}
-                  >
+            {filter === 'month' && cyclesWithTransactions.length > 1 && heroPagerWidth > 0 ? (() => {
+              const cycleIdx = Math.max(0, cyclesWithTransactions.findIndex((cycle) => cycle.id === selectedCycle?.id));
+              const hasPrev = cycleIdx > 0;
+              const hasNext = cycleIdx < cyclesWithTransactions.length - 1;
+              return (
+                <View pointerEvents="box-none" style={styles.heroArrows}>
+                  {hasPrev ? (
                     <Pressable
-                      style={({ pressed }) => [
-                        styles.cycleChip,
-                        active && styles.cycleChipActive,
-                        pressed && styles.cycleChipPressed,
-                      ]}
+                      style={({ pressed }) => [styles.heroArrow, pressed && styles.heroArrowPressed]}
                       onPress={() => {
-                        setSelectedCycleId(cycle.id);
-                        setFilter('cycle');
+                        const next = cyclesWithTransactions[cycleIdx - 1];
+                        if (!next) return;
+                        setSelectedCycleId(next.id);
+                        heroPagerRef.current?.scrollTo({ x: (cycleIdx - 1) * heroPagerWidth, animated: true });
                         void Haptics.selectionAsync();
                       }}
                     >
-                      <Text style={[styles.cycleChipText, active && styles.cycleChipTextActive]}>
-                        {cycle.label}
-                      </Text>
+                      <MaterialCommunityIcons name="chevron-left" size={24} color={colors.text} />
                     </Pressable>
-                  </MotionView>
-                );
-              })}
-            </ScrollView>
+                  ) : <View style={styles.heroArrowSpacer} />}
+                  {hasNext ? (
+                    <Pressable
+                      style={({ pressed }) => [styles.heroArrow, pressed && styles.heroArrowPressed]}
+                      onPress={() => {
+                        const next = cyclesWithTransactions[cycleIdx + 1];
+                        if (!next) return;
+                        setSelectedCycleId(next.id);
+                        heroPagerRef.current?.scrollTo({ x: (cycleIdx + 1) * heroPagerWidth, animated: true });
+                        void Haptics.selectionAsync();
+                      }}
+                    >
+                      <MaterialCommunityIcons name="chevron-right" size={24} color={colors.text} />
+                    </Pressable>
+                  ) : <View style={styles.heroArrowSpacer} />}
+                </View>
+              );
+            })() : null}
           </View>
-        ) : null}
+        </MotionView>
 
         <View style={styles.filterRow}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.filterChip,
+              filter === 'month' && styles.filterChipActive,
+              pressed && styles.cycleChipPressed,
+            ]}
+            onPress={() => {
+              setFilter('month');
+              void Haptics.selectionAsync();
+            }}
+          >
+            <Text style={[styles.filterChipText, filter === 'month' && styles.filterChipTextActive]}>
+              Month
+            </Text>
+          </Pressable>
           <Pressable
             style={({ pressed }) => [
               styles.filterChip,
@@ -618,72 +754,48 @@ export default function HomeScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Top categories</Text>
           <View style={styles.sectionBody}>
-            {categorySpend.length === 0 ? (
+            {topCategoryTotals.length === 0 ? (
               <View style={styles.emptyCard}>
                 <Text style={styles.emptyText}>No spending in this range yet.</Text>
               </View>
             ) : (
-              categorySpend.map((item, index) => (
-                <MotionView key={item.categoryId} index={index} direction="left" distance={145} delayMs={250}>
-                  <View style={styles.categoryCard}>
+              topCategoryTotals.map((item, index) => (
+                <MotionView key={`${item.label}-${item.tone}`} index={index} direction="left" distance={145} delayMs={250}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Show ${item.label} transactions`}
+                    style={({ pressed }) => [styles.categoryCard, pressed && styles.cycleChipPressed]}
+                    onPress={() => {
+                      void Haptics.selectionAsync();
+                      const params = new URLSearchParams();
+                      if (selectedRange.startOn) params.set('startOn', selectedRange.startOn);
+                      if (selectedRange.endOnExclusive) {
+                        params.set('endOnExclusive', selectedRange.endOnExclusive);
+                      }
+                      params.set('kind', item.tone === 'income' ? 'income' : 'expense');
+                      params.set('parentLabel', item.label);
+                      router.push((`/personal-history?${params.toString()}`) as never);
+                    }}
+                  >
                     <View style={styles.alertRow}>
                       <Text style={styles.categoryLabel}>{item.label}</Text>
-                      <Text style={styles.categoryAmount}>{formatMinor(item.spentMinor)}</Text>
+                      <Text
+                        style={[
+                          styles.categoryAmount,
+                          { color: item.tone === 'income' ? colors.success : colors.danger },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {item.tone === 'income' ? '+' : '-'}
+                        {formatMinor(Math.abs(item.netMinor))}
+                      </Text>
                     </View>
-                    <ProgressBar value={spendTotal === 0 ? 0 : item.spentMinor / spendTotal} color={item.color} />
-                  </View>
+                    <ProgressBar value={spendTotal === 0 ? 0 : item.absMinor / spendTotal} color={item.color} />
+                  </Pressable>
                 </MotionView>
               ))
             )}
           </View>
-        </View>
-
-        {hints.length > 0 ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Helpful nudges</Text>
-            <View style={styles.sectionBody}>
-              {hints.map((hint, index) => (
-                <MotionView key={hint} index={index} direction="down" distance={120} delayMs={290}>
-                  <View style={styles.hintCard}>
-                    <MaterialCommunityIcons name="lightbulb-outline" size={18} color={colors.accent} />
-                    <Text style={styles.hintText}>{hint}</Text>
-                  </View>
-                </MotionView>
-              ))}
-            </View>
-          </View>
-        ) : null}
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Momentum streak</Text>
-          <MotionView direction="up" distance={140} delayMs={230}>
-            <View style={styles.streakCard}>
-              <Animated.View style={[styles.streakSpark, styles.streakSparkOne, streakSparkOneStyle]} />
-              <Animated.View style={[styles.streakSpark, styles.streakSparkTwo, streakSparkTwoStyle]} />
-              <View style={styles.streakTopRow}>
-                <Animated.View style={[styles.streakIconWrap, streakIconStyle]}>
-                  <MaterialCommunityIcons name={streakDays >= 7 ? 'fire' : 'trending-up'} size={20} color={colors.accentAlt} />
-                </Animated.View>
-                <View style={styles.streakCopy}>
-                  <Text style={styles.streakTitle}>{streakDays} day{streakDays === 1 ? '' : 's'} active</Text>
-                  <Text style={styles.streakMeta}>{streakTier} · {todayCount} logged today</Text>
-                </View>
-              </View>
-              <ProgressBar value={streakProgress} color={colors.accentAlt} />
-              <View style={styles.streakBottomRow}>
-                <Text style={styles.streakGoal}>Goal: 7-day streak</Text>
-                <Pressable
-                  style={({ pressed }) => [styles.streakAction, pressed && styles.cycleChipPressed]}
-                  onPress={() => {
-                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    composer.openCreate();
-                  }}
-                >
-                  <Text style={styles.streakActionText}>Log now</Text>
-                </Pressable>
-              </View>
-            </View>
-          </MotionView>
         </View>
 
         <View style={[styles.section, styles.sectionFlush]}>
@@ -748,7 +860,31 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { paddingBottom: spacing.xxl * 4, gap: spacing.lg },
-  heroWrap: { marginHorizontal: spacing.lg },
+  heroWrap: { paddingHorizontal: spacing.lg },
+  heroPressable: { borderRadius: radius.lg },
+  heroPressed: { opacity: 0.92 },
+  heroArrows: {
+    position: 'absolute',
+    left: spacing.sm,
+    right: spacing.sm,
+    top: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  heroArrowSpacer: { width: 34 },
+  heroArrow: {
+    width: 34,
+    height: 34,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(11,11,15,0.46)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  heroArrowPressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
   hero: {
     borderRadius: radius.lg,
     padding: spacing.xl,
@@ -854,50 +990,4 @@ const styles = StyleSheet.create({
   categoryCard: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.md, gap: spacing.sm },
   categoryLabel: { ...typography.body, color: colors.text, flex: 1 },
   categoryAmount: { ...typography.body, color: colors.text, fontWeight: '600' },
-  hintCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    gap: spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  hintText: { ...typography.body, color: colors.text, flex: 1 },
-  streakCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    gap: spacing.sm,
-    overflow: 'hidden',
-  },
-  streakTopRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  streakIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(124,92,255,0.18)',
-  },
-  streakCopy: { flex: 1, gap: 2 },
-  streakTitle: { ...typography.body, color: colors.text, fontWeight: '700' },
-  streakMeta: { ...typography.label, color: colors.textMuted },
-  streakBottomRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
-  streakGoal: { ...typography.label, color: colors.textMuted },
-  streakAction: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(124,92,255,0.2)',
-  },
-  streakActionText: { ...typography.label, color: colors.text, fontWeight: '700' },
-  streakSpark: {
-    position: 'absolute',
-    width: 8,
-    height: 8,
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(245,185,66,0.8)',
-  },
-  streakSparkOne: { top: 10, right: 14 },
-  streakSparkTwo: { top: 26, right: 30 },
 });
