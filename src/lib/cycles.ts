@@ -70,6 +70,130 @@ export const activeCycle = (cycles: readonly SalaryCycle[]): SalaryCycle | null 
   return cycles[cycles.length - 1] ?? null;
 };
 
+type YmdParts = { y: number; m: number; d: number };
+
+const pad2 = (value: number): string => String(value).padStart(2, '0');
+
+const addMonths = ({ y, m, d }: YmdParts, delta: number): YmdParts => {
+  const idx = (y * 12 + (m - 1)) + delta;
+  const ny = Math.floor(idx / 12);
+  const nm = (idx % 12) + 1;
+  return { y: ny, m: nm, d };
+};
+
+const monthStartYmd = (y: number, m: number): string => `${y}-${pad2(m)}-01`;
+
+const monthKey = (ymd: string): { y: number; m: number } => {
+  const { y, m } = parseYmd(ymd);
+  return { y, m };
+};
+
+const anchoredYmd = (y: number, m: number, anchorDay: number): string =>
+  `${y}-${pad2(m)}-${pad2(Math.min(anchorDay, new Date(y, m, 0).getDate()))}`;
+
+const cycleStartForDate = (
+  ymd: string,
+  anchorDay: number,
+): { y: number; m: number } => {
+  const { y, m } = parseYmd(ymd);
+  const currentMonthStart = anchoredYmd(y, m, anchorDay);
+  if (ymd < currentMonthStart) {
+    const previous = addMonths({ y, m, d: 1 }, -1);
+    return { y: previous.y, m: previous.m };
+  }
+  return { y, m };
+};
+
+export const buildCalendarCycles = (rows: readonly { occurred_on: string }[]): SalaryCycle[] => {
+  if (rows.length === 0) return [];
+  const sorted = [...rows].sort((a, b) => a.occurred_on.localeCompare(b.occurred_on));
+  const first = sorted[0]?.occurred_on;
+  const last = sorted[sorted.length - 1]?.occurred_on;
+  if (!first || !last) return [];
+
+  const start = monthKey(first);
+  const end = monthKey(last);
+
+  const out: SalaryCycle[] = [];
+  let cursor = { y: start.y, m: start.m, d: 1 };
+  const endIdx = end.y * 12 + (end.m - 1);
+  while (cursor.y * 12 + (cursor.m - 1) <= endIdx) {
+    const startOn = monthStartYmd(cursor.y, cursor.m);
+    const next = addMonths(cursor, 1);
+    const endOnExclusive = monthStartYmd(next.y, next.m);
+    const id = `cal-${cursor.y}-${pad2(cursor.m)}`;
+    out.push({
+      id,
+      startOn,
+      endOnExclusive,
+      label: formatMonthYearLabel(startOn),
+    });
+    cursor = next;
+  }
+
+  // Latest calendar cycle should be considered active.
+  if (out.length > 0) {
+    const lastIndex = out.length - 1;
+    const last = out[lastIndex];
+    if (last) out[lastIndex] = { ...last, endOnExclusive: null };
+  }
+
+  return out;
+};
+
+export const buildDefaultCycles = (txns: readonly { id: string; occurred_on: string; is_salary?: boolean }[]): SalaryCycle[] => {
+  const salaryCycles = buildSalaryCycles(
+    txns.filter((t) => Boolean(t.is_salary)).map((t) => ({ id: t.id, occurred_on: t.occurred_on })),
+  );
+  if (salaryCycles.length > 0) return salaryCycles;
+  return buildCalendarCycles(txns);
+};
+
+export const buildNavigableCycles = (
+  txns: readonly { id: string; occurred_on: string; is_salary?: boolean }[],
+): SalaryCycle[] => {
+  if (txns.length === 0) return [];
+
+  const salaryTxns = [...txns]
+    .filter((txn) => Boolean(txn.is_salary))
+    .sort((a, b) => a.occurred_on.localeCompare(b.occurred_on));
+
+  if (salaryTxns.length > 1) return buildDefaultCycles(txns);
+
+  const sorted = [...txns].sort((a, b) => a.occurred_on.localeCompare(b.occurred_on));
+  const first = sorted[0]?.occurred_on;
+  const last = sorted[sorted.length - 1]?.occurred_on;
+  if (!first || !last) return [];
+
+  const anchorDay = salaryTxns[0] ? parseYmd(salaryTxns[0].occurred_on).d : 1;
+  const start = cycleStartForDate(first, anchorDay);
+  const idsByStart = new Map(salaryTxns.map((txn) => [txn.occurred_on, txn.id]));
+
+  const cycles: SalaryCycle[] = [];
+  let cursor = { y: start.y, m: start.m, d: 1 };
+  while (true) {
+    const startOn = anchoredYmd(cursor.y, cursor.m, anchorDay);
+    const next = addMonths(cursor, 1);
+    const endOnExclusive = anchoredYmd(next.y, next.m, anchorDay);
+
+    cycles.push({
+      id: idsByStart.get(startOn) ?? `nav-${startOn}`,
+      startOn,
+      endOnExclusive,
+      label: labelForSalaryDate(startOn),
+    });
+
+    if (last < endOnExclusive) break;
+    cursor = next;
+  }
+
+  const lastIndex = cycles.length - 1;
+  const latest = cycles[lastIndex];
+  if (latest) cycles[lastIndex] = { ...latest, endOnExclusive: null };
+
+  return cycles;
+};
+
 // Group arbitrary rows with an `occurred_on` by cycle id.
 // Rows that fall before the first cycle are placed under the special key "pre-cycle".
 export const PRE_CYCLE = 'pre-cycle' as const;

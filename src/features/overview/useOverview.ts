@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import {
   activeCycle,
-  buildSalaryCycles,
+  buildDefaultCycles,
   type SalaryCycle,
 } from '@/lib/cycles';
 import { bankBalance, transactionBalance, type BalanceTxn } from '@/lib/balance';
@@ -73,7 +73,9 @@ export type OverviewData = {
 };
 
 const EMPTY_SHARED: SharedCycleResult = {
-  userTopupTotal: 0,
+  meTopupTotal: 0,
+  gfTopupTotal: 0,
+  totalTopupTotal: 0,
   sharedExpenseTotal: 0,
   partnerInferred: 0,
   userShareRatio: 0.5,
@@ -197,7 +199,7 @@ export const useOverview = (): OverviewData => {
         }
       }
 
-      const cycles = buildSalaryCycles(txns.filter((t) => t.is_salary));
+      const cycles = buildDefaultCycles(txns);
       const active = activeCycle(cycles);
       const previousCycle = cycles.length > 1 ? cycles[cycles.length - 2] ?? null : null;
 
@@ -278,7 +280,15 @@ export const useOverview = (): OverviewData => {
       setBudgets(budgets);
       setCycle(active);
       setPreviousCycleState(previousCycle);
-      setShared(computeSharedCycle(cycleTopups, cycleSharedExpenses));
+      setShared(
+        computeSharedCycle(
+          cycleTopups.map((t) => ({
+            amount_minor: t.amount_minor,
+            shared_participant: t.shared_participant,
+          })),
+          cycleSharedExpenses.map((t) => ({ amount_minor: t.amount_minor })),
+        ),
+      );
       setCycleBalanceMinor(currentCycleBalanceMinor);
       setBankBalanceMinor(bankBalance(totalSavingsMinor, totalLoanRemainingMinor));
       setSavingsAccounts(savingsAccountsRows);

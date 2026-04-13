@@ -15,6 +15,7 @@ import { SkeletonBlock, SkeletonCard } from '@/ui/Skeleton';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 import { formatMinor, formatPercent } from '@/lib/format';
 import type { SalaryCycle } from '@/lib/cycles';
+import { computeSharedCycle } from '@/lib/shared';
 import type { TransactionRow } from '@/features/transactions/types';
 import { supabase } from '@/lib/supabase';
 
@@ -159,12 +160,10 @@ export default function SharedScreen() {
   }, [categoryMeta, sharedExpenses]);
 
   const sharedSpendTotal = sharedExpenses.reduce((sum, row) => sum + row.amount_minor, 0);
-  const userTopupTotal = topups.reduce((sum, row) => sum + row.amount_minor, 0);
-  const partnerInferred = Math.max(sharedSpendTotal - userTopupTotal, 0);
-  const denominator = userTopupTotal + partnerInferred;
-  const ratio = denominator === 0 ? 0.5 : userTopupTotal / denominator;
-  const userEffectiveShare = Math.round(sharedSpendTotal * ratio);
-  const sharedBalance = userTopupTotal - userEffectiveShare;
+  const { totalTopupTotal, userShareRatio: ratio, userEffectiveShare, sharedBalance } = computeSharedCycle(
+    topups.map((row) => ({ amount_minor: row.amount_minor, shared_participant: row.shared_participant })),
+    sharedExpenses.map((row) => ({ amount_minor: row.amount_minor })),
+  );
 
   const deleteTransaction = async (row: TransactionRow): Promise<void> => {
     const { error } = await supabase.from('transactions').delete().eq('id', row.id);
@@ -187,7 +186,21 @@ export default function SharedScreen() {
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.text} />}
       >
-        <ScreenHeader title="Shared" subtitle="Fairness and shared spend" />
+        <ScreenHeader
+          title="Shared"
+          subtitle="Fairness and shared spend"
+          actions={[
+            {
+              icon: 'plus',
+              tone: 'accent',
+              onPress: () =>
+                composer.openCreate({
+                  kind: 'expense',
+                  from_shared_screen: true,
+                }),
+            },
+          ]}
+        />
 
       {data.isInitialLoading ? <SharedSkeleton /> : null}
 
@@ -213,18 +226,6 @@ export default function SharedScreen() {
               </View>
             </MotionView>
           </View>
-          <Pressable
-            style={styles.heroButton}
-            onPress={() =>
-              composer.openCreate({
-                kind: 'expense',
-                is_shared_topup: true,
-                name: 'Shared top-up',
-              })
-            }
-          >
-            <Text style={styles.heroButtonText}>Top up</Text>
-          </Pressable>
         </View>
       </MotionView>
 
@@ -250,7 +251,7 @@ export default function SharedScreen() {
         <MotionView style={styles.metricMotion} direction="left" distance={150} delayMs={180}>
           <View style={styles.metricCard}>
             <Text style={styles.metricLabel}>Contributed</Text>
-            <Text style={styles.metricAmount}>{formatMinor(userTopupTotal)}</Text>
+            <Text style={styles.metricAmount}>{formatMinor(totalTopupTotal)}</Text>
           </View>
         </MotionView>
         <MotionView style={styles.metricMotion} direction="right" distance={150} delayMs={220}>
@@ -299,7 +300,9 @@ export default function SharedScreen() {
             ) : (
               topups.map((row) => (
                 <View key={row.id} style={styles.timelineRow}>
-                  <Text style={styles.timelineLabel}>{row.name}</Text>
+                  <Text style={styles.timelineLabel}>
+                    {row.shared_participant === 'gf' ? 'GF' : 'Me'} · {row.name}
+                  </Text>
                   <Text style={styles.timelineAmount}>{formatMinor(row.amount_minor)}</Text>
                 </View>
               ))
@@ -386,15 +389,6 @@ const styles = StyleSheet.create({
   },
   heroStatLabel: { ...typography.label, color: colors.textMuted, fontSize: 11, textTransform: 'uppercase' },
   heroStatValue: { ...typography.label, color: colors.text, fontWeight: '600' },
-  heroButton: {
-    marginTop: spacing.sm,
-    alignSelf: 'flex-start',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.pill,
-    backgroundColor: colors.accent,
-  },
-  heroButtonText: { ...typography.label, color: colors.text },
   metricsRow: { flexDirection: 'row', gap: spacing.md, paddingHorizontal: spacing.lg },
   metricMotion: { flex: 1 },
   metricCard: { flex: 1, backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.lg, gap: spacing.xs },

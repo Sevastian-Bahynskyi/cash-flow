@@ -60,7 +60,7 @@ export default function AlertsScreen() {
 
   const hints = [
     data.transactions.length === 0 ? 'Log your first transaction so alerts can become behavioral instead of empty.' : null,
-    data.shared.userTopupTotal === 0 ? 'Your first shared top-up unlocks the fairness view and ratio explanation.' : null,
+    data.shared.totalTopupTotal === 0 ? 'Your first shared top-up unlocks the fairness view and ratio explanation.' : null,
     data.budgets.length === 0 ? 'Set one budget to start getting calm warning states before overspending sneaks up.' : null,
   ].filter((value): value is string => value !== null);
 
