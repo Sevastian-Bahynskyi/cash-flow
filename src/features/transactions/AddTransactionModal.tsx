@@ -297,20 +297,36 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
     () => (categoriesState.status === 'ready' ? categoriesState.options : []),
     [categoriesState],
   );
+  const sharedTopupCategory = useMemo(
+    () => findSharedTopupCategoryOption(categoryOptions),
+    [categoryOptions],
+  );
+
+  const resolvedCategoryForSave = useMemo(() => {
+    const base = kind === 'income' ? normalizeIncomeCategoryOption(category, categoryOptions) : category;
+    if (kind === 'expense' && isSharedTopup) {
+      return sharedTopupCategory ?? base;
+    }
+    return base;
+  }, [category, categoryOptions, isSharedTopup, kind, sharedTopupCategory]);
+  const amountMinorForSave = useMemo(() => parseAmountMinor(amount), [amount]);
+  const canSave = Boolean(resolvedCategoryForSave && amountMinorForSave !== null);
 
   const editing = Boolean(draft?.id);
   const sharedFlowLocked = Boolean(draft?.from_shared_screen && !draft?.id);
+  const sharedTopupEditFlow = Boolean(editing && draft?.kind === 'expense' && draft?.is_shared_topup);
+  const useSharedFlowOptions = kind === 'expense' && (sharedFlowLocked || sharedTopupEditFlow);
   const amountDisplayState = useMemo(() => highlightedAmount(amount), [amount]);
   const selectedIsSalary = isSalaryCategoryOption(category);
   const selectedIsMobilePay = isMobilePayCategoryOption(category);
   const categoryAccentColor = category
     ? getCategoryDisplayColor({
-        kind,
-        parentName: category.parentName,
-        name: category.name,
-        parentColor: category.parentColor,
-        color: category.color,
-      })
+      kind,
+      parentName: category.parentName,
+      name: category.name,
+      parentColor: category.parentColor,
+      color: category.color,
+    })
     : colors.textMuted;
   const selectedTransferPerson = useMemo(() => {
     const normalizedName = normalizeTransferPersonName(name);
@@ -323,6 +339,8 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
   const autoAppliedCategoryId = useRef<string | null>(null);
   const suggestionRunId = useRef(0);
   const handledPendingImportId = useRef<string | null>(null);
+  const suppressRecentSuggestionsName = useRef<string | null>(null);
+  const lastSharedExpenseCategoryId = useRef<string | null>(null);
 
   const openKeypad = (): void => {
     if (keypadOpen) return;
@@ -386,8 +404,8 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
         nextShared = true;
         nextTopup = false;
       } else {
-        nextTopup = true;
-        nextShared = false;
+        nextShared = true;
+        nextTopup = false;
       }
     }
     setShared(nextShared);
@@ -410,6 +428,12 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
     setImageImportError(null);
     setImageImportSkippedDuplicates([]);
     autoAppliedCategoryId.current = null;
+    suppressRecentSuggestionsName.current = null;
+    if (fromSharedCreate && nextShared && !nextTopup && nextCategory) {
+      lastSharedExpenseCategoryId.current = nextCategory.id;
+    } else {
+      lastSharedExpenseCategoryId.current = null;
+    }
   };
 
   useEffect(() => {
@@ -460,12 +484,10 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
   }, [categoryOptions, draft?.category, draft?.category_id, visible]);
 
   useEffect(() => {
-    if (!visible || !isSharedTopup || categoryOptions.length === 0) return;
-    const next = findSharedTopupCategoryOption(categoryOptions);
-    if (!next) return;
-    setCategory(next);
+    if (!visible || !isSharedTopup || !sharedTopupCategory) return;
+    setCategory(sharedTopupCategory);
     setUserTouchedCategory(true);
-  }, [visible, isSharedTopup, categoryOptions]);
+  }, [visible, isSharedTopup, sharedTopupCategory]);
 
   useEffect(() => {
     if (!visible) return;
@@ -520,7 +542,17 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
     if (!visible) return;
     if (recentTimer.current) clearTimeout(recentTimer.current);
     const q = name.trim();
+
+    if (suppressRecentSuggestionsName.current && q !== suppressRecentSuggestionsName.current) {
+      suppressRecentSuggestionsName.current = null;
+    }
+
     if (q.length < 1) {
+      setRecentSuggestions([]);
+      return;
+    }
+
+    if (suppressRecentSuggestionsName.current === q) {
       setRecentSuggestions([]);
       return;
     }
@@ -1164,24 +1196,18 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
   };
 
   const applyRecentSuggestion = (row: TransactionRow): void => {
+    suppressRecentSuggestionsName.current = row.name.trim();
+    setRecentSuggestions([]);
     setName(row.name);
-    setComment(row.comment ?? '');
-    setDate(row.occurred_on);
-    setKind(row.kind);
-    setRecurring(row.recurring);
-    setShared(row.shared);
-    setSharedParticipant(row.shared_participant ?? 'me');
-    setIsSharedTopup(row.is_shared_topup);
-    setCurrencyCode(row.currency_code);
-    setAmount(minorToInput(row.original_amount_minor));
-    setCountryIso(row.country_iso ?? countryIso);
     const baseMatch =
       categoryOptions.find((option) => option.id === row.category_id) ??
       (row.is_salary ? findSalaryCategoryOption(categoryOptions) : null);
     const match =
-      row.kind === 'income'
+      kind === 'income'
         ? normalizeIncomeCategoryOption(baseMatch, categoryOptions)
-        : baseMatch;
+        : isIncomeCategoryOption(baseMatch)
+          ? null
+          : baseMatch;
     if (match) {
       autoAppliedCategoryId.current = null;
       setCategory(match);
@@ -1192,8 +1218,8 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
   const visibleCategoryLabel = category ? `${category.parentName} · ${category.name}` : 'Pick a category';
   const showSuggestionCard = Boolean(
     !isSharedTopup &&
-      suggestion &&
-      (!userTouchedCategory || !category || category.id !== suggestion.category.id),
+    suggestion &&
+    (!userTouchedCategory || !category || category.id !== suggestion.category.id),
   );
 
   return (
@@ -1204,15 +1230,15 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
             <Text style={styles.headerAction}>Cancel</Text>
           </Pressable>
           <Text style={styles.headerTitle}>{editing ? 'Edit transaction' : 'New transaction'}</Text>
-          <Pressable onPress={() => void handleSave()} disabled={saving} hitSlop={12}>
-            <Text style={[styles.headerAction, styles.headerSave, saving && styles.disabled]}>
+          <Pressable onPress={() => void handleSave()} disabled={saving || !canSave} hitSlop={12}>
+            <Text style={[styles.headerAction, styles.headerSave, (saving || !canSave) && styles.disabled]}>
               {saving ? 'Saving' : 'Save'}
             </Text>
           </Pressable>
         </View>
 
         <View style={styles.amountHero}>
-          {!sharedFlowLocked ? (
+          {!useSharedFlowOptions ? (
             <TransactionKindSelector
               value={kind}
               onChange={(value) => {
@@ -1398,7 +1424,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
             multiline
           />
 
-          {kind === 'expense' && sharedFlowLocked ? (
+          {useSharedFlowOptions ? (
             <>
               <Text style={styles.label}>Options</Text>
               <View style={styles.actionRow}>
@@ -1413,6 +1439,27 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
                     setIsSharedTopup(false);
                     setSharedParticipant('me');
                     autoAppliedCategoryId.current = null;
+
+                    const isCurrentlyTopupCategory = Boolean(
+                      sharedTopupCategory && category?.id === sharedTopupCategory.id,
+                    );
+                    if (!isCurrentlyTopupCategory) {
+                      if (category) lastSharedExpenseCategoryId.current = category.id;
+                      setUserTouchedCategory(Boolean(category));
+                      return;
+                    }
+
+                    if (lastSharedExpenseCategoryId.current) {
+                      const restore = categoryOptions.find(
+                        (option) => option.id === lastSharedExpenseCategoryId.current,
+                      );
+                      if (restore) {
+                        setCategory(restore);
+                        setUserTouchedCategory(true);
+                        return;
+                      }
+                    }
+
                     setCategory(null);
                     setUserTouchedCategory(false);
                   }}
@@ -1426,11 +1473,17 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
                   variant="card"
                   labelPrefix="Top-up"
                   onBeforeOpen={() => {
+                    if (category && (!sharedTopupCategory || category.id !== sharedTopupCategory.id)) {
+                      lastSharedExpenseCategoryId.current = category.id;
+                    }
                     setShared(false);
                     setIsSharedTopup(true);
                   }}
                   onChange={(next) => {
                     setSharedParticipant(next);
+                    if (category && (!sharedTopupCategory || category.id !== sharedTopupCategory.id)) {
+                      lastSharedExpenseCategoryId.current = category.id;
+                    }
                     setShared(false);
                     setIsSharedTopup(true);
                   }}
@@ -1481,7 +1534,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
             </View>
           ) : null}
 
-          {kind === 'expense' && shared && !isSharedTopup && !sharedFlowLocked ? (
+          {kind === 'expense' && shared && !isSharedTopup && !useSharedFlowOptions ? (
             <>
               <Text style={styles.label}>Shared participant</Text>
               <View style={styles.actionRow}>
@@ -1627,7 +1680,13 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
           kind={kind}
           onSelect={(option) => {
             autoAppliedCategoryId.current = null;
-            setCategory(kind === 'income' ? normalizeIncomeCategoryOption(option, categoryOptions) : option);
+            const normalized = kind === 'income' ? normalizeIncomeCategoryOption(option, categoryOptions) : option;
+            setCategory(normalized);
+            if (sharedFlowLocked && kind === 'expense' && normalized) {
+              if (!sharedTopupCategory || normalized.id !== sharedTopupCategory.id) {
+                lastSharedExpenseCategoryId.current = normalized.id;
+              }
+            }
             setUserTouchedCategory(true);
           }}
           frequentIds={frequentIds}

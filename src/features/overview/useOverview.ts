@@ -127,7 +127,7 @@ export const useOverview = (): OverviewData => {
         supabase
           .from('transactions')
           .select(
-            'id, user_id, kind, amount_minor, occurred_on, name, comment, category_id, country_iso, recurring, shared, shared_participant, is_shared_topup, is_salary, currency_code, original_amount_minor, converted_amount_minor, fx_rate, created_at, updated_at',
+            'id, user_id, kind, amount_minor, occurred_on, name, comment, category_id, country_iso, recurring, shared, shared_participant, is_shared_topup, is_salary, currency_code, original_amount_minor, converted_amount_minor, fx_rate, personal_effect_minor, shared_effect_minor, is_neutral_display, created_at, updated_at',
           )
           .order('occurred_on', { ascending: true }),
         supabase

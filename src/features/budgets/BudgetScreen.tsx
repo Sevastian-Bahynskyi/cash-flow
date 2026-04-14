@@ -1,7 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Keyboard,
+  LayoutAnimation,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -9,9 +11,11 @@ import {
   Text,
   TextInput,
   View,
+  UIManager,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useLocalSearchParams } from 'expo-router';
 import { useOverview } from '@/features/overview/useOverview';
 import { buildCategoryMeta } from '@/features/categories/helpers';
 import { buildBudgetStateByCategory } from '@/features/budgets/helpers';
@@ -19,12 +23,17 @@ import { findIncomeParentIds, isIncomeCategoryRow } from '@/features/categories/
 import { runDetached } from '@/lib/async';
 import { supabase } from '@/lib/supabase';
 import { formatMinor, formatPercent } from '@/lib/format';
+import { buildNavigableCycles, findCycleFor, type SalaryCycle } from '@/lib/cycles';
 import { ProgressBar } from '@/ui/ProgressBar';
 import { ScreenHeader } from '@/ui/ScreenHeader';
 import { CategoryIcon } from '@/ui/CategoryIcon';
 import { NumericKeypad } from '@/ui/NumericKeypad';
 import { SkeletonBlock, SkeletonCard } from '@/ui/Skeleton';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 type BudgetDraft = {
   categoryId: string;
@@ -34,11 +43,18 @@ type BudgetDraft = {
   budgetId?: string;
 };
 
+const toLocalIsoDay = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const parseMinor = (raw: string): number | null => {
   const normalized = raw.trim().replace(',', '.');
   if (!normalized) return null;
   const value = Number(normalized);
-  if (!Number.isFinite(value) || value <= 0) return null;
+  if (!Number.isFinite(value) || value < 0) return null;
   return Math.round(value * 100);
 };
 
@@ -107,50 +123,131 @@ function BudgetSkeleton() {
 }
 
 export default function BudgetScreen() {
+  const { cycleId } = useLocalSearchParams<{ cycleId?: string | string[] }>();
+  const initialCycleId = Array.isArray(cycleId) ? cycleId[0] ?? null : cycleId ?? null;
   const data = useOverview();
   const [refreshing, setRefreshing] = useState(false);
   const [draft, setDraft] = useState<BudgetDraft | null>(null);
   const [saving, setSaving] = useState(false);
   const [query, setQuery] = useState('');
   const [keypadOpen, setKeypadOpen] = useState(true);
+  const [expandedParentIds, setExpandedParentIds] = useState<string[]>([]);
+  const [selectedCycleId, setSelectedCycleId] = useState<string | null>(null);
 
   const categoryMeta = useMemo(() => buildCategoryMeta(data.categories), [data.categories]);
+  const cycles = useMemo(() => buildNavigableCycles(data.transactions), [data.transactions]);
+  const cyclesWithTransactions = useMemo(
+    () =>
+      [...cycles]
+        .filter((cycle) =>
+          data.transactions.some(
+            (row) => row.occurred_on >= cycle.startOn && (cycle.endOnExclusive === null || row.occurred_on < cycle.endOnExclusive),
+          ),
+        )
+        .reverse(),
+    [cycles, data.transactions],
+  );
+  useEffect(() => {
+    const todayIsoDay = toLocalIsoDay(new Date());
+    if (cyclesWithTransactions.length === 0) {
+      setSelectedCycleId(null);
+      return;
+    }
+
+    setSelectedCycleId((current) => {
+      if (current && cyclesWithTransactions.some((cycle) => cycle.id === current)) return current;
+      if (initialCycleId && cyclesWithTransactions.some((cycle) => cycle.id === initialCycleId)) return initialCycleId;
+      return findCycleFor(cyclesWithTransactions, todayIsoDay)?.id ?? cyclesWithTransactions[0]?.id ?? null;
+    });
+  }, [cyclesWithTransactions, initialCycleId]);
+
+  const selectedCycle: SalaryCycle | null =
+    cyclesWithTransactions.find((cycle) => cycle.id === selectedCycleId) ??
+    findCycleFor(cyclesWithTransactions, toLocalIsoDay(new Date())) ??
+    cyclesWithTransactions[0] ??
+    null;
   const budgetStates = useMemo(
-    () => buildBudgetStateByCategory(data.categories, data.budgets, data.transactions, data.activeCycle),
-    [data.activeCycle, data.budgets, data.categories, data.transactions],
+    () => buildBudgetStateByCategory(data.categories, data.budgets, data.transactions, selectedCycle),
+    [data.budgets, data.categories, data.transactions, selectedCycle],
   );
   const amountDisplayState = useMemo(() => highlightedAmount(draft?.amount ?? ''), [draft?.amount]);
   const incomeParentIds = useMemo(() => findIncomeParentIds(data.categories), [data.categories]);
 
-  const rows = useMemo(() => {
-    const budgetByCategoryId = new Map(data.budgets.map((budget) => [budget.category_id, budget]));
-    return data.categories
-      .filter((category) => !isIncomeCategoryRow(category, incomeParentIds))
-      .map((category) => ({
-        category,
-        label: categoryMeta[category.id]?.label ?? category.name,
-        icon: category.icon,
-        budget: budgetByCategoryId.get(category.id),
-        state: budgetStates[category.id] ?? null,
-      }))
+  const selectedCycleBudgets = useMemo(
+    () => data.budgets.filter((budget) => budget.salary_cycle_id === selectedCycle?.id),
+    [data.budgets, selectedCycle?.id],
+  );
+
+  const budgetByCategoryId = useMemo(
+    () => new Map(selectedCycleBudgets.map((budget) => [budget.category_id, budget])),
+    [selectedCycleBudgets],
+  );
+
+  const groupedRows = useMemo(() => {
+    const parents = data.categories
+      .filter((category) => category.level === 1 && !isIncomeCategoryRow(category, incomeParentIds))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    return parents
+      .map((parent) => {
+        const children = data.categories
+          .filter((category) => category.parent_id === parent.id)
+          .sort((a, b) => a.name.localeCompare(b.name));
+        const hasBudget = Boolean(budgetByCategoryId.get(parent.id) || children.some((child) => budgetByCategoryId.get(child.id)));
+        return {
+          parent,
+          label: categoryMeta[parent.id]?.label ?? parent.name,
+          icon: parent.icon,
+          budget: budgetByCategoryId.get(parent.id) ?? null,
+          state: budgetStates[parent.id] ?? null,
+          hasBudget,
+          children: children.map((child) => ({
+            category: child,
+            label: categoryMeta[child.id]?.label ?? child.name,
+            icon: child.icon,
+            budget: budgetByCategoryId.get(child.id) ?? null,
+            state: budgetStates[child.id] ?? null,
+          })),
+        };
+      })
       .sort((a, b) => {
-        const aHasBudget = a.budget ? 1 : 0;
-        const bHasBudget = b.budget ? 1 : 0;
-        if (aHasBudget !== bHasBudget) return bHasBudget - aHasBudget;
-        if (a.category.level !== b.category.level) return a.category.level - b.category.level;
+        if (a.hasBudget !== b.hasBudget) return Number(b.hasBudget) - Number(a.hasBudget);
         return a.label.localeCompare(b.label);
       });
-  }, [budgetStates, categoryMeta, data.budgets, data.categories, incomeParentIds]);
+  }, [budgetByCategoryId, budgetStates, categoryMeta, data.categories, incomeParentIds]);
 
   const filteredRows = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    if (normalizedQuery.length === 0) return rows;
-    return rows.filter(({ label, category }) => {
-      const parentLabel = categoryMeta[category.id]?.label ?? label;
-      const searchText = `${label} ${category.name} ${parentLabel}`.toLowerCase();
-      return searchText.includes(normalizedQuery);
+    if (normalizedQuery.length === 0) return groupedRows;
+    return groupedRows.filter(({ parent, label, children }) => {
+      const parentLabel = categoryMeta[parent.id]?.label ?? label;
+      const parentText = `${label} ${parent.name} ${parentLabel}`.toLowerCase();
+      if (parentText.includes(normalizedQuery)) return true;
+      return children.some(({ category, label: childLabel }) => {
+        const childParentLabel = categoryMeta[category.parent_id ?? category.id]?.label ?? '';
+        const searchText = `${childLabel} ${category.name} ${childParentLabel}`.toLowerCase();
+        return searchText.includes(normalizedQuery);
+      });
     });
-  }, [categoryMeta, query, rows]);
+  }, [categoryMeta, groupedRows, query]);
+
+  const visibleParentIds = useMemo(() => filteredRows.map((group) => group.parent.id), [filteredRows]);
+
+  useEffect(() => {
+    setExpandedParentIds((current) => current.filter((id) => visibleParentIds.includes(id)));
+  }, [visibleParentIds]);
+
+  const toggleParent = (parentId: string): void => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpandedParentIds((current) =>
+      current.includes(parentId) ? current.filter((id) => id !== parentId) : [...current, parentId],
+    );
+  };
+
+  const selectCycle = (cycleId: string): void => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setSelectedCycleId(cycleId);
+  };
 
   const onRefresh = async (): Promise<void> => {
     setRefreshing(true);
@@ -162,16 +259,21 @@ export default function BudgetScreen() {
   };
 
   const saveBudget = async (): Promise<void> => {
-    if (!draft || !data.userId || !data.activeCycle) return;
+    if (!draft || !data.userId || !selectedCycle) return;
     const amountMinor = parseMinor(draft.amount);
     if (amountMinor === null) return;
+
+    if (amountMinor === 0) {
+      await removeBudget();
+      return;
+    }
 
     setSaving(true);
     try {
       const payload = {
         user_id: data.userId,
         category_id: draft.categoryId,
-        salary_cycle_id: data.activeCycle.id,
+        salary_cycle_id: selectedCycle.id,
         amount_minor: amountMinor,
       };
       const { error } = await supabase
@@ -188,10 +290,11 @@ export default function BudgetScreen() {
   };
 
   const removeBudget = async (): Promise<void> => {
-    if (!draft?.budgetId) return;
+    const budgetId = draft?.budgetId ?? budgetByCategoryId.get(draft?.categoryId ?? '')?.id;
+    if (!budgetId) return;
     setSaving(true);
     try {
-      const { error } = await supabase.from('budgets').delete().eq('id', draft.budgetId);
+      const { error } = await supabase.from('budgets').delete().eq('id', budgetId);
       if (!error) {
         await data.reload();
         setDraft(null);
@@ -212,103 +315,194 @@ export default function BudgetScreen() {
         <ScreenHeader
           back
           title="Budgets"
-          subtitle={data.activeCycle ? `Current cycle ${data.activeCycle.label}` : 'Add a salary transaction to start budgeting'}
+          subtitle={selectedCycle ? `Selected cycle ${selectedCycle.label}` : 'Add a salary transaction to start budgeting'}
         />
+
+        {selectedCycle && cyclesWithTransactions.length > 0 ? (
+          <View style={styles.cycleCard}>
+            <Pressable
+              style={({ pressed }) => [styles.cycleArrow, pressed && styles.buttonPressed]}
+              onPress={() => {
+                const index = cyclesWithTransactions.findIndex((cycle) => cycle.id === selectedCycle.id);
+                const next = cyclesWithTransactions[index - 1];
+                if (!next) return;
+                selectCycle(next.id);
+              }}
+              disabled={cyclesWithTransactions.findIndex((cycle) => cycle.id === selectedCycle.id) <= 0}
+            >
+              <MaterialCommunityIcons name="chevron-left" size={22} color={colors.text} />
+            </Pressable>
+            <View style={styles.cycleBody}>
+              <Text style={styles.cycleLabel}>Cycle</Text>
+              <Text style={styles.cycleValue}>{selectedCycle.label}</Text>
+              <Text style={styles.cycleMeta}>Budgets use this salary window, even if it is a past cycle.</Text>
+            </View>
+            <Pressable
+              style={({ pressed }) => [styles.cycleArrow, pressed && styles.buttonPressed]}
+              onPress={() => {
+                const index = cyclesWithTransactions.findIndex((cycle) => cycle.id === selectedCycle.id);
+                const next = cyclesWithTransactions[index + 1];
+                if (!next) return;
+                selectCycle(next.id);
+              }}
+              disabled={cyclesWithTransactions.findIndex((cycle) => cycle.id === selectedCycle.id) >= cyclesWithTransactions.length - 1}
+            >
+              <MaterialCommunityIcons name="chevron-right" size={22} color={colors.text} />
+            </Pressable>
+          </View>
+        ) : null}
 
         {data.isInitialLoading ? <BudgetSkeleton /> : null}
 
         {!data.isInitialLoading ? (
           <>
-        <View style={styles.hero}>
-          <Text style={styles.heroTitle}>Cycle budget state</Text>
-          <Text style={styles.heroBody}>
-            Budgets live on salary cycles, not calendar months. Tap any category to set, edit, or remove its target for the active cycle.
-          </Text>
-        </View>
 
-        <View style={styles.searchWrap}>
-          <MaterialCommunityIcons name="magnify" size={18} color={colors.textMuted} />
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search categories"
-            placeholderTextColor={colors.textMuted}
-            autoCorrect={false}
-            autoCapitalize="none"
-            style={styles.searchInput}
-          />
-          {query.trim().length > 0 ? (
-            <Pressable onPress={() => setQuery('')} hitSlop={12}>
-              <MaterialCommunityIcons name="close-circle" size={18} color={colors.textMuted} />
-            </Pressable>
-          ) : null}
-        </View>
-
-        {!data.activeCycle ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyTitle}>No active salary cycle yet</Text>
-            <Text style={styles.emptyBody}>
-              Mark an income transaction as salary first. That opens the current cycle and lets budgets attach to the right period.
-            </Text>
-          </View>
-        ) : (
-          <View style={styles.section}>
-            {filteredRows.length === 0 ? (
-              <View style={styles.emptySearchCard}>
-                <Text style={styles.emptyTitle}>No categories match</Text>
-                <Text style={styles.emptyBody}>Try a broader search term or clear the filter.</Text>
-              </View>
-            ) : null}
-
-            {filteredRows.map(({ category, label, icon, budget, state }) => {
-              const tone =
-                state?.tone === 'critical'
-                  ? colors.danger
-                  : state?.tone === 'warning'
-                    ? '#F5B942'
-                    : category.level === 1
-                      ? category.color
-                      : `${category.color}CC`;
-              return (
-                <Pressable
-                  key={category.id}
-                  style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-                  onPress={() => {
-                    Keyboard.dismiss();
-                    setKeypadOpen(true);
-                    setDraft({
-                      categoryId: category.id,
-                      label,
-                      icon,
-                      amount: budget ? String((budget.amount_minor / 100).toFixed(2)) : '',
-                      budgetId: budget?.id,
-                    });
-                  }}
-                >
-                  <View style={[styles.iconWrap, { backgroundColor: `${tone}22` }]}>
-                    <CategoryIcon name={icon} size={20} color={tone} />
-                  </View>
-                  <View style={styles.rowBody}>
-                    <View style={styles.rowHead}>
-                      <Text style={[styles.rowLabel, category.level === 2 && styles.rowLabelChild]}>
-                        {label}
-                      </Text>
-                      <Text style={styles.rowAmount}>
-                        {state ? formatMinor(state.amountMinor) : 'No budget'}
-                      </Text>
-                    </View>
-                    <Text style={styles.rowMeta}>
-                      {state
-                        ? `${formatMinor(state.spentMinor)} spent · ${formatPercent(state.ratio)}`
-                        : 'Tap to set a target for this cycle'}
-                    </Text>
-                    <ProgressBar value={state?.ratio ?? 0} color={tone} />
-                  </View>
+            <View style={styles.searchWrap}>
+              <MaterialCommunityIcons name="magnify" size={18} color={colors.textMuted} />
+              <TextInput
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Search categories"
+                placeholderTextColor={colors.textMuted}
+                autoCorrect={false}
+                autoCapitalize="none"
+                style={styles.searchInput}
+              />
+              {query.trim().length > 0 ? (
+                <Pressable onPress={() => setQuery('')} hitSlop={12}>
+                  <MaterialCommunityIcons name="close-circle" size={18} color={colors.textMuted} />
                 </Pressable>
-              );
-            })}
-          </View>
-        )}
+              ) : null}
+            </View>
+
+            {!selectedCycle ? (
+              <View style={styles.emptyCard}>
+                <Text style={styles.emptyTitle}>No active salary cycle yet</Text>
+                <Text style={styles.emptyBody}>
+                  Mark an income transaction as salary first. That opens the current cycle and lets budgets attach to the right period.
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.section}>
+                {filteredRows.length === 0 ? (
+                  <View style={styles.emptySearchCard}>
+                    <Text style={styles.emptyTitle}>No categories match</Text>
+                    <Text style={styles.emptyBody}>Try a broader search term or clear the filter.</Text>
+                  </View>
+                ) : null}
+
+                {filteredRows.map(({ parent, label, icon, budget, state, children }) => {
+                  const expanded = expandedParentIds.includes(parent.id);
+                  const tone =
+                    state?.tone === 'critical'
+                      ? colors.danger
+                      : state?.tone === 'warning'
+                        ? '#F5B942'
+                        : parent.color;
+                  return (
+                    <View key={parent.id} style={styles.groupCard}>
+                      <Pressable
+                        style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+                        onPress={() => {
+                          Keyboard.dismiss();
+                          setKeypadOpen(true);
+                          setDraft({
+                            categoryId: parent.id,
+                            label,
+                            icon,
+                            amount: budget ? String((budget.amount_minor / 100).toFixed(2)) : '',
+                            budgetId: budget?.id,
+                          });
+                        }}
+                      >
+                        <View style={[styles.iconWrap, { backgroundColor: `${tone}22` }]}>
+                          <CategoryIcon name={icon} size={20} color={tone} />
+                        </View>
+                        <View style={styles.rowBody}>
+                          <View style={styles.rowHead}>
+                            <Text style={styles.rowLabel}>{label}</Text>
+                            <View style={styles.rowAmountWrap}>
+                              <Text style={styles.rowAmount}>
+                                {state ? formatMinor(state.amountMinor) : 'No budget'}
+                              </Text>
+                            </View>
+                          </View>
+                          <Text style={styles.rowMeta}>
+                            {state
+                              ? `${formatMinor(state.spentMinor)} spent · ${formatPercent(state.ratio)}`
+                              : 'Tap to set a target for this cycle'}
+                          </Text>
+                          <ProgressBar value={state?.ratio ?? 0} color={tone} />
+                        </View>
+                        <Pressable
+                          hitSlop={14}
+                          style={({ pressed }) => [styles.chevronHitbox, pressed && styles.buttonPressed]}
+                          onPress={() => toggleParent(parent.id)}
+                        >
+                          <MaterialCommunityIcons
+                            name={expanded ? 'chevron-up' : 'chevron-down'}
+                            size={20}
+                            color={colors.textMuted}
+                          />
+                        </Pressable>
+                      </Pressable>
+
+                      {expanded ? (
+                        <View style={styles.childGroup}>
+                          {children.length === 0 ? (
+                            <Text style={styles.childEmpty}>No subcategories</Text>
+                          ) : (
+                            children.map(({ category, label: childLabel, icon: childIcon, budget: childBudget, state: childState }) => {
+                              const childTone =
+                                childState?.tone === 'critical'
+                                  ? colors.danger
+                                  : childState?.tone === 'warning'
+                                    ? '#F5B942'
+                                    : `${category.color}CC`;
+                              return (
+                                <Pressable
+                                  key={category.id}
+                                  style={({ pressed }) => [styles.childRow, pressed && styles.rowPressed]}
+                                  onPress={() => {
+                                    Keyboard.dismiss();
+                                    setKeypadOpen(true);
+                                    setDraft({
+                                      categoryId: category.id,
+                                      label: childLabel,
+                                      icon: childIcon,
+                                      amount: childBudget ? String((childBudget.amount_minor / 100).toFixed(2)) : '',
+                                      budgetId: childBudget?.id,
+                                    });
+                                  }}
+                                >
+                                  <View style={[styles.childIconWrap, { backgroundColor: `${childTone}22` }]}>
+                                    <CategoryIcon name={childIcon} size={18} color={childTone} />
+                                  </View>
+                                  <View style={styles.rowBody}>
+                                    <View style={styles.rowHead}>
+                                      <Text style={[styles.rowLabel, styles.rowLabelChild]}>{childLabel}</Text>
+                                      <Text style={styles.rowAmount}>
+                                        {childState ? formatMinor(childState.amountMinor) : 'No budget'}
+                                      </Text>
+                                    </View>
+                                    <Text style={styles.rowMeta}>
+                                      {childState
+                                        ? `${formatMinor(childState.spentMinor)} spent · ${formatPercent(childState.ratio)}`
+                                        : 'Tap to set a target for this cycle'}
+                                    </Text>
+                                    <ProgressBar value={childState?.ratio ?? 0} color={childTone} />
+                                  </View>
+                                </Pressable>
+                              );
+                            })
+                          )}
+                        </View>
+                      ) : null}
+                    </View>
+                  );
+                })}
+              </View>
+            )}
           </>
         ) : null}
       </ScrollView>
@@ -355,7 +549,7 @@ export default function BudgetScreen() {
                 <Text style={styles.amountCurrency}>DKK</Text>
               </View>
               <Text style={styles.helper}>
-                Use the same keypad as transactions. Progress updates automatically from transactions in the active salary cycle.
+                Use the same keypad as transactions. Progress updates automatically from transactions in the selected salary cycle.
               </Text>
 
               <Pressable
@@ -408,6 +602,28 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.bg },
   container: { flex: 1, backgroundColor: colors.bg },
   content: { paddingBottom: spacing.xxl * 3, gap: spacing.lg },
+  cycleCard: {
+    marginHorizontal: spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+  },
+  cycleBody: { flex: 1, gap: spacing.xs },
+  cycleLabel: { ...typography.label, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
+  cycleValue: { ...typography.h2, color: colors.text },
+  cycleMeta: { ...typography.label, color: colors.textMuted },
+  cycleArrow: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceAlt,
+  },
   hero: {
     marginHorizontal: spacing.lg,
     padding: spacing.lg,
@@ -473,8 +689,36 @@ const styles = StyleSheet.create({
   rowHead: { flexDirection: 'row', gap: spacing.md, alignItems: 'center' },
   rowLabel: { ...typography.body, color: colors.text, flex: 1, fontWeight: '600' },
   rowLabelChild: { color: colors.textMuted },
+  rowAmountWrap: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   rowAmount: { ...typography.label, color: colors.text },
   rowMeta: { ...typography.label, color: colors.textMuted },
+  groupCard: { gap: spacing.sm },
+  chevronHitbox: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceAlt,
+    marginLeft: spacing.xs,
+  },
+  childGroup: { gap: spacing.sm, paddingLeft: spacing.lg },
+  childRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    alignItems: 'center',
+  },
+  childEmpty: { ...typography.label, color: colors.textMuted, paddingHorizontal: spacing.sm },
+  childIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   modalSafeArea: { flex: 1, backgroundColor: colors.bg },
   modalContent: { flex: 1, justifyContent: 'space-between' },
   modalBody: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, gap: spacing.md },
@@ -496,6 +740,19 @@ const styles = StyleSheet.create({
   amountValueActive: { color: colors.accentAlt },
   amountCurrency: { ...typography.label, color: colors.textMuted, letterSpacing: 0.5 },
   helper: { ...typography.label, color: colors.textMuted },
+  smallButton: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+    backgroundColor: colors.accent,
+  },
+  smallButtonMuted: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceAlt,
+  },
+  smallButtonText: { ...typography.label, color: colors.text, fontWeight: '600' },
   primaryButton: {
     borderRadius: radius.md,
     backgroundColor: colors.accent,
