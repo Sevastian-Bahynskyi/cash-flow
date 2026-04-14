@@ -1,0 +1,5 @@
+#!/bin/zsh
+set -euo pipefail
+script_dir="$(cd -- "$(dirname -- "${0:A}")" && pwd -P)"
+cd "$script_dir"
+exec npm run my-cash-flow
