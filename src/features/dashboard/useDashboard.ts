@@ -1,9 +1,14 @@
 import { useMemo } from 'react';
 import type { barDataItem, lineDataItem } from 'react-native-gifted-charts';
-import { buildCategoryMeta, getCategoryMetaDisplayColor } from '@/features/categories/helpers';
+import {
+  buildCategoryMeta,
+  getCategoryDisplayColor,
+  getCategoryMetaDisplayColor,
+} from '@/features/categories/helpers';
 import { useOverview } from '@/features/overview/useOverview';
-import { buildNavigableCycles, type SalaryCycle } from '@/lib/cycles';
+import { buildNavigableCycles, formatCycleDisplayRange, type SalaryCycle } from '@/lib/cycles';
 import { colors } from '@/ui/tokens';
+import type { TransactionRow } from '@/features/transactions/types';
 
 export type DashboardRange = 'weekly' | 'monthly' | 'yearly';
 
@@ -130,7 +135,7 @@ const buildMonthlyCycleBuckets = (
     startOn: cycle.startOn,
     endOn: toIsoDate(effectiveEnd),
     rangeLabel: cycle.label,
-    rangeDescription: `${formatRangeDate.format(start)} - ${formatRangeDate.format(effectiveEnd)}`,
+    rangeDescription: formatCycleDisplayRange(cycle, today),
     bucketUnitLabel: 'Daily',
     buckets,
   };
@@ -204,7 +209,19 @@ const buildMonthlyWindows = (
 ): DashboardWindow[] => {
   const cycles = buildNavigableCycles(transactions);
   if (cycles.length === 0) return [buildFallbackMonthlyWindow(today)];
-  return cycles.map((cycle) => buildMonthlyCycleBuckets(cycle, today)).reverse();
+
+  const cycleMatch = (row: TransactionRow, cycle: SalaryCycle): boolean => {
+    const afterStart = row.occurred_on >= cycle.startOn;
+    const beforeEnd = cycle.endOnExclusive === null || row.occurred_on < cycle.endOnExclusive;
+    return afterStart && beforeEnd;
+  };
+
+  const filtered = cycles
+    .filter((cycle) => transactions.some((row) => cycleMatch(row, cycle)))
+    .map((cycle) => buildMonthlyCycleBuckets(cycle, today))
+    .reverse();
+
+  return filtered.length > 0 ? filtered : [buildFallbackMonthlyWindow(today)];
 };
 
 const buildYearlyWindows = (
@@ -303,10 +320,15 @@ export const useDashboard = (
       };
 
     const categoryMeta = buildCategoryMeta(overview.categories);
+    const categoriesById = new Map(overview.categories.map((category) => [category.id, category]));
     const bucketMap = new Map<string, DashboardBucket>(
       descriptor.buckets.map((bucket) => [bucket.key, createEmptyBucket(bucket)]),
     );
     const categoryTotals = new Map<string, number>();
+    const categoryPresentation = new Map<
+      string,
+      { label: string; color: string; icon: string }
+    >();
 
     let incomeMinor = 0;
     let expenseMinor = 0;
@@ -344,18 +366,51 @@ export const useDashboard = (
       bucket.expenseMinor += row.amount_minor;
 
       if (row.category_id) {
-        categoryTotals.set(row.category_id, (categoryTotals.get(row.category_id) ?? 0) + row.amount_minor);
+        const category = categoriesById.get(row.category_id);
+        const parentCategory =
+          category?.level === 2 && category.parent_id
+            ? categoriesById.get(category.parent_id) ?? category
+            : category;
+        const aggregateCategoryId = parentCategory?.id ?? row.category_id;
+
+        categoryTotals.set(
+          aggregateCategoryId,
+          (categoryTotals.get(aggregateCategoryId) ?? 0) + row.amount_minor,
+        );
+
+        if (!categoryPresentation.has(aggregateCategoryId)) {
+          const parentName = parentCategory?.name ?? categoryMeta[aggregateCategoryId]?.name ?? 'Category';
+          const parentColor = parentCategory?.color ?? categoryMeta[aggregateCategoryId]?.color ?? colors.accent;
+          const color = getCategoryDisplayColor({
+            kind: 'expense',
+            parentName,
+            name: parentName,
+            parentColor,
+            color: parentColor,
+          });
+          const icon = parentCategory?.icon ?? categoryMeta[aggregateCategoryId]?.icon ?? 'shape-outline';
+
+          categoryPresentation.set(aggregateCategoryId, {
+            label: parentName,
+            color,
+            icon,
+          });
+        }
       }
     }
 
     const buckets = descriptor.buckets.map((bucket) => bucketMap.get(bucket.key) ?? createEmptyBucket(bucket));
     const categoryBreakdown = [...categoryTotals.entries()]
       .map(([categoryId, amountMinor], index) => {
-        const meta = categoryMeta[categoryId];
+        const meta = categoryPresentation.get(categoryId);
         return {
           categoryId,
-          label: meta?.label ?? 'Category',
-          color: meta ? getCategoryMetaDisplayColor(meta, 'expense') : pieFallbackColors[index % pieFallbackColors.length] ?? colors.accent,
+          label: meta?.label ?? categoryMeta[categoryId]?.label ?? 'Category',
+          color:
+            meta?.color ??
+            (categoryMeta[categoryId]
+              ? getCategoryMetaDisplayColor(categoryMeta[categoryId], 'expense')
+              : pieFallbackColors[index % pieFallbackColors.length] ?? colors.accent),
           icon: meta?.icon ?? 'shape-outline',
           amountMinor,
           share: expenseMinor === 0 ? 0 : amountMinor / expenseMinor,
