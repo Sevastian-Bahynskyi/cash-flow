@@ -15,6 +15,8 @@ export type SalaryCycle = {
   label: string; // e.g. "May 2026"
 };
 
+const formatRangeDate = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' });
+
 const parseYmd = (ymd: string): { y: number; m: number; d: number } => {
   const parts = ymd.split('-');
   if (parts.length !== 3) {
@@ -74,6 +76,12 @@ type YmdParts = { y: number; m: number; d: number };
 
 const pad2 = (value: number): string => String(value).padStart(2, '0');
 
+const toIsoDate = (date: Date): string =>
+  `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+
+const addDays = (date: Date, amount: number): Date =>
+  new Date(date.getFullYear(), date.getMonth(), date.getDate() + amount);
+
 const addMonths = ({ y, m, d }: YmdParts, delta: number): YmdParts => {
   const idx = (y * 12 + (m - 1)) + delta;
   const ny = Math.floor(idx / 12);
@@ -82,6 +90,19 @@ const addMonths = ({ y, m, d }: YmdParts, delta: number): YmdParts => {
 };
 
 const monthStartYmd = (y: number, m: number): string => `${y}-${pad2(m)}-01`;
+
+export const formatCycleDisplayRange = (cycle: SalaryCycle, today: Date): string => {
+  const start = parseYmd(cycle.startOn);
+  const endExclusive = cycle.endOnExclusive
+    ? parseYmd(cycle.endOnExclusive)
+    : { y: today.getFullYear(), m: today.getMonth() + 1, d: today.getDate() };
+
+  const endDate = cycle.endOnExclusive && endExclusive.d === 1
+    ? addDays(new Date(endExclusive.y, endExclusive.m - 1, endExclusive.d), -1)
+    : new Date(endExclusive.y, endExclusive.m - 1, endExclusive.d);
+
+  return `${formatRangeDate.format(new Date(start.y, start.m - 1, start.d))} – ${formatRangeDate.format(endDate)}`;
+};
 
 const monthKey = (ymd: string): { y: number; m: number } => {
   const { y, m } = parseYmd(ymd);
@@ -159,6 +180,42 @@ export const buildNavigableCycles = (
     .sort((a, b) => a.occurred_on.localeCompare(b.occurred_on));
 
   if (salaryTxns.length > 1) return buildDefaultCycles(txns);
+
+  if (salaryTxns.length === 1) {
+    const sorted = [...txns].sort((a, b) => a.occurred_on.localeCompare(b.occurred_on));
+    const first = sorted[0]?.occurred_on;
+    const salaryDate = salaryTxns[0]?.occurred_on;
+    if (!first || !salaryDate) return [];
+
+    const startMonth = monthKey(first);
+    const salaryMonth = monthKey(salaryDate);
+    const cycles: SalaryCycle[] = [];
+
+    let cursor = { y: startMonth.y, m: startMonth.m, d: 1 };
+    while (true) {
+      const startOn = monthStartYmd(cursor.y, cursor.m);
+      const isSalaryMonth = cursor.y === salaryMonth.y && cursor.m === salaryMonth.m;
+
+      cycles.push({
+        id: isSalaryMonth ? `nav-pre-${salaryDate}` : `nav-${startOn}`,
+        startOn,
+        endOnExclusive: isSalaryMonth ? salaryDate : monthStartYmd(addMonths(cursor, 1).y, addMonths(cursor, 1).m),
+        label: formatMonthYearLabel(startOn),
+      });
+
+      if (isSalaryMonth) break;
+      cursor = addMonths(cursor, 1);
+    }
+
+    cycles.push({
+      id: salaryTxns[0]?.id ?? `nav-${salaryDate}`,
+      startOn: salaryDate,
+      endOnExclusive: null,
+      label: labelForSalaryDate(salaryDate),
+    });
+
+    return cycles;
+  }
 
   const sorted = [...txns].sort((a, b) => a.occurred_on.localeCompare(b.occurred_on));
   const first = sorted[0]?.occurred_on;

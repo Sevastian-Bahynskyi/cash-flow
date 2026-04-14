@@ -6,7 +6,7 @@
 //   user_share_ratio = user_shared_topup_total / (user_shared_topup_total + partner_inferred)
 //   if both totals are zero, ratio = 0.5
 //   user_effective_share = round(shared_expense_total * user_share_ratio)
-//   shared balance = user_shared_topup_total - user_effective_share
+//   shared balance = total_topup_total - shared_expense_total
 
 export type SharedTopup = {
   amount_minor: number;
@@ -46,7 +46,7 @@ export const computeSharedCycle = (
   const denom = meTopupTotal + gfTopupTotal + partnerInferred;
   const userShareRatio = denom === 0 ? 0.5 : meTopupTotal / denom;
   const userEffectiveShare = Math.round(sharedExpenseTotal * userShareRatio);
-  const sharedBalance = meTopupTotal - userEffectiveShare;
+  const sharedBalance = totalTopupTotal - sharedExpenseTotal;
   return {
     meTopupTotal,
     gfTopupTotal,
