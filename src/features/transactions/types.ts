@@ -43,6 +43,9 @@ export type TransactionDraft = {
 
 export type TransactionRow = TransactionInsert & {
   id: string;
+  personal_effect_minor?: number;
+  shared_effect_minor?: number;
+  is_neutral_display?: boolean;
   created_at: string;
   updated_at: string;
 };

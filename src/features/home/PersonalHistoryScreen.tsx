@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -31,7 +31,7 @@ import { ScreenHeader } from '@/ui/ScreenHeader';
 import { SkeletonBlock, SkeletonCard } from '@/ui/Skeleton';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 
-const PAGE_SIZE = 40;
+const PAGE_SIZE = 20;
 const DELETE_CHUNK_SIZE = 100;
 const SEARCH_DEBOUNCE_MS = 250;
 const DEBUG_BUILD_TAG = 'personal-history-v2-2026-04-13';
@@ -55,6 +55,40 @@ type HistoryFilters = {
   endOnExclusive: string | null;
   kind: 'income' | 'expense' | null;
   parentLabel: string | null;
+  sharedOnly: boolean;
+  includeShared: boolean;
+};
+
+const EMPTY_IDS: readonly string[] = [];
+
+const pushHistoryDebug = (payload: Record<string, unknown>): void => {
+  fetch('http://127.0.0.1:7401/ingest/3868ff3d-2d0f-4946-999c-a38c9c4e1bb0', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '41e759' },
+    body: JSON.stringify({
+      sessionId: '41e759',
+      runId: 'personal-history-load-debug',
+      ...payload,
+      timestamp: Date.now(),
+    }),
+  }).catch(() => { });
+};
+
+const applySharedScopeFilter = <T,>(queryBuilder: T, filters: HistoryFilters): T => {
+  const query = queryBuilder as unknown as {
+    eq: (col: string, value: boolean) => T;
+    or: (filter: string) => T;
+  };
+
+  if (filters.sharedOnly) {
+    return query.or('shared.eq.true,is_shared_topup.eq.true');
+  }
+
+  if (filters.includeShared) {
+    return queryBuilder;
+  }
+
+  return query.eq('shared', false);
 };
 
 const pad2 = (value: string): string => value.padStart(2, '0');
@@ -181,7 +215,7 @@ const buildTransactionSearchFilter = (
       },
       timestamp: Date.now(),
     }),
-  }).catch(() => {});
+  }).catch(() => { });
   // #endregion
 
   return filter;
@@ -228,7 +262,9 @@ const loadCategories = async (): Promise<CategoryRow[]> => {
   const [categoriesRes, overridesRes] = await Promise.all([
     supabase
       .from('categories')
-      .select('id, user_id, parent_id, name, level, is_system, icon, color'),
+      .select('id, user_id, parent_id, name, level, is_system, icon, color')
+      .order('level', { ascending: true })
+      .order('name', { ascending: true }),
     supabase
       .from('category_overrides')
       .select('id, user_id, category_id, name, icon, updated_at'),
@@ -277,8 +313,9 @@ const loadTransactionPage = async (
   const startedAt = Date.now();
   let query = supabase
     .from('transactions')
-    .select(TRANSACTION_SELECT)
-    .eq('shared', false);
+    .select(TRANSACTION_SELECT);
+
+  query = applySharedScopeFilter(query, filters);
 
   query = applyBaseFilters(query, filters);
   query = applySearchFilter(query, searchQuery, matchedCategoryIds);
@@ -308,7 +345,7 @@ const loadTransactionPage = async (
         },
         timestamp: Date.now(),
       }),
-    }).catch(() => {});
+    }).catch(() => { });
     // #endregion
     throw error;
   }
@@ -331,7 +368,7 @@ const loadTransactionPage = async (
       },
       timestamp: Date.now(),
     }),
-  }).catch(() => {});
+  }).catch(() => { });
   // #endregion
 
   return (data ?? []) as TransactionRow[];
@@ -344,8 +381,9 @@ const loadMatchingTransactionIds = async (
 ): Promise<string[]> => {
   let query = supabase
     .from('transactions')
-    .select('id')
-    .eq('shared', false);
+    .select('id');
+
+  query = applySharedScopeFilter(query, filters);
 
   query = applyBaseFilters(query, filters);
   query = applySearchFilter(query, searchQuery, matchedCategoryIds);
@@ -392,7 +430,7 @@ function PersonalHistorySkeleton() {
   );
 }
 
-function PersonalHistoryRow({
+const PersonalHistoryRow = memo(function PersonalHistoryRow({
   item,
   onEdit,
   onDuplicate,
@@ -410,6 +448,7 @@ function PersonalHistoryRow({
   onToggleSelect: (row: TransactionRow) => void;
 }) {
   const { row } = item;
+  const isNeutralSharedTopup = row.is_shared_topup;
 
   const openActions = (): void => {
     if (selectionMode) {
@@ -429,6 +468,7 @@ function PersonalHistoryRow({
     <Pressable
       style={({ pressed }) => [
         styles.row,
+        row.kind === 'income' && styles.rowIncomeOutline,
         selectionMode && styles.rowSelectable,
         selected && styles.rowSelected,
         pressed && styles.rowPressed,
@@ -450,8 +490,17 @@ function PersonalHistoryRow({
           <Text style={styles.name} numberOfLines={1}>
             {row.name}
           </Text>
-          <Text style={[styles.amount, row.kind === 'income' ? styles.amountIncome : styles.amountExpense]}>
-            {row.kind === 'income' ? '+' : '-'}
+          <Text
+            style={[
+              styles.amount,
+              isNeutralSharedTopup
+                ? styles.amountNeutral
+                : row.kind === 'income'
+                  ? styles.amountIncome
+                  : styles.amountExpense,
+            ]}
+          >
+            {isNeutralSharedTopup ? '' : row.kind === 'income' ? '+' : '-'}
             {displayAmountForRow(row)}
           </Text>
         </View>
@@ -483,7 +532,11 @@ function PersonalHistoryRow({
             <View style={styles.chip}>
               <Text style={styles.chipText}>
                 Shared top-up
-                {row.shared_participant ? ` · ${row.shared_participant === 'gf' ? 'GF' : 'Me'}` : ''}
+                {row.shared_participant ? (
+                  <Text style={row.shared_participant === 'gf' ? styles.chipTextGf : styles.chipTextMe}>
+                    {` · ${row.shared_participant === 'gf' ? 'GF' : 'Me'}`}
+                  </Text>
+                ) : null}
               </Text>
             </View>
           ) : null}
@@ -496,7 +549,7 @@ function PersonalHistoryRow({
       ) : null}
     </Pressable>
   );
-}
+});
 
 export default function PersonalHistoryScreen() {
   const composer = useComposer();
@@ -505,6 +558,8 @@ export default function PersonalHistoryScreen() {
     endOnExclusive?: string;
     kind?: string;
     parentLabel?: string;
+    shared?: string;
+    includeShared?: string;
   }>();
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [transactions, setTransactions] = useState<TransactionRow[]>([]);
@@ -519,10 +574,10 @@ export default function PersonalHistoryScreen() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [hasMore, setHasMore] = useState(true);
   const [nextOffset, setNextOffset] = useState(0);
-  const [resolvedRequestKey, setResolvedRequestKey] = useState<string | null>(null);
   const [motionRun, setMotionRun] = useState(0);
   const requestVersionRef = useRef(0);
   const hasLoadedOnceRef = useRef(false);
+  const skipNextComposerRefreshRef = useRef(false);
 
   useEffect(() => {
     // #region agent log
@@ -538,7 +593,7 @@ export default function PersonalHistoryScreen() {
         data: { tag: DEBUG_BUILD_TAG },
         timestamp: Date.now(),
       }),
-    }).catch(() => {});
+    }).catch(() => { });
     // #endregion
   }, []);
 
@@ -560,18 +615,24 @@ export default function PersonalHistoryScreen() {
         ? params.endOnExclusive.trim()
         : null;
     const kind =
-      params.kind === 'income' || params.kind === 'expense' ? (params.kind as 'income' | 'expense') : null;
+      params.kind === 'income' || params.kind === 'expense' ? params.kind : null;
     const parentLabel =
       typeof params.parentLabel === 'string' && params.parentLabel.trim() ? params.parentLabel.trim() : null;
-    return { startOn, endOnExclusive, kind, parentLabel };
-  }, [params.endOnExclusive, params.kind, params.parentLabel, params.startOn]);
+    const sharedOnly =
+      params.shared === '1' ||
+      params.shared === 'true';
+    const includeShared =
+      params.includeShared === '1' ||
+      params.includeShared === 'true';
+    return { startOn, endOnExclusive, kind, parentLabel, sharedOnly, includeShared };
+  }, [params.endOnExclusive, params.includeShared, params.kind, params.parentLabel, params.shared, params.startOn]);
   const matchedCategoryIds = useMemo(() => {
     const q = debouncedQuery.trim().toLowerCase();
-    if (q.length < 2) return [];
+    if (q.length < 2) return EMPTY_IDS;
 
     // Avoid treating pure date queries as category queries.
     if (/^\d{4}(-\d{2}(-\d{2})?)?$/.test(q) || /^\d{1,2}\.\d{1,2}(\.\d{2,4})?$/.test(q)) {
-      return [];
+      return EMPTY_IDS;
     }
 
     const out: string[] = [];
@@ -579,6 +640,7 @@ export default function PersonalHistoryScreen() {
       const label = categoryMeta[row.id]?.label ?? row.name;
       if (label.toLowerCase().includes(q)) out.push(row.id);
     }
+    out.sort((a, b) => a.localeCompare(b));
     return out;
   }, [categories, categoryMeta, debouncedQuery]);
   const scopedCategoryIds = useMemo(() => {
@@ -590,41 +652,40 @@ export default function PersonalHistoryScreen() {
       const parentLabel = meta?.parentName?.trim() ? meta.parentName : meta?.name ?? row.name;
       if (parentLabel.trim().toLowerCase() === target) ids.push(row.id);
     }
+    ids.sort((a, b) => a.localeCompare(b));
     return ids;
   }, [categories, categoryMeta, filters.parentLabel, matchedCategoryIds]);
-  const requestKey = useMemo(
-    () =>
-      JSON.stringify({
-        query: debouncedQuery,
-        startOn: filters.startOn,
-        endOnExclusive: filters.endOnExclusive,
-        kind: filters.kind,
-        parentLabel: filters.parentLabel,
-        categoryIds: scopedCategoryIds,
-      }),
-    [
-      debouncedQuery,
-      filters.endOnExclusive,
-      filters.kind,
-      filters.parentLabel,
-      filters.startOn,
-      scopedCategoryIds,
-    ],
+  const scopedCategoryIdsKey = useMemo(() => scopedCategoryIds.join(','), [scopedCategoryIds]);
+  const stableScopedCategoryIds = useMemo<readonly string[]>(
+    () => (scopedCategoryIdsKey.length > 0 ? scopedCategoryIdsKey.split(',') : EMPTY_IDS),
+    [scopedCategoryIdsKey],
   );
 
   const reload = useCallback(
     async (showSkeleton = false): Promise<void> => {
       const requestVersion = requestVersionRef.current + 1;
       requestVersionRef.current = requestVersion;
-      const activeRequestKey = requestKey;
       if (showSkeleton) setIsInitialLoading(true);
       setIsLoadingMore(false);
       setError(null);
 
+      pushHistoryDebug({
+        hypothesisId: 'reload-start',
+        location: 'PersonalHistoryScreen.tsx:reload:start',
+        message: 'Starting history reload',
+        data: {
+          requestVersion,
+          showSkeleton,
+          debouncedQuery,
+          filters,
+          scopedCategoryIds: stableScopedCategoryIds,
+        },
+      });
+
       try {
         const [nextCategories, firstPage] = await Promise.all([
           loadCategories(),
-          loadTransactionPage(0, debouncedQuery, scopedCategoryIds, filters),
+          loadTransactionPage(0, debouncedQuery, stableScopedCategoryIds, filters),
         ]);
 
         if (requestVersionRef.current !== requestVersion) return;
@@ -633,7 +694,17 @@ export default function PersonalHistoryScreen() {
         setTransactions(firstPage);
         setNextOffset(firstPage.length);
         setHasMore(firstPage.length === PAGE_SIZE);
-        setResolvedRequestKey(activeRequestKey);
+
+        pushHistoryDebug({
+          hypothesisId: 'reload-success',
+          location: 'PersonalHistoryScreen.tsx:reload:success',
+          message: 'History reload succeeded',
+          data: {
+            requestVersion,
+            rows: firstPage.length,
+            hasMore: firstPage.length === PAGE_SIZE,
+          },
+        });
       } catch (loadError) {
         if (requestVersionRef.current !== requestVersion) return;
         reportDevError('personal-history.reload', loadError, {
@@ -643,14 +714,34 @@ export default function PersonalHistoryScreen() {
         setTransactions([]);
         setNextOffset(0);
         setHasMore(false);
-        setResolvedRequestKey(activeRequestKey);
+
+        pushHistoryDebug({
+          hypothesisId: 'reload-error',
+          location: 'PersonalHistoryScreen.tsx:reload:error',
+          message: 'History reload failed',
+          data: {
+            requestVersion,
+            error: getErrorMessage(loadError, 'Failed to load personal history.'),
+          },
+        });
       } finally {
-        if (requestVersionRef.current === requestVersion && showSkeleton) {
+        if (requestVersionRef.current === requestVersion) {
           setIsInitialLoading(false);
+
+          pushHistoryDebug({
+            hypothesisId: 'reload-final',
+            location: 'PersonalHistoryScreen.tsx:reload:finally',
+            message: 'History reload finalized',
+            data: {
+              requestVersion,
+              showSkeleton,
+              isLatest: true,
+            },
+          });
         }
       }
     },
-    [debouncedQuery, filters, requestKey, scopedCategoryIds],
+    [debouncedQuery, filters, stableScopedCategoryIds],
   );
 
   const loadMore = useCallback(async (): Promise<void> => {
@@ -659,13 +750,38 @@ export default function PersonalHistoryScreen() {
     const startOffset = nextOffset;
     setIsLoadingMore(true);
 
+    pushHistoryDebug({
+      hypothesisId: 'load-more-start',
+      location: 'PersonalHistoryScreen.tsx:loadMore:start',
+      message: 'Loading older history page',
+      data: {
+        requestVersion,
+        startOffset,
+        debouncedQuery,
+        filters,
+        scopedCategoryIds: stableScopedCategoryIds,
+      },
+    });
+
     try {
-      const page = await loadTransactionPage(startOffset, debouncedQuery, scopedCategoryIds, filters);
+      const page = await loadTransactionPage(startOffset, debouncedQuery, stableScopedCategoryIds, filters);
       if (requestVersionRef.current !== requestVersion) return;
 
       setTransactions((current) => mergeUniqueTransactions(current, page));
       setNextOffset(startOffset + page.length);
       setHasMore(page.length === PAGE_SIZE);
+
+      pushHistoryDebug({
+        hypothesisId: 'load-more-success',
+        location: 'PersonalHistoryScreen.tsx:loadMore:success',
+        message: 'Older page loaded',
+        data: {
+          requestVersion,
+          startOffset,
+          pageRows: page.length,
+          hasMore: page.length === PAGE_SIZE,
+        },
+      });
     } catch (loadError) {
       if (requestVersionRef.current !== requestVersion) return;
       reportDevError('personal-history.load-more', loadError, {
@@ -673,12 +789,23 @@ export default function PersonalHistoryScreen() {
         searchQuery: debouncedQuery,
       });
       setError(getErrorMessage(loadError, 'Failed to load older transactions.'));
+
+      pushHistoryDebug({
+        hypothesisId: 'load-more-error',
+        location: 'PersonalHistoryScreen.tsx:loadMore:error',
+        message: 'Older page failed',
+        data: {
+          requestVersion,
+          startOffset,
+          error: getErrorMessage(loadError, 'Failed to load older transactions.'),
+        },
+      });
     } finally {
       if (requestVersionRef.current === requestVersion) {
         setIsLoadingMore(false);
       }
     }
-  }, [debouncedQuery, filters, hasMore, isInitialLoading, isLoadingMore, nextOffset, scopedCategoryIds]);
+  }, [debouncedQuery, filters, hasMore, isInitialLoading, isLoadingMore, nextOffset, stableScopedCategoryIds]);
 
   useEffect(() => {
     runDetached(
@@ -690,6 +817,10 @@ export default function PersonalHistoryScreen() {
 
   useEffect(() => {
     if (composer.refreshKey > 0) {
+      if (skipNextComposerRefreshRef.current) {
+        skipNextComposerRefreshRef.current = false;
+        return;
+      }
       runDetached(reload(false), 'personal-history.refresh');
     }
   }, [composer.refreshKey, reload]);
@@ -708,7 +839,7 @@ export default function PersonalHistoryScreen() {
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const hasQuery = debouncedQuery.length > 0;
   const isSearchPending = query.trim() !== debouncedQuery;
-  const shouldShowSkeleton = isInitialLoading || resolvedRequestKey !== requestKey;
+  const shouldShowSkeleton = isInitialLoading;
 
   const sections = useMemo<HistorySection[]>(() => {
     const grouped = new Map<string, HistoryItem[]>();
@@ -752,6 +883,10 @@ export default function PersonalHistoryScreen() {
     const { error: deleteError } = await supabase.from('transactions').delete().eq('id', row.id);
     if (deleteError) throw deleteError;
 
+    setTransactions((current) => current.filter((item) => item.id !== row.id));
+    setSelectedIds((current) => current.filter((id) => id !== row.id));
+    setNextOffset((current) => Math.max(0, current - 1));
+    skipNextComposerRefreshRef.current = true;
     composer.bumpRefresh();
   };
 
@@ -760,9 +895,21 @@ export default function PersonalHistoryScreen() {
 
     await Haptics.selectionAsync();
     await deleteTransactionIds(selectedIds);
+
+    const loadedIds = new Set(transactions.map((row) => row.id));
+    const hasUnknownSelections = selectedIds.some((id) => !loadedIds.has(id));
+
+    if (!hasUnknownSelections) {
+      const selectedSet = new Set(selectedIds);
+      setTransactions((current) => current.filter((row) => !selectedSet.has(row.id)));
+      setNextOffset((current) => Math.max(0, current - selectedSet.size));
+    } else {
+      await reload(false);
+    }
+
     setSelectionMode(false);
     setSelectedIds([]);
-    await reload(false);
+    skipNextComposerRefreshRef.current = true;
     composer.bumpRefresh();
   };
 
@@ -787,7 +934,7 @@ export default function PersonalHistoryScreen() {
   const selectAllMatching = async (): Promise<void> => {
     setIsSelectingAll(true);
     try {
-      const ids = await loadMatchingTransactionIds(debouncedQuery, scopedCategoryIds, filters);
+      const ids = await loadMatchingTransactionIds(debouncedQuery, stableScopedCategoryIds, filters);
       setSelectedIds(ids);
     } catch (selectAllError) {
       reportDevError('personal-history.select-all', selectAllError, {
@@ -832,31 +979,35 @@ export default function PersonalHistoryScreen() {
     >
       <Text style={styles.footerButtonText}>Load older transactions</Text>
     </Pressable>
+  ) : transactions.length > 0 ? (
+    <View style={styles.footer}>
+      <Text style={styles.footerText}>No older transactions to load.</Text>
+    </View>
   ) : null;
 
   return (
     <MotionScope value={motionRun}>
       <View style={styles.container}>
         <ScreenHeader
-          title="Personal history"
-          subtitle="Full personal transaction timeline"
+          title={filters.sharedOnly ? 'Shared history' : 'Personal history'}
+          subtitle={filters.sharedOnly ? 'Full shared transaction timeline' : 'Full personal transaction timeline'}
           back
           actions={
             transactions.length > 0 || selectionMode
               ? [
-                  {
-                    icon: selectionMode ? 'close' : 'checkbox-multiple-blank-outline',
-                    onPress: () => {
-                      runDetached(Haptics.selectionAsync(), 'personal-history.toggle-selection-mode.haptics');
-                      setSelectionMode((current) => {
-                        const next = !current;
-                        if (!next) setSelectedIds([]);
-                        return next;
-                      });
-                    },
-                    tone: selectionMode ? 'accent' : 'default',
+                {
+                  icon: selectionMode ? 'close' : 'checkbox-multiple-blank-outline',
+                  onPress: () => {
+                    runDetached(Haptics.selectionAsync(), 'personal-history.toggle-selection-mode.haptics');
+                    setSelectionMode((current) => {
+                      const next = !current;
+                      if (!next) setSelectedIds([]);
+                      return next;
+                    });
                   },
-                ]
+                  tone: selectionMode ? 'accent' : 'default',
+                },
+              ]
               : undefined
           }
         />
@@ -956,12 +1107,18 @@ export default function PersonalHistoryScreen() {
             ListEmptyComponent={
               <View style={styles.emptyCard}>
                 <Text style={styles.emptyTitle}>
-                  {hasQuery ? 'No transactions match this search' : 'No personal transactions yet'}
+                  {hasQuery
+                    ? 'No transactions match this search'
+                    : filters.sharedOnly
+                      ? 'No shared transactions yet'
+                      : 'No personal transactions yet'}
                 </Text>
                 <Text style={styles.emptyText}>
                   {hasQuery
                     ? 'Try a broader date, name, or notes search.'
-                    : 'Add your first transaction and your full history will show up here by date.'}
+                    : filters.sharedOnly
+                      ? 'Add a shared expense or top-up and your full shared history will show up here by date.'
+                      : 'Add your first transaction and your full history will show up here by date.'}
                 </Text>
               </View>
             }
@@ -1057,6 +1214,10 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     alignItems: 'flex-start',
   },
+  rowIncomeOutline: {
+    borderWidth: 1,
+    borderColor: colors.success,
+  },
   rowSelectable: {
     borderWidth: 1,
     borderColor: colors.border,
@@ -1077,6 +1238,7 @@ const styles = StyleSheet.create({
   rowTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   name: { ...typography.body, color: colors.text, flex: 1, fontWeight: '600' },
   amount: { ...typography.body, color: colors.text },
+  amountNeutral: { color: colors.textMuted, fontWeight: '600' },
   amountIncome: { color: colors.success, fontWeight: '700' },
   amountExpense: { color: colors.danger, fontWeight: '700' },
   meta: { ...typography.label, color: colors.textMuted },
@@ -1103,6 +1265,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
   },
   chipText: { ...typography.label, color: colors.textMuted },
+  chipTextMe: { color: '#60A5FA', fontWeight: '600' },
+  chipTextGf: { color: '#F472B6', fontWeight: '600' },
   sectionGap: { height: spacing.md },
   itemGap: { height: spacing.sm },
   emptyCard: {

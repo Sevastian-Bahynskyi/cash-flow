@@ -75,6 +75,7 @@ function TransactionRowCard({
     row.currency_code !== 'DKK' && row.original_amount_minor > 0
       ? `${formatMinor(row.converted_amount_minor, 'DKK')} · ${formatMinor(row.original_amount_minor, row.currency_code)}`
       : formatMinor(row.amount_minor, 'DKK');
+  const isNeutralSharedTopup = row.is_shared_topup;
 
   return (
     <MotionView index={index} direction="right" distance={155} delayMs={160} stepMs={65}>
@@ -102,8 +103,17 @@ function TransactionRowCard({
             <Text style={styles.name} numberOfLines={1}>
               {row.name}
             </Text>
-            <Text style={[styles.amount, row.kind === 'income' ? styles.amountIncome : styles.amountExpense]}>
-              {row.kind === 'income' ? '+' : '-'}{displayAmount}
+            <Text
+              style={[
+                styles.amount,
+                isNeutralSharedTopup
+                  ? styles.amountNeutral
+                  : row.kind === 'income'
+                    ? styles.amountIncome
+                    : styles.amountExpense,
+              ]}
+            >
+              {isNeutralSharedTopup ? '' : row.kind === 'income' ? '+' : '-'}{displayAmount}
             </Text>
           </View>
           <View style={styles.rowMetaWrap}>
@@ -113,17 +123,18 @@ function TransactionRowCard({
             <View style={styles.chips}>
               {row.shared ? (
                 <View style={styles.chip}>
-                  <Text style={styles.chipText}>
-                    Shared expense
-                    {row.shared_participant ? ` · ${row.shared_participant === 'gf' ? 'GF' : 'Me'}` : ''}
-                  </Text>
+                  <Text style={styles.chipText}>Shared expense</Text>
                 </View>
               ) : null}
               {row.is_shared_topup ? (
                 <View style={styles.chip}>
                   <Text style={styles.chipText}>
                     Shared top-up
-                    {row.shared_participant ? ` · ${row.shared_participant === 'gf' ? 'GF' : 'Me'}` : ''}
+                    {row.shared_participant ? (
+                      <Text style={row.shared_participant === 'gf' ? styles.chipTextGf : styles.chipTextMe}>
+                        {` · ${row.shared_participant === 'gf' ? 'GF' : 'Me'}`}
+                      </Text>
+                    ) : null}
                   </Text>
                 </View>
               ) : null}
@@ -257,11 +268,14 @@ const styles = StyleSheet.create({
   rowTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   name: { ...typography.body, color: colors.text, flex: 1, fontWeight: '600' },
   amount: { ...typography.body, color: colors.text },
+  amountNeutral: { color: colors.textMuted, fontWeight: '600' },
   amountIncome: { color: colors.success, fontWeight: '700' },
   amountExpense: { color: colors.danger, fontWeight: '700' },
   rowMetaWrap: { gap: 6 },
   meta: { ...typography.label, color: colors.textMuted },
   chips: { flexDirection: 'row', gap: spacing.xs, flexWrap: 'wrap' },
+  chipTextMe: { color: '#60A5FA', fontWeight: '600' },
+  chipTextGf: { color: '#F472B6', fontWeight: '600' },
   selectionIndicator: {
     width: 22,
     height: 22,
