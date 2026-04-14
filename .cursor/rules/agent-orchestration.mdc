@@ -1,0 +1,12 @@
+---
+description: Agent orchestration and plugin opt-in policy
+alwaysApply: true
+---
+
+# Agent Orchestration Policy
+
+- Skills and plugins are opt-in only.
+- Do not auto-use newly added skills or plugins.
+- Keep execution in default direct mode unless user intent explicitly calls for optional orchestration.
+- This includes optional plugins such as `caveman`, `lean-ctx`, and `symdex`.
+- If user intent is ambiguous, ask before enabling optional skills/plugins.
