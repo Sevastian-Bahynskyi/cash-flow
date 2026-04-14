@@ -6,6 +6,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -66,8 +67,28 @@ export default function AiRulesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [draft, setDraft] = useState<RuleDraft | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const categoryMeta = useMemo(() => buildCategoryMeta(overview.categories), [overview.categories]);
+
+  const filteredRules = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return rules;
+
+    return rules.filter((rule) => {
+      const categoryLabel = rule.category_id ? categoryMeta[rule.category_id]?.label ?? '' : '';
+      const statusLabel = rule.is_blocked
+        ? 'blocked'
+        : rule.category_id
+          ? 'mapped'
+          : 'unmapped';
+      const sharedLabel = rule.is_shared_topup ? 'shared top up' : '';
+      return [rule.pattern, rule.kind, categoryLabel, statusLabel, sharedLabel, rule.source]
+        .join(' ')
+        .toLowerCase()
+        .includes(q);
+    });
+  }, [categoryMeta, rules, searchQuery]);
 
   const loadRules = async (): Promise<void> => {
     setLoading(true);
@@ -141,9 +162,24 @@ export default function AiRulesScreen() {
           <>
             <View style={styles.hero}>
               <Text style={styles.heroTitle}>Deterministic beats mysterious</Text>
-              <Text style={styles.heroBody}>
-                Each rule matches a normalized merchant and decides whether we categorize it, block it, or mark it as a shared top-up. These rules are checked before fuzzy memory and before the fallback AI.
-              </Text>
+            </View>
+
+            <View style={styles.searchWrap}>
+              <MaterialCommunityIcons name="magnify" size={18} color={colors.textMuted} />
+              <TextInput
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder="Search merchant rules"
+                placeholderTextColor={colors.textMuted}
+                autoCorrect={false}
+                autoCapitalize="none"
+                style={styles.searchInput}
+              />
+              {searchQuery.length > 0 ? (
+                <Pressable onPress={() => setSearchQuery('')} hitSlop={12}>
+                  <MaterialCommunityIcons name="close-circle" size={18} color={colors.textMuted} />
+                </Pressable>
+              ) : null}
             </View>
 
             <View style={styles.section}>
@@ -155,8 +191,12 @@ export default function AiRulesScreen() {
                 <View style={styles.emptyCard}>
                   <Text style={styles.emptyText}>No merchant rules yet. They will appear here as you correct or block suggestions.</Text>
                 </View>
+              ) : filteredRules.length === 0 ? (
+                <View style={styles.emptyCard}>
+                  <Text style={styles.emptyText}>No merchant rules match this search.</Text>
+                </View>
               ) : (
-                rules.map((rule) => (
+                filteredRules.map((rule) => (
                   <Pressable
                     key={rule.id}
                     style={({ pressed }) => [styles.ruleCard, pressed && styles.rowPressed]}
@@ -294,10 +334,23 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
     padding: spacing.lg,
-    gap: spacing.sm,
   },
   heroTitle: { ...typography.h2, color: colors.text },
-  heroBody: { ...typography.body, color: colors.textMuted },
+  searchWrap: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    color: colors.text,
+    ...typography.body,
+    paddingVertical: 0,
+  },
   section: { gap: spacing.sm },
   emptyCard: {
     backgroundColor: colors.surface,
