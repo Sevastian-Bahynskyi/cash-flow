@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  KeyboardAvoidingView,
   Modal,
   Pressable,
   RefreshControl,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -28,10 +30,12 @@ import { useOverview } from '@/features/overview/useOverview';
 import { buildBudgetStateByCategory } from '@/features/budgets/helpers';
 import { runDetached } from '@/lib/async';
 import { supabase } from '@/lib/supabase';
+import { formatMinor } from '@/lib/format';
 import { ScreenHeader } from '@/ui/ScreenHeader';
 import { CategoryIcon } from '@/ui/CategoryIcon';
 import { SkeletonBlock, SkeletonCard } from '@/ui/Skeleton';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
+import { ProgressBar } from '@/ui/ProgressBar';
 
 type CategoryDraft = {
   mode: 'create-parent' | 'create-child' | 'edit';
@@ -44,6 +48,8 @@ type CategoryDraft = {
   readOnly: boolean;
   canDelete: boolean;
   saveMode: 'category' | 'override';
+  budgetId?: string;
+  budgetAmount: string;
 };
 
 type TransferPersonDraft = {
@@ -58,11 +64,19 @@ type UsageBadge = {
   color: string;
 };
 
+const TRANSFER_EXPENSE_COLOR = '#7C5CFF';
+const TRANSFER_INCOME_COLOR = '#22C55E';
+
+const isTransfersCategoryName = (value: string): boolean => value.trim().toLowerCase() === 'transfers';
+
 const toneForBudget = (tone: 'neutral' | 'warning' | 'critical' | null): string => {
   if (tone === 'critical') return colors.danger;
   if (tone === 'warning') return '#F5B942';
   return colors.textMuted;
 };
+
+const minorToAmountInput = (amountMinor: number | undefined): string =>
+  typeof amountMinor === 'number' && amountMinor > 0 ? (amountMinor / 100).toFixed(2) : '';
 
 const buildUsageBadges = ({
   parentName,
@@ -175,6 +189,16 @@ export default function CategoryManagementScreen() {
     () => buildBudgetStateByCategory(data.categories, data.budgets, data.transactions, data.activeCycle),
     [data.activeCycle, data.budgets, data.categories, data.transactions],
   );
+  const activeCycleBudgetByCategoryId = useMemo(() => {
+    const map = new Map<string, (typeof data.budgets)[number]>();
+    if (!data.activeCycle) return map;
+    for (const budget of data.budgets) {
+      if (budget.salary_cycle_id === data.activeCycle.id) {
+        map.set(budget.category_id, budget);
+      }
+    }
+    return map;
+  }, [data.activeCycle, data.budgets]);
 
   const parents = useMemo(
     () =>
@@ -252,6 +276,7 @@ export default function CategoryManagementScreen() {
       readOnly: false,
       canDelete: false,
       saveMode: 'category',
+      budgetAmount: '',
     });
   };
 
@@ -267,6 +292,7 @@ export default function CategoryManagementScreen() {
       readOnly: false,
       canDelete: false,
       saveMode: 'category',
+      budgetAmount: '',
     });
   };
 
@@ -284,14 +310,29 @@ export default function CategoryManagementScreen() {
       readOnly: category.is_system && category.level === 1,
       canDelete: !category.is_system,
       saveMode: isSystemSubcategory ? 'override' : 'category',
+      budgetId: activeCycleBudgetByCategoryId.get(category.id)?.id,
+      budgetAmount: minorToAmountInput(activeCycleBudgetByCategoryId.get(category.id)?.amount_minor),
     });
   };
 
   const saveCategory = async (): Promise<void> => {
     if (!draft || draft.name.trim().length === 0 || !data.userId || draft.readOnly) return;
 
+    const budgetAmountMinor = draft.budgetAmount.trim().length > 0 ? parseFloat(draft.budgetAmount.replace(',', '.')) : NaN;
+    const hasBudgetAmount = Number.isFinite(budgetAmountMinor) && budgetAmountMinor > 0;
+    const resolvedBudgetMinor = hasBudgetAmount ? Math.round(budgetAmountMinor * 100) : null;
+    if (draft.budgetAmount.trim().length > 0 && resolvedBudgetMinor === null) {
+      Alert.alert('Could not save budget', 'Enter a valid amount greater than zero.');
+      return;
+    }
+    if (resolvedBudgetMinor !== null && !data.activeCycle) {
+      Alert.alert('Could not save budget', 'Add a salary income first to attach budgets to the current cycle.');
+      return;
+    }
+
     setSaving(true);
     try {
+      let savedCategoryId = draft.categoryId ?? null;
       if (draft.mode === 'edit' && draft.categoryId) {
         if (draft.saveMode === 'override') {
           const { error } = await supabase.from('category_overrides').upsert(
@@ -311,43 +352,71 @@ export default function CategoryManagementScreen() {
 
           clearCategoryCache();
           await data.reload();
-          setDraft(null);
-          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          return;
-        }
+          savedCategoryId = draft.categoryId;
+        } else {
+          const payload =
+            draft.level === 1
+              ? { name: draft.name.trim(), icon: draft.icon, color: draft.color }
+              : { name: draft.name.trim(), icon: draft.icon };
+          const { error } = await supabase.from('categories').update(payload).eq('id', draft.categoryId);
+          if (error) {
+            Alert.alert('Could not save category', error.message);
+            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            return;
+          }
 
-        const payload =
-          draft.level === 1
-            ? { name: draft.name.trim(), icon: draft.icon, color: draft.color }
-            : { name: draft.name.trim(), icon: draft.icon };
-        const { error } = await supabase.from('categories').update(payload).eq('id', draft.categoryId);
-        if (error) {
-          Alert.alert('Could not save category', error.message);
+          clearCategoryCache();
+          await data.reload();
+          savedCategoryId = draft.categoryId;
+        }
+      }
+
+      if (draft.mode !== 'edit') {
+        const payload = {
+          user_id: data.userId,
+          parent_id: draft.level === 2 ? draft.parentId : null,
+          name: draft.name.trim(),
+          level: draft.level,
+          is_system: false,
+          icon: draft.icon,
+          color: draft.level === 1 ? draft.color : draft.color,
+        };
+        const { data: insertedCategory, error } = await supabase.from('categories').insert(payload).select('id').single();
+        if (error || !insertedCategory) {
+          Alert.alert('Could not create category', error?.message ?? 'Unknown error');
           await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
           return;
         }
 
+        savedCategoryId = insertedCategory.id;
         clearCategoryCache();
         await data.reload();
-        setDraft(null);
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        return;
       }
 
-      const payload = {
-        user_id: data.userId,
-        parent_id: draft.level === 2 ? draft.parentId : null,
-        name: draft.name.trim(),
-        level: draft.level,
-        is_system: false,
-        icon: draft.icon,
-        color: draft.level === 1 ? draft.color : draft.color,
-      };
-      const { error } = await supabase.from('categories').insert(payload);
-      if (error) {
-        Alert.alert('Could not create category', error.message);
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        return;
+      if (savedCategoryId && data.activeCycle) {
+        if (resolvedBudgetMinor !== null) {
+          const { error } = await supabase.from('budgets').upsert(
+            {
+              user_id: data.userId,
+              category_id: savedCategoryId,
+              salary_cycle_id: data.activeCycle.id,
+              amount_minor: resolvedBudgetMinor,
+            },
+            { onConflict: 'user_id,category_id,salary_cycle_id' },
+          );
+          if (error) {
+            Alert.alert('Could not save budget', error.message);
+            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            return;
+          }
+        } else if (draft.budgetId) {
+          const { error } = await supabase.from('budgets').delete().eq('id', draft.budgetId);
+          if (error) {
+            Alert.alert('Could not remove budget', error.message);
+            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            return;
+          }
+        }
       }
 
       clearCategoryCache();
@@ -538,159 +607,219 @@ export default function CategoryManagementScreen() {
             <View style={styles.section}>
               {visibleParents.map(({ parent, children, usageBadges }) => (
                 <View key={parent.id} style={styles.parentCard}>
-              <View style={styles.parentHead}>
-                <View style={[styles.parentIconWrap, { backgroundColor: `${parent.color}22` }]}>
-                  <CategoryIcon name={parent.icon} size={22} color={parent.color} />
-                </View>
-                <View style={styles.parentCopy}>
-                  <Text style={styles.parentName}>{parent.name}</Text>
-                  <View style={styles.parentMetaRow}>
-                    <Text style={styles.parentMeta}>
-                      {parent.is_system ? 'System category' : 'Custom category'}
-                    </Text>
-                    {budgetStates[parent.id] ? (
-                      <Text
-                        style={[
-                          styles.budgetTag,
-                          { color: toneForBudget(budgetStates[parent.id]?.tone ?? null) },
-                        ]}
-                      >
-                        Budget {Math.round((budgetStates[parent.id]?.ratio ?? 0) * 100)}%
-                      </Text>
-                    ) : null}
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.parentActions}>
-                <Pressable
-                  style={({ pressed }) => [styles.smallButton, pressed && styles.buttonPressed]}
-                  onPress={() => openCreateChild(parent)}
-                >
-                  <Text style={styles.smallButtonText}>Add subcategory</Text>
-                </Pressable>
-                {!parent.is_system ? (
-                  <Pressable
-                    style={({ pressed }) => [styles.smallButtonMuted, pressed && styles.buttonPressed]}
-                    onPress={() => openEdit(parent)}
-                  >
-                    <Text style={styles.smallButtonText}>Edit</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-
-              <View style={styles.childList}>
-                {children.map((child) => {
-                  const displayName = getDisplayCategoryName(parent.name, child.name);
-                  const usageBadges = buildUsageBadges({
-                    parentName: parent.name,
-                    name: child.name,
-                    parentColor: parent.color,
-                    color: child.color,
-                  });
-                  const activeUsageBadge = usageBadges.find((badge) =>
-                    activeTab === 'expense' ? badge.label === 'Expense' : badge.label === 'Income',
-                  );
-                  const childDisplayColor = activeUsageBadge?.color ?? usageBadges[0]?.color ?? parent.color;
-
-                  return (
-                    <Swipeable
-                      key={child.id}
-                      enabled={!child.is_system}
-                      overshootRight={false}
-                      renderRightActions={() =>
-                        child.is_system ? null : (
-                          <SwipeDeleteAction label="Delete" onPress={() => deleteCategoryById(child)} />
-                        )
-                      }
+                  <View style={styles.parentHead}>
+                    <View
+                      style={[
+                        styles.parentIconWrap,
+                        isTransfersCategoryName(parent.name)
+                          ? styles.dualToneIconWrap
+                          : { backgroundColor: `${parent.color}22` },
+                      ]}
                     >
-                      <Pressable
-                        style={({ pressed }) => [styles.childRow, pressed && styles.rowPressed]}
-                        onPress={() => {
-                          openEdit(child);
-                        }}
-                      >
-                        <View style={[styles.childIconWrap, { backgroundColor: `${childDisplayColor}22` }]}>
-                          <CategoryIcon name={child.icon} size={18} color={childDisplayColor} />
-                        </View>
-                      <View style={styles.childCopy}>
-                        <Text style={styles.childName}>{displayName}</Text>
-                        <View style={styles.childMetaRow}>
-                          <Text style={styles.childMeta}>
-                            {child.is_system ? 'System subcategory' : 'Custom subcategory'}
-                          </Text>
-                        </View>
-                      </View>
-                      {budgetStates[child.id] ? (
-                        <Text
-                          style={[
-                            styles.budgetTag,
-                            { color: toneForBudget(budgetStates[child.id]?.tone ?? null) },
-                          ]}
-                        >
-                          {Math.round((budgetStates[child.id]?.ratio ?? 0) * 100)}%
-                        </Text>
+                      {isTransfersCategoryName(parent.name) ? (
+                        <>
+                          <View style={[styles.dualToneHalf, styles.dualToneHalfLeft, { backgroundColor: TRANSFER_EXPENSE_COLOR }]} />
+                          <View style={[styles.dualToneHalf, styles.dualToneHalfRight, { backgroundColor: TRANSFER_INCOME_COLOR }]} />
+                          <View style={styles.dualToneDivider} />
+                        </>
                       ) : null}
-                      </Pressable>
-                    </Swipeable>
-                  );
-                })}
-              </View>
-
-              {parent.id === transfersParentId ? (
-                <View style={styles.transferPeopleCard}>
-                  <View style={styles.transferPeopleHead}>
-                    <View style={styles.transferPeopleCopy}>
-                      <Text style={styles.transferPeopleTitle}>People</Text>
-                      <Text style={styles.transferPeopleMeta}>
-                        Auto-categorization defaults to Transfers · MobilePay only when the transaction name itself looks
-                        like this person&apos;s full name.
-                      </Text>
+                      <CategoryIcon
+                        name={parent.icon}
+                        size={22}
+                        color={isTransfersCategoryName(parent.name) ? colors.text : parent.color}
+                      />
                     </View>
+                    <View style={styles.parentCopy}>
+                      <Text style={styles.parentName}>{parent.name}</Text>
+                      <View style={styles.parentMetaRow}>
+                        <Text style={styles.parentMeta}>
+                          {parent.is_system ? 'System category' : 'Custom category'}
+                        </Text>
+                        {budgetStates[parent.id] ? (
+                          <Text
+                            style={[
+                              styles.budgetTag,
+                              { color: toneForBudget(budgetStates[parent.id]?.tone ?? null) },
+                            ]}
+                          >
+                            Budget {Math.round((budgetStates[parent.id]?.ratio ?? 0) * 100)}%
+                          </Text>
+                        ) : null}
+                      </View>
+                      {budgetStates[parent.id] ? (
+                        <View style={styles.progressWrap}>
+                          <View style={styles.progressRow}>
+                            <Text style={styles.progressText}>
+                              {formatMinor(budgetStates[parent.id].spentMinor)} of {formatMinor(budgetStates[parent.id].amountMinor)}
+                            </Text>
+                            <Text style={[styles.budgetTag, { color: toneForBudget(budgetStates[parent.id]?.tone ?? null) }]}>
+                              Budget {Math.round((budgetStates[parent.id]?.ratio ?? 0) * 100)}%
+                            </Text>
+                          </View>
+                          <ProgressBar
+                            value={budgetStates[parent.id].ratio}
+                            color={toneForBudget(budgetStates[parent.id]?.tone ?? null)}
+                          />
+                        </View>
+                      ) : null}
+                    </View>
+                  </View>
+
+                  <View style={styles.parentActions}>
                     <Pressable
                       style={({ pressed }) => [styles.smallButton, pressed && styles.buttonPressed]}
-                      onPress={() => {
-                        setTransferPeopleError(null);
-                        setTransferPersonDraft({ name: '' });
-                        runDetached(Haptics.selectionAsync(), 'categories.addTransferPerson.haptics');
-                      }}
+                      onPress={() => openCreateChild(parent)}
                     >
-                      <Text style={styles.smallButtonText}>Add person</Text>
+                      <Text style={styles.smallButtonText}>Add subcategory</Text>
                     </Pressable>
+                    {!parent.is_system ? (
+                      <Pressable
+                        style={({ pressed }) => [styles.smallButtonMuted, pressed && styles.buttonPressed]}
+                        onPress={() => openEdit(parent)}
+                      >
+                        <Text style={styles.smallButtonText}>Edit</Text>
+                      </Pressable>
+                    ) : null}
                   </View>
 
-                  {transferPeopleLoading ? (
-                    <Text style={styles.transferPeopleEmpty}>Loading...</Text>
-                  ) : transferPeople.length === 0 ? (
-                    <Text style={styles.transferPeopleEmpty}>No people added yet.</Text>
-                  ) : (
-                    <View style={styles.transferPeopleList}>
-                      {transferPeople.map((person) => (
+                  <View style={styles.childList}>
+                    {children.map((child) => {
+                      const displayName = getDisplayCategoryName(parent.name, child.name);
+                      const usageBadges = buildUsageBadges({
+                        parentName: parent.name,
+                        name: child.name,
+                        parentColor: parent.color,
+                        color: child.color,
+                      });
+                      const activeUsageBadge = usageBadges.find((badge) =>
+                        activeTab === 'expense' ? badge.label === 'Expense' : badge.label === 'Income',
+                      );
+                      const childDisplayColor = activeUsageBadge?.color ?? usageBadges[0]?.color ?? parent.color;
+                      const isTransfersChild = isTransfersCategoryName(parent.name);
+
+                      return (
                         <Swipeable
-                          key={person.id}
-                          enabled={!transferPeopleSaving}
+                          key={child.id}
+                          enabled={!child.is_system}
                           overshootRight={false}
-                          renderRightActions={() => (
-                            <SwipeDeleteAction label="Delete" onPress={() => deleteTransferPersonById(person)} />
-                          )}
+                          renderRightActions={() =>
+                            child.is_system ? null : (
+                              <SwipeDeleteAction label="Delete" onPress={() => deleteCategoryById(child)} />
+                            )
+                          }
                         >
                           <Pressable
-                            style={({ pressed }) => [styles.transferPersonRow, pressed && styles.rowPressed]}
+                            style={({ pressed }) => [styles.childRow, pressed && styles.rowPressed]}
                             onPress={() => {
-                              setTransferPeopleError(null);
-                              setTransferPersonDraft({ id: person.id, name: person.name });
-                              runDetached(Haptics.selectionAsync(), 'categories.editTransferPerson.haptics');
+                              openEdit(child);
                             }}
                           >
-                            <Text style={styles.transferPersonName}>{person.name}</Text>
-                            <MaterialCommunityIcons name="pencil-outline" size={18} color={colors.textMuted} />
+                            <View
+                              style={[
+                                styles.childIconWrap,
+                                isTransfersChild
+                                  ? styles.dualToneIconWrap
+                                  : { backgroundColor: `${childDisplayColor}22` },
+                              ]}
+                            >
+                              {isTransfersChild ? (
+                                <>
+                                  <View style={[styles.dualToneHalf, styles.dualToneHalfLeft, { backgroundColor: TRANSFER_EXPENSE_COLOR }]} />
+                                  <View style={[styles.dualToneHalf, styles.dualToneHalfRight, { backgroundColor: TRANSFER_INCOME_COLOR }]} />
+                                  <View style={styles.dualToneDivider} />
+                                </>
+                              ) : null}
+                              <CategoryIcon name={child.icon} size={18} color={isTransfersChild ? colors.text : childDisplayColor} />
+                            </View>
+                            <View style={styles.childCopy}>
+                              <Text style={styles.childName}>{displayName}</Text>
+                              <View style={styles.childMetaRow}>
+                                <Text style={styles.childMeta}>
+                                  {child.is_system ? 'System subcategory' : 'Custom subcategory'}
+                                </Text>
+                              </View>
+                            </View>
                           </Pressable>
+                          {budgetStates[child.id] ? (
+                            <View style={styles.childBudgetWrap}>
+                              <View style={styles.progressRow}>
+                                <Text style={styles.progressText}>
+                                  {formatMinor(budgetStates[child.id].spentMinor)} of {formatMinor(budgetStates[child.id].amountMinor)}
+                                </Text>
+                                <Text
+                                  style={[
+                                    styles.budgetTag,
+                                    { color: toneForBudget(budgetStates[child.id]?.tone ?? null) },
+                                  ]}
+                                >
+                                  {Math.round((budgetStates[child.id]?.ratio ?? 0) * 100)}%
+                                </Text>
+                              </View>
+                              <ProgressBar
+                                value={budgetStates[child.id].ratio}
+                                color={toneForBudget(budgetStates[child.id]?.tone ?? null)}
+                              />
+                            </View>
+                          ) : null}
                         </Swipeable>
-                      ))}
+                      );
+                    })}
+                  </View>
+
+                  {parent.id === transfersParentId ? (
+                    <View style={styles.transferPeopleCard}>
+                      <View style={styles.transferPeopleHead}>
+                        <View style={styles.transferPeopleCopy}>
+                          <Text style={styles.transferPeopleTitle}>People</Text>
+                          <Text style={styles.transferPeopleMeta}>
+                            Auto-categorization defaults to Transfers · MobilePay only when the transaction name itself looks
+                            like this person&apos;s full name.
+                          </Text>
+                        </View>
+                        <Pressable
+                          style={({ pressed }) => [styles.smallButton, pressed && styles.buttonPressed]}
+                          onPress={() => {
+                            setTransferPeopleError(null);
+                            setTransferPersonDraft({ name: '' });
+                            runDetached(Haptics.selectionAsync(), 'categories.addTransferPerson.haptics');
+                          }}
+                        >
+                          <Text style={styles.smallButtonText}>Add person</Text>
+                        </Pressable>
+                      </View>
+
+                      {transferPeopleLoading ? (
+                        <Text style={styles.transferPeopleEmpty}>Loading...</Text>
+                      ) : transferPeople.length === 0 ? (
+                        <Text style={styles.transferPeopleEmpty}>No people added yet.</Text>
+                      ) : (
+                        <View style={styles.transferPeopleList}>
+                          {transferPeople.map((person) => (
+                            <Swipeable
+                              key={person.id}
+                              enabled={!transferPeopleSaving}
+                              overshootRight={false}
+                              renderRightActions={() => (
+                                <SwipeDeleteAction label="Delete" onPress={() => deleteTransferPersonById(person)} />
+                              )}
+                            >
+                              <Pressable
+                                style={({ pressed }) => [styles.transferPersonRow, pressed && styles.rowPressed]}
+                                onPress={() => {
+                                  setTransferPeopleError(null);
+                                  setTransferPersonDraft({ id: person.id, name: person.name });
+                                  runDetached(Haptics.selectionAsync(), 'categories.editTransferPerson.haptics');
+                                }}
+                              >
+                                <Text style={styles.transferPersonName}>{person.name}</Text>
+                                <MaterialCommunityIcons name="pencil-outline" size={18} color={colors.textMuted} />
+                              </Pressable>
+                            </Swipeable>
+                          ))}
+                        </View>
+                      )}
                     </View>
-                  )}
-                </View>
-              ) : null}
+                  ) : null}
                 </View>
               ))}
             </View>
@@ -714,81 +843,108 @@ export default function CategoryManagementScreen() {
               draft?.readOnly
                 ? undefined
                 : [
-                    {
-                      icon: 'check',
-                      onPress: () => runDetached(saveCategory(), 'categories.saveCategory'),
-                    },
-                  ]
+                  {
+                    icon: 'check',
+                    onPress: () => runDetached(saveCategory(), 'categories.saveCategory'),
+                  },
+                ]
             }
           />
-          <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalContent}>
-            <Text style={styles.label}>Name</Text>
-            <TextInput
-              value={draft?.name ?? ''}
-              onChangeText={(value) => setDraft((current) => (current ? { ...current, name: value } : current))}
-              editable={!draft?.readOnly}
-              placeholder="Category name"
-              placeholderTextColor={colors.textMuted}
-              style={styles.input}
-            />
+          <KeyboardAvoidingView
+            style={styles.keyboardAvoiding}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            keyboardVerticalOffset={spacing.lg}
+          >
+            <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
+              <Text style={styles.label}>Name</Text>
+              <TextInput
+                value={draft?.name ?? ''}
+                onChangeText={(value) => setDraft((current) => (current ? { ...current, name: value } : current))}
+                editable={!draft?.readOnly}
+                placeholder="Category name"
+                placeholderTextColor={colors.textMuted}
+                style={styles.input}
+              />
 
-            <Text style={styles.label}>Icon</Text>
-            <View style={styles.optionGrid}>
-              {categoryIconOptions.map((icon) => {
-                const active = draft?.icon === icon;
-                return (
-                  <Pressable
-                    key={icon}
-                    disabled={draft?.readOnly}
-                    style={({ pressed }) => [
-                      styles.optionTile,
-                      active && styles.optionTileActive,
-                      pressed && styles.buttonPressed,
-                    ]}
-                    onPress={() => setDraft((current) => (current ? { ...current, icon } : current))}
-                  >
-                    <CategoryIcon name={icon} size={20} color={active ? colors.text : colors.textMuted} />
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            <Text style={styles.label}>Color</Text>
-            {draft?.level === 2 ? (
-              <View style={styles.lockedColor}>
-                <View style={[styles.colorDot, { backgroundColor: draft.color }]} />
-                <Text style={styles.lockedCopy}>Subcategories inherit the parent color.</Text>
-              </View>
-            ) : (
-              <View style={styles.colorRow}>
-                {categoryColorOptions.map((color) => {
-                  const active = draft?.color === color;
+              <Text style={styles.label}>Icon</Text>
+              <View style={styles.optionGrid}>
+                {categoryIconOptions.map((icon) => {
+                  const active = draft?.icon === icon;
                   return (
                     <Pressable
-                      key={color}
+                      key={icon}
                       disabled={draft?.readOnly}
                       style={({ pressed }) => [
-                        styles.colorChip,
-                        { backgroundColor: color },
-                        active && styles.colorChipActive,
+                        styles.optionTile,
+                        active && styles.optionTileActive,
                         pressed && styles.buttonPressed,
                       ]}
-                      onPress={() => setDraft((current) => (current ? { ...current, color } : current))}
-                    />
+                      onPress={() => setDraft((current) => (current ? { ...current, icon } : current))}
+                    >
+                      <CategoryIcon name={icon} size={20} color={active ? colors.text : colors.textMuted} />
+                    </Pressable>
                   );
                 })}
               </View>
-            )}
 
-            {!draft?.readOnly && draft?.mode === 'edit' && draft.canDelete ? (
-              <Pressable
-                style={({ pressed }) => [styles.destructiveButton, pressed && styles.buttonPressed]}
-                onPress={() => runDetached(deleteCategory(), 'categories.deleteCategory')}
-              >
-                <Text style={styles.destructiveButtonText}>{saving ? 'Working...' : 'Delete category'}</Text>
-              </Pressable>
-            ) : null}
-          </ScrollView>
+              <Text style={styles.label}>Color</Text>
+              {draft?.level === 2 ? (
+                <View style={styles.lockedColor}>
+                  <View style={[styles.colorDot, { backgroundColor: draft.color }]} />
+                  <Text style={styles.lockedCopy}>Subcategories inherit the parent color.</Text>
+                </View>
+              ) : (
+                <View style={styles.colorRow}>
+                  {categoryColorOptions.map((color) => {
+                    const active = draft?.color === color;
+                    return (
+                      <Pressable
+                        key={color}
+                        disabled={draft?.readOnly}
+                        style={({ pressed }) => [
+                          styles.colorChip,
+                          { backgroundColor: color },
+                          active && styles.colorChipActive,
+                          pressed && styles.buttonPressed,
+                        ]}
+                        onPress={() => setDraft((current) => (current ? { ...current, color } : current))}
+                      />
+                    );
+                  })}
+                </View>
+              )}
+
+              {activeTab === 'expense' ? (
+                <>
+                  <Text style={styles.label}>Budget</Text>
+                  <View style={styles.budgetRow}>
+                    <TextInput
+                      value={draft?.budgetAmount ?? ''}
+                      onChangeText={(value) => setDraft((current) => (current ? { ...current, budgetAmount: value } : current))}
+                      editable={!draft?.readOnly}
+                      placeholder={data.activeCycle ? `Optional target for ${data.activeCycle.label}` : 'Add salary to set budgets'}
+                      placeholderTextColor={colors.textMuted}
+                      keyboardType="decimal-pad"
+                      style={styles.input}
+                    />
+                    <Text style={styles.budgetCurrency}>DKK</Text>
+                  </View>
+                  <Text style={styles.helperText}>
+                    Optional. Saves against the active salary cycle and shows progress in the list.
+                  </Text>
+                </>
+              ) : null}
+
+              {!draft?.readOnly && draft?.mode === 'edit' && draft.canDelete ? (
+                <Pressable
+                  style={({ pressed }) => [styles.destructiveButton, pressed && styles.buttonPressed]}
+                  onPress={() => runDetached(deleteCategory(), 'categories.deleteCategory')}
+                >
+                  <Text style={styles.destructiveButtonText}>{saving ? 'Working...' : 'Delete category'}</Text>
+                </Pressable>
+              ) : null}
+            </ScrollView>
+          </KeyboardAvoidingView>
         </SafeAreaView>
       </Modal>
 
@@ -893,12 +1049,16 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   parentCopy: { flex: 1, gap: 2 },
   parentName: { ...typography.h2, color: colors.text },
   parentMetaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   parentMeta: { ...typography.label, color: colors.textMuted },
   budgetTag: { ...typography.label, fontWeight: '700' },
+  progressWrap: { gap: spacing.xs, marginTop: spacing.sm },
+  progressRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  progressText: { ...typography.label, color: colors.textMuted },
   parentActions: { flexDirection: 'row', gap: spacing.sm },
   smallButton: {
     paddingHorizontal: spacing.md,
@@ -966,12 +1126,40 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  dualToneIconWrap: {
+    flexDirection: 'row',
+    backgroundColor: 'transparent',
+  },
+  dualToneHalf: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: '50%',
+  },
+  dualToneHalfLeft: {
+    left: 0,
+  },
+  dualToneHalfRight: {
+    right: 0,
+  },
+  dualToneDivider: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: '50%',
+    width: 1,
+    marginLeft: -0.5,
+    backgroundColor: 'rgba(255,255,255,0.45)',
   },
   childCopy: { flex: 1, gap: 2 },
   childName: { ...typography.body, color: colors.text, fontWeight: '600' },
   childMetaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, alignItems: 'center' },
   childMeta: { ...typography.label, color: colors.textMuted },
+  childBudgetWrap: { gap: spacing.xs, marginTop: spacing.xs, marginBottom: spacing.xs },
   modalSafeArea: { flex: 1, backgroundColor: colors.bg },
+  keyboardAvoiding: { flex: 1 },
   modalScroll: { flex: 1 },
   modalContent: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.md },
   label: {
@@ -1022,6 +1210,13 @@ const styles = StyleSheet.create({
   },
   colorDot: { width: 16, height: 16, borderRadius: radius.pill },
   lockedCopy: { ...typography.body, color: colors.textMuted },
+  budgetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  budgetCurrency: { ...typography.label, color: colors.textMuted, fontWeight: '700' },
+  helperText: { ...typography.body, color: colors.textMuted },
   destructiveButton: {
     marginTop: spacing.md,
     borderRadius: radius.md,

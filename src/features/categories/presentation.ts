@@ -55,6 +55,7 @@ export const bankIconOptions = [
 
 export const categoryIconOptions = [
   ...bankIconOptions,
+  'hammer-wrench',
   'music-note-outline',
   'cash-plus',
   'cash-refund',

@@ -64,10 +64,15 @@ function CategoryRow({
     parentColor: item.parentColor,
     color: item.color,
   });
+  const incomeOutlined = isAllowedIncomeCategoryOption(item);
 
   return (
     <Pressable
-      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+      style={({ pressed }) => [
+        styles.row,
+        incomeOutlined && styles.rowIncomeOutline,
+        pressed && styles.rowPressed,
+      ]}
       onPress={() => {
         onSelect(item);
         onClose();
@@ -334,6 +339,10 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     borderRadius: radius.md,
     backgroundColor: colors.surface,
+  },
+  rowIncomeOutline: {
+    borderWidth: 1,
+    borderColor: colors.accentAlt,
   },
   rowPressed: { opacity: 0.86 },
   rowIconWrap: {
