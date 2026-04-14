@@ -1,20 +1,10 @@
-import { useEffect } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Tabs, usePathname } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, {
-  Easing,
-  interpolate,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
 import { useComposer } from '@/features/transactions/composer/context/ComposerContext';
-import { colors, radius, spacing, typography } from '@/ui/tokens';
-
-const FAB_HIDE_TRANSLATE = 110;
-const FAB_TOGGLE_MS = 300;
+import { FloatingActionButton } from '@/ui/FloatingActionButton';
+import { colors, spacing, typography } from '@/ui/tokens';
 
 const iconForRoute = (name: string, focused: boolean): keyof typeof MaterialCommunityIcons.glyphMap => {
   switch (name) {
@@ -38,39 +28,19 @@ function GlobalAddButton() {
   const leaf = pathname.split('/').filter(Boolean).pop() ?? '';
   const hidden = leaf === 'shared' || leaf === 'bank';
 
-  const visibility = useSharedValue(hidden ? 1 : 0);
-
-  useEffect(() => {
-    visibility.value = withTiming(hidden ? 1 : 0, {
-      duration: FAB_TOGGLE_MS,
-      easing: Easing.out(Easing.cubic),
-    });
-  }, [hidden, visibility]);
-
-  const fabMotion = useAnimatedStyle(() => ({
-    transform: [
-      { translateY: interpolate(visibility.value, [0, 1], [0, FAB_HIDE_TRANSLATE]) },
-    ],
-    opacity: interpolate(visibility.value, [0, 1], [1, 0]),
-  }));
-
   const bottom = Math.max(insets.bottom, spacing.md) + 56;
 
   return (
-    <Animated.View
-      style={[styles.fabOuter, { bottom, right: spacing.xl }, fabMotion]}
-      pointerEvents={hidden ? 'none' : 'box-none'}
-    >
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Add transaction"
-        onPress={() => composer.openCreate()}
-        style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
-      >
-        <MaterialCommunityIcons name="plus" size={30} color={colors.text} />
-        <Text style={styles.fabLabel}>Add</Text>
-      </Pressable>
-    </Animated.View>
+    <FloatingActionButton
+      icon="plus"
+      label="Add"
+      accessibilityLabel="Add transaction"
+      onPress={() => composer.openCreate()}
+      bottom={bottom}
+      right={spacing.xl}
+      backgroundColor={colors.accent}
+      hidden={hidden}
+    />
   );
 }
 
@@ -118,30 +88,6 @@ const styles = StyleSheet.create({
   tabLabel: {
     ...typography.label,
     fontSize: 12,
-    marginTop: 2,
-  },
-  fabOuter: {
-    position: 'absolute',
-    width: 72,
-    height: 72,
-  },
-  fab: {
-    width: 72,
-    height: 72,
-    borderRadius: radius.pill,
-    backgroundColor: colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.34,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 14,
-  },
-  fabPressed: { opacity: 0.86, transform: [{ scale: 0.98 }] },
-  fabLabel: {
-    ...typography.label,
-    color: colors.text,
     marginTop: 2,
   },
 });

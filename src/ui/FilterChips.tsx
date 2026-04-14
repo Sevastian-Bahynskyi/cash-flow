@@ -57,7 +57,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   chipActive: {
-    backgroundColor: colors.accent,
+    backgroundColor: 'rgba(124,92,255,0.18)',
     borderColor: colors.accent,
   },
   chipPressed: { opacity: 0.85 },
