@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Animated, {
@@ -25,9 +24,12 @@ import {
 import { runDetached } from '@/lib/async';
 import { MotionScope } from '@/ui/MotionScope';
 import { MotionView } from '@/ui/MotionView';
+import { FilterChips } from '@/ui/FilterChips';
 import { ProgressBar } from '@/ui/ProgressBar';
 import { ScreenHeader } from '@/ui/ScreenHeader';
 import { SkeletonBlock, SkeletonCard } from '@/ui/Skeleton';
+import { TopCategoriesSection } from '@/ui/TopCategoriesSection';
+import { HeroCard } from '@/ui/HeroCard';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 import { transactionBalance } from '@/lib/balance';
 import { formatMinor, formatPercent } from '@/lib/format';
@@ -42,6 +44,28 @@ const toLocalIsoDay = (date: Date): string => {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+};
+
+const heroRangeDate = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' });
+
+const formatHeroCycleRange = (cycle: SalaryCycle, today: Date): string => {
+  const startParts = cycle.startOn.split('-').map(Number);
+  const endExclusiveParts = cycle.endOnExclusive
+    ? cycle.endOnExclusive.split('-').map(Number)
+    : [today.getFullYear(), today.getMonth() + 1, today.getDate()];
+
+  const startYear = startParts[0] ?? 1970;
+  const startMonth = startParts[1] ?? 1;
+  const startDay = startParts[2] ?? 1;
+  const endYear = endExclusiveParts[0] ?? today.getFullYear();
+  const endMonth = endExclusiveParts[1] ?? today.getMonth() + 1;
+  const endDay = endExclusiveParts[2] ?? today.getDate();
+  const endBase = new Date(endYear, endMonth - 1, endDay);
+  const endDate = cycle.endOnExclusive && endDay === 1
+    ? new Date(endBase.getFullYear(), endBase.getMonth(), endBase.getDate() - 1)
+    : endBase;
+
+  return `${heroRangeDate.format(new Date(startYear, startMonth - 1, startDay))} – ${heroRangeDate.format(endDate)}`;
 };
 
 const cycleMatch = (row: TransactionRow, cycle: SalaryCycle | null): boolean => {
@@ -232,16 +256,16 @@ export default function HomeScreen() {
       return b.occurred_on.localeCompare(a.occurred_on);
     });
   }, [rangeTransactions]);
-  const personalSpendMinor = useMemo(
-    () =>
-      personalTransactions.reduce((sum, row) => {
-        if (row.kind !== 'expense' || row.is_shared_topup) return sum;
-        return sum + row.amount_minor;
-      }, 0),
-    [personalTransactions],
-  );
 
-  const recentItems = personalTransactions.slice(0, 8).map((row) => {
+  const recentActivityTransactions = useMemo(() => {
+    const base = rangeTransactions.filter((row) => !row.is_shared_topup);
+    return [...base].sort((a, b) => {
+      if (a.occurred_on === b.occurred_on) return b.updated_at.localeCompare(a.updated_at);
+      return b.occurred_on.localeCompare(a.occurred_on);
+    });
+  }, [rangeTransactions]);
+
+  const recentItems = recentActivityTransactions.slice(0, 8).map((row) => {
     const meta = row.category_id ? categoryMeta[row.category_id] : null;
     const parentLabel =
       meta?.parentName?.trim() ? meta.parentName : meta?.name?.trim() ? meta.name : null;
@@ -265,7 +289,7 @@ export default function HomeScreen() {
     };
   });
   const hasAnyPersonalHistory = useMemo(
-    () => data.transactions.some((row) => !row.shared),
+    () => data.transactions.some((row) => !row.is_shared_topup),
     [data.transactions],
   );
   const selectedRecentCount = selectedRecentIds.length;
@@ -313,7 +337,7 @@ export default function HomeScreen() {
       byParent.set(key, current);
     }
 
-      const items = [...byParent.values()].map((item) => {
+    const items = [...byParent.values()].map((item) => {
       const netMinor = item.incomeMinor - item.expenseMinor;
       const absMinor = Math.abs(netMinor);
       const tone = netMinor >= 0 ? ('income' as const) : ('expense' as const);
@@ -334,9 +358,21 @@ export default function HomeScreen() {
     });
 
     return items.sort((a, b) => b.absMinor - a.absMinor).slice(0, 5);
-  }, [categoryMeta, personalTransactions]);
+  }, [categoryMeta, data.categories, personalTransactions]);
 
   const spendTotal = topCategoryTotals.reduce((sum, item) => sum + item.absMinor, 0);
+  const topCategoryItems = useMemo(
+    () =>
+      topCategoryTotals.map((item) => ({
+        id: item.label,
+        label: item.label,
+        amountLabel: `${item.tone === 'income' ? '+' : '-'}${formatMinor(Math.abs(item.netMinor))}`,
+        amountColor: item.tone === 'income' ? colors.success : colors.danger,
+        progress: spendTotal === 0 ? 0 : item.absMinor / spendTotal,
+        color: item.color,
+      })),
+    [spendTotal, topCategoryTotals],
+  );
 
   const filteredBudgetAlerts: BudgetAlert[] = useMemo(() => {
     if (filter !== 'month') return [];
@@ -425,13 +461,6 @@ export default function HomeScreen() {
     );
   };
 
-  const currentCycleLabel =
-    filter === 'all'
-      ? 'All time'
-      : filter === 'year'
-        ? `${currentYear}`
-        : selectedCycle?.label ?? 'No month';
-
   const heroEyebrow =
     filter === 'all'
       ? 'All-time balance'
@@ -440,7 +469,11 @@ export default function HomeScreen() {
         : 'Month balance';
 
   const yearChipLabel = currentYearCycles.length > 0 ? `Current year` : `Current year`;
-  const heroRangeLabel = filter === 'year' || filter === 'all' ? 'Range' : 'Month';
+  const filterOptions = [
+    { label: 'Month', value: 'month' as const },
+    { label: yearChipLabel, value: 'year' as const },
+    { label: 'All time', value: 'all' as const },
+  ];
 
   const onRefresh = async (): Promise<void> => {
     setRefreshing(true);
@@ -482,9 +515,7 @@ export default function HomeScreen() {
           subtitle="Personal flow"
           actions={[
             { icon: 'bell-outline', onPress: () => router.push('/alerts') },
-            { icon: 'brain', onPress: () => router.push('/ai-rules') },
-            { icon: 'shape-outline', onPress: () => router.push('/categories') },
-            { icon: 'target', onPress: () => router.push('/budgets') },
+            { icon: 'brain', onPress: () => router.push('/ai-rules') }
           ]}
         />
 
@@ -492,364 +523,265 @@ export default function HomeScreen() {
 
         {!data.isInitialLoading ? (
           <>
-        <MotionView direction="left" distance={210} delayMs={90} rotateFrom={-9}>
-          <View
-            onLayout={(event) => {
-              const next = Math.round(event.nativeEvent.layout.width);
-              if (next > 0) setHeroPagerWidth(next);
-            }}
-          >
-            {filter === 'month' && cyclesWithTransactions.length > 0 ? (
-              <ScrollView
-                ref={(node) => {
-                  heroPagerRef.current = node;
-                }}
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                scrollEventThrottle={16}
-                onMomentumScrollEnd={(event) => {
-                  if (heroPagerWidth <= 0) return;
-                  const index = Math.round(event.nativeEvent.contentOffset.x / heroPagerWidth);
-                  const cycle = cyclesWithTransactions[index];
-                  if (!cycle) return;
-                  setSelectedCycleId(cycle.id);
-                  void Haptics.selectionAsync();
+            <FilterChips
+              value={filter}
+              options={filterOptions}
+              onChange={(next) => {
+                setFilter(next);
+                Haptics.selectionAsync().catch(() => undefined);
+              }}
+            />
+
+            <MotionView direction="left" distance={210} delayMs={90} rotateFrom={-9}>
+              <View
+                onLayout={(event) => {
+                  const next = Math.round(event.nativeEvent.layout.width);
+                  if (next > 0) setHeroPagerWidth(next);
                 }}
               >
-                {cyclesWithTransactions.map((cycle) => {
-                  const cycleTxns = data.transactions.filter((row) => cycleMatch(row, cycle));
-                  const cycleBalance = transactionBalance(cycleTxns);
-                  const cyclePersonalSpend = cycleTxns.reduce((sum, row) => {
-                    if (row.kind !== 'expense') return sum;
-                    if (row.shared || row.is_shared_topup) return sum;
-                    return sum + row.amount_minor;
-                  }, 0);
-                  return (
-                    <Animated.View
-                      key={cycle.id}
-                      style={[styles.heroWrap, heroAnimatedStyle, heroPagerWidth > 0 ? { width: heroPagerWidth } : null]}
-                    >
-                      <Pressable
-                        style={({ pressed }) => [styles.heroPressable, pressed && styles.heroPressed]}
-                        onPress={() => {
-                          void Haptics.selectionAsync();
-                          const params = new URLSearchParams();
-                          params.set('startOn', cycle.startOn);
-                          if (cycle.endOnExclusive) params.set('endOnExclusive', cycle.endOnExclusive);
-                          router.push((`/personal-history?${params.toString()}`) as never);
-                        }}
-                      >
-                        <LinearGradient colors={['#1F2438', '#101219', '#0B0B0F']} style={styles.hero}>
-                          <Text style={styles.heroEyebrow}>Month balance</Text>
-                          <Text style={styles.heroAmount}>{formatMinor(cycleBalance)}</Text>
-                          <View style={styles.heroStats}>
-                            <MotionView direction="up" distance={90} delayMs={220}>
-                              <View style={styles.heroStatChip}>
-                                <Text style={styles.heroStatLabel}>Month</Text>
-                                <Text style={styles.heroStatValue}>{cycle.label}</Text>
-                              </View>
-                            </MotionView>
-                            <MotionView direction="right" distance={120} delayMs={280}>
-                              <View style={styles.heroStatChip}>
-                                <Text style={styles.heroStatLabel}>Spend</Text>
-                                <Text style={styles.heroStatValue}>{formatMinor(cyclePersonalSpend)}</Text>
-                              </View>
-                            </MotionView>
-                          </View>
-                        </LinearGradient>
-                        <Animated.View pointerEvents="none" style={[styles.heroGlow, heroGlowStyle]} />
-                      </Pressable>
-                    </Animated.View>
-                  );
-                })}
-              </ScrollView>
-            ) : (
-              <Animated.View style={[styles.heroWrap, heroAnimatedStyle]}>
-                <Pressable
-                  style={({ pressed }) => [styles.heroPressable, pressed && styles.heroPressed]}
-                  onPress={() => {
-                    void Haptics.selectionAsync();
-                    const params = new URLSearchParams();
-                    if (selectedRange.startOn) params.set('startOn', selectedRange.startOn);
-                    if (selectedRange.endOnExclusive) {
-                      params.set('endOnExclusive', selectedRange.endOnExclusive);
-                    }
-                    router.push((`/personal-history?${params.toString()}`) as never);
-                  }}
-                >
-                  <LinearGradient colors={['#1F2438', '#101219', '#0B0B0F']} style={styles.hero}>
-                    <Text style={styles.heroEyebrow}>{heroEyebrow}</Text>
-                    <Text style={styles.heroAmount}>{formatMinor(snapshotMinor)}</Text>
-                    <View style={styles.heroStats}>
-                      <MotionView direction="up" distance={90} delayMs={220}>
-                        <View style={styles.heroStatChip}>
-                          <Text style={styles.heroStatLabel}>{heroRangeLabel}</Text>
-                          <Text style={styles.heroStatValue}>{currentCycleLabel}</Text>
-                        </View>
-                      </MotionView>
-                      <MotionView direction="right" distance={120} delayMs={280}>
-                        <View style={styles.heroStatChip}>
-                          <Text style={styles.heroStatLabel}>Spend</Text>
-                          <Text style={styles.heroStatValue}>{formatMinor(personalSpendMinor)}</Text>
-                        </View>
-                      </MotionView>
-                    </View>
-                  </LinearGradient>
-                  <Animated.View pointerEvents="none" style={[styles.heroGlow, heroGlowStyle]} />
-                </Pressable>
-              </Animated.View>
-            )}
-
-            {filter === 'month' && cyclesWithTransactions.length > 1 && heroPagerWidth > 0 ? (() => {
-              const cycleIdx = Math.max(0, cyclesWithTransactions.findIndex((cycle) => cycle.id === selectedCycle?.id));
-              const hasPrev = cycleIdx > 0;
-              const hasNext = cycleIdx < cyclesWithTransactions.length - 1;
-              return (
-                <View pointerEvents="box-none" style={styles.heroArrows}>
-                  {hasPrev ? (
-                    <Pressable
-                      style={({ pressed }) => [styles.heroArrow, pressed && styles.heroArrowPressed]}
-                      onPress={() => {
-                        const next = cyclesWithTransactions[cycleIdx - 1];
-                        if (!next) return;
-                        setSelectedCycleId(next.id);
-                        heroPagerRef.current?.scrollTo({ x: (cycleIdx - 1) * heroPagerWidth, animated: true });
-                        void Haptics.selectionAsync();
-                      }}
-                    >
-                      <MaterialCommunityIcons name="chevron-left" size={24} color={colors.text} />
-                    </Pressable>
-                  ) : <View style={styles.heroArrowSpacer} />}
-                  {hasNext ? (
-                    <Pressable
-                      style={({ pressed }) => [styles.heroArrow, pressed && styles.heroArrowPressed]}
-                      onPress={() => {
-                        const next = cyclesWithTransactions[cycleIdx + 1];
-                        if (!next) return;
-                        setSelectedCycleId(next.id);
-                        heroPagerRef.current?.scrollTo({ x: (cycleIdx + 1) * heroPagerWidth, animated: true });
-                        void Haptics.selectionAsync();
-                      }}
-                    >
-                      <MaterialCommunityIcons name="chevron-right" size={24} color={colors.text} />
-                    </Pressable>
-                  ) : <View style={styles.heroArrowSpacer} />}
-                </View>
-              );
-            })() : null}
-          </View>
-        </MotionView>
-
-        <View style={styles.filterRow}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.filterChip,
-              filter === 'month' && styles.filterChipActive,
-              pressed && styles.cycleChipPressed,
-            ]}
-            onPress={() => {
-              setFilter('month');
-              void Haptics.selectionAsync();
-            }}
-          >
-            <Text style={[styles.filterChipText, filter === 'month' && styles.filterChipTextActive]}>
-              Month
-            </Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
-              styles.filterChip,
-              filter === 'year' && styles.filterChipActive,
-              pressed && styles.cycleChipPressed,
-            ]}
-            onPress={() => {
-              setFilter('year');
-              void Haptics.selectionAsync();
-            }}
-          >
-            <Text style={[styles.filterChipText, filter === 'year' && styles.filterChipTextActive]}>
-              {yearChipLabel}
-            </Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
-              styles.filterChip,
-              filter === 'all' && styles.filterChipActive,
-              pressed && styles.cycleChipPressed,
-            ]}
-            onPress={() => {
-              setFilter('all');
-              void Haptics.selectionAsync();
-            }}
-          >
-            <Text style={[styles.filterChipText, filter === 'all' && styles.filterChipTextActive]}>
-              All time
-            </Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.quickRow}>
-          <MotionView style={styles.quickMotion} direction="left" distance={165} delayMs={170}>
-            <Pressable
-              style={styles.quickCard}
-              onPress={() => {
-                void Haptics.selectionAsync();
-                router.push('/budgets');
-              }}
-            >
-              <MaterialCommunityIcons name="target" size={20} color={colors.accent} />
-              <Text style={styles.quickTitle}>Budgets</Text>
-            </Pressable>
-          </MotionView>
-          <MotionView style={styles.quickMotion} direction="right" distance={165} delayMs={230}>
-            <Pressable
-              style={styles.quickCard}
-              onPress={() => {
-                void Haptics.selectionAsync();
-                router.push('/categories');
-              }}
-            >
-              <MaterialCommunityIcons name="shape-outline" size={20} color={colors.success} />
-              <Text style={styles.quickTitle}>Categories</Text>
-            </Pressable>
-          </MotionView>
-        </View>
-
-        {data.error ? (
-          <View style={styles.section}>
-            <View style={styles.errorCard}>
-              <Text style={styles.errorTitle}>Something needs a refresh</Text>
-              <Text style={styles.emptyText}>{data.error}</Text>
-            </View>
-          </View>
-        ) : null}
-
-        {filteredBudgetAlerts.length > 0 ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Budget pressure</Text>
-            <View style={styles.sectionBody}>
-              {filteredBudgetAlerts.map((alert, index) => {
-                const ratio = alert.spentMinor / alert.amountMinor;
-                const tone = alert.level === 'critical' ? colors.danger : '#F5B942';
-                return (
-                  <MotionView key={alert.categoryId} index={index} direction="right" distance={150} delayMs={210}>
-                    <View style={styles.alertCard}>
-                      <View style={styles.alertRow}>
-                        <Text style={styles.alertTitle}>{alert.label}</Text>
-                        <Text style={[styles.alertRatio, { color: tone }]}>{formatPercent(ratio)}</Text>
-                      </View>
-                      <Text style={styles.alertMeta}>
-                        {formatMinor(alert.spentMinor)} of {formatMinor(alert.amountMinor)}
-                      </Text>
-                      <ProgressBar value={ratio} color={tone} />
-                    </View>
-                  </MotionView>
-                );
-              })}
-            </View>
-          </View>
-        ) : null}
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Top categories</Text>
-          <View style={styles.sectionBody}>
-            {topCategoryTotals.length === 0 ? (
-              <View style={styles.emptyCard}>
-                <Text style={styles.emptyText}>No spending in this range yet.</Text>
-              </View>
-            ) : (
-              topCategoryTotals.map((item, index) => (
-                <MotionView key={`${item.label}-${item.tone}`} index={index} direction="left" distance={145} delayMs={250}>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Show ${item.label} transactions`}
-                    style={({ pressed }) => [styles.categoryCard, pressed && styles.cycleChipPressed]}
-                    onPress={() => {
-                      void Haptics.selectionAsync();
-                      const params = new URLSearchParams();
-                      if (selectedRange.startOn) params.set('startOn', selectedRange.startOn);
-                      if (selectedRange.endOnExclusive) {
-                        params.set('endOnExclusive', selectedRange.endOnExclusive);
-                      }
-                      params.set('kind', item.tone === 'income' ? 'income' : 'expense');
-                      params.set('parentLabel', item.label);
-                      router.push((`/personal-history?${params.toString()}`) as never);
+                {filter === 'month' && cyclesWithTransactions.length > 0 ? (
+                  <ScrollView
+                    ref={(node) => {
+                      heroPagerRef.current = node;
+                    }}
+                    horizontal
+                    pagingEnabled
+                    showsHorizontalScrollIndicator={false}
+                    scrollEventThrottle={16}
+                    onMomentumScrollEnd={(event) => {
+                      if (heroPagerWidth <= 0) return;
+                      const index = Math.round(event.nativeEvent.contentOffset.x / heroPagerWidth);
+                      const cycle = cyclesWithTransactions[index];
+                      if (!cycle) return;
+                      setSelectedCycleId(cycle.id);
+                      Haptics.selectionAsync().catch(() => undefined);
                     }}
                   >
-                    <View style={styles.alertRow}>
-                      <Text style={styles.categoryLabel}>{item.label}</Text>
-                      <Text
-                        style={[
-                          styles.categoryAmount,
-                          { color: item.tone === 'income' ? colors.success : colors.danger },
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {item.tone === 'income' ? '+' : '-'}
-                        {formatMinor(Math.abs(item.netMinor))}
-                      </Text>
-                    </View>
-                    <ProgressBar value={spendTotal === 0 ? 0 : item.absMinor / spendTotal} color={item.color} />
-                  </Pressable>
-                </MotionView>
-              ))
-            )}
-          </View>
-        </View>
+                    {cyclesWithTransactions.map((cycle) => {
+                      const cycleTxns = data.transactions.filter((row) => cycleMatch(row, cycle));
+                      const cycleBalance = transactionBalance(cycleTxns);
+                      return (
+                        <Animated.View
+                          key={cycle.id}
+                          style={[styles.heroWrap, heroAnimatedStyle, heroPagerWidth > 0 ? { width: heroPagerWidth } : null]}
+                        >
+                          <Pressable
+                            style={({ pressed }) => [styles.heroPressable, pressed && styles.heroPressed]}
+                            onPress={() => {
+                              Haptics.selectionAsync().catch(() => undefined);
+                              const params = new URLSearchParams();
+                              params.set('startOn', cycle.startOn);
+                              if (cycle.endOnExclusive) params.set('endOnExclusive', cycle.endOnExclusive);
+                              params.set('includeShared', '1');
+                              router.push((`/personal-history?${params.toString()}`) as never);
+                            }}
+                          >
+                            <HeroCard
+                              eyebrow="Month balance"
+                              dateRange={formatHeroCycleRange(cycle, new Date())}
+                              amount={formatMinor(cycleBalance)}
+                            />
+                            <Animated.View pointerEvents="none" style={[styles.heroGlow, heroGlowStyle]} />
+                          </Pressable>
+                        </Animated.View>
+                      );
+                    })}
+                  </ScrollView>
+                ) : (
+                  <Animated.View style={[styles.heroWrap, heroAnimatedStyle]}>
+                    <Pressable
+                      style={({ pressed }) => [styles.heroPressable, pressed && styles.heroPressed]}
+                      onPress={() => {
+                        Haptics.selectionAsync().catch(() => undefined);
+                        const params = new URLSearchParams();
+                        if (selectedRange.startOn) params.set('startOn', selectedRange.startOn);
+                        if (selectedRange.endOnExclusive) {
+                          params.set('endOnExclusive', selectedRange.endOnExclusive);
+                        }
+                        params.set('includeShared', '1');
+                        router.push((`/personal-history?${params.toString()}`) as never);
+                      }}
+                    >
+                      <HeroCard
+                        eyebrow={heroEyebrow}
+                        dateRange={filter === 'month' && selectedCycle ? formatHeroCycleRange(selectedCycle, new Date()) : undefined}
+                        amount={formatMinor(snapshotMinor)}
+                      />
+                      <Animated.View pointerEvents="none" style={[styles.heroGlow, heroGlowStyle]} />
+                    </Pressable>
+                  </Animated.View>
+                )}
 
-        <View style={[styles.section, styles.sectionFlush]}>
-          <TransactionList
-            title="Recent personal activity"
-            actions={
-              recentSelectionMode
-                ? [
-                    { label: 'Cancel', onPress: () => setRecentSelectionMode(false), tone: 'muted' },
-                    {
-                      label: selectedRecentCount > 0 ? `Delete ${selectedRecentCount}` : 'Delete',
-                      onPress: confirmDeleteSelectedRecentTransactions,
-                      tone: 'danger',
-                      disabled: selectedRecentCount === 0,
-                    },
-                  ]
-                : [
-                    ...(hasAnyPersonalHistory
-                      ? [{ label: 'See more', onPress: () => router.push('/personal-history' as never), tone: 'accent' as const }]
-                      : []),
-                    ...(recentItems.length > 0
-                      ? [{ label: 'Select', onPress: () => setRecentSelectionMode(true), tone: 'muted' as const }]
-                      : []),
-                  ]
-            }
-            items={recentItems}
-            emptyLabel="Log the first transaction to start building your personal history."
-            selectionMode={recentSelectionMode}
-            selectedIds={selectedRecentIds}
-            onToggleSelect={toggleRecentSelection}
-            onEdit={(row) => composer.openEdit(row)}
-            onDuplicate={(row) => {
-              composer.openCreate({
-                kind: row.kind,
-                amount_minor: row.converted_amount_minor,
-                original_amount_minor: row.original_amount_minor,
-                currency_code: row.currency_code,
-                category_id: row.category_id,
-                name: row.name,
-                comment: row.comment,
-                occurred_on: row.occurred_on,
-                recurring: row.recurring,
-                shared: row.shared,
-                shared_participant: row.shared_participant,
-                is_salary: row.is_salary,
-                is_shared_topup: row.is_shared_topup,
-                country_iso: row.country_iso,
-              });
-            }}
-            onDelete={(row) => {
-              runDetached(deleteTransaction(row), 'home.delete-transaction');
-            }}
-          />
-        </View>
+                {filter === 'month' && cyclesWithTransactions.length > 1 && heroPagerWidth > 0 ? (() => {
+                  const cycleIdx = Math.max(0, cyclesWithTransactions.findIndex((cycle) => cycle.id === selectedCycle?.id));
+                  const hasPrev = cycleIdx > 0;
+                  const hasNext = cycleIdx < cyclesWithTransactions.length - 1;
+                  return (
+                    <View pointerEvents="box-none" style={styles.heroArrows}>
+                      {hasPrev ? (
+                        <Pressable
+                          style={({ pressed }) => [styles.heroArrow, pressed && styles.heroArrowPressed]}
+                          onPress={() => {
+                            const next = cyclesWithTransactions[cycleIdx - 1];
+                            if (!next) return;
+                            setSelectedCycleId(next.id);
+                            heroPagerRef.current?.scrollTo({ x: (cycleIdx - 1) * heroPagerWidth, animated: true });
+                            Haptics.selectionAsync().catch(() => undefined);
+                          }}
+                        >
+                          <MaterialCommunityIcons name="chevron-left" size={24} color={colors.text} />
+                        </Pressable>
+                      ) : <View style={styles.heroArrowSpacer} />}
+                      {hasNext ? (
+                        <Pressable
+                          style={({ pressed }) => [styles.heroArrow, pressed && styles.heroArrowPressed]}
+                          onPress={() => {
+                            const next = cyclesWithTransactions[cycleIdx + 1];
+                            if (!next) return;
+                            setSelectedCycleId(next.id);
+                            heroPagerRef.current?.scrollTo({ x: (cycleIdx + 1) * heroPagerWidth, animated: true });
+                            Haptics.selectionAsync().catch(() => undefined);
+                          }}
+                        >
+                          <MaterialCommunityIcons name="chevron-right" size={24} color={colors.text} />
+                        </Pressable>
+                      ) : <View style={styles.heroArrowSpacer} />}
+                    </View>
+                  );
+                })() : null}
+              </View>
+            </MotionView>
+
+            <View style={styles.quickRow}>
+              <MotionView style={styles.quickMotion} direction="left" distance={165} delayMs={170}>
+                <Pressable
+                  style={styles.quickCard}
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => undefined);
+                    router.push(selectedCycle ? `/budgets?cycleId=${encodeURIComponent(selectedCycle.id)}` : '/budgets');
+                  }}
+                >
+                  <MaterialCommunityIcons name="target" size={20} color={colors.accent} />
+                  <Text style={styles.quickTitle}>Budgets</Text>
+                </Pressable>
+              </MotionView>
+              <MotionView style={styles.quickMotion} direction="right" distance={165} delayMs={230}>
+                <Pressable
+                  style={styles.quickCard}
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => undefined);
+                    router.push('/categories');
+                  }}
+                >
+                  <MaterialCommunityIcons name="shape-outline" size={20} color={colors.success} />
+                  <Text style={styles.quickTitle}>Categories</Text>
+                </Pressable>
+              </MotionView>
+            </View>
+
+            {data.error ? (
+              <View style={styles.section}>
+                <View style={styles.errorCard}>
+                  <Text style={styles.errorTitle}>Something needs a refresh</Text>
+                  <Text style={styles.emptyText}>{data.error}</Text>
+                </View>
+              </View>
+            ) : null}
+
+            {filteredBudgetAlerts.length > 0 ? (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Budget pressure</Text>
+                <View style={styles.sectionBody}>
+                  {filteredBudgetAlerts.map((alert, index) => {
+                    const ratio = alert.spentMinor / alert.amountMinor;
+                    const tone = alert.level === 'critical' ? colors.danger : '#F5B942';
+                    return (
+                      <MotionView key={alert.categoryId} index={index} direction="right" distance={150} delayMs={210}>
+                        <View style={styles.alertCard}>
+                          <View style={styles.alertRow}>
+                            <Text style={styles.alertTitle}>{alert.label}</Text>
+                            <Text style={[styles.alertRatio, { color: tone }]}>{formatPercent(ratio)}</Text>
+                          </View>
+                          <Text style={styles.alertMeta}>
+                            {formatMinor(alert.spentMinor)} of {formatMinor(alert.amountMinor)}
+                          </Text>
+                          <ProgressBar value={ratio} color={tone} />
+                        </View>
+                      </MotionView>
+                    );
+                  })}
+                </View>
+              </View>
+            ) : null}
+
+            <TopCategoriesSection
+              title="Top categories"
+              items={topCategoryItems}
+              emptyLabel="No spending in this range yet."
+              onPressItem={(item) => {
+                Haptics.selectionAsync().catch(() => undefined);
+                const source = topCategoryTotals.find((topCategory) => topCategory.label === item.label);
+                const params = new URLSearchParams();
+                if (selectedRange.startOn) params.set('startOn', selectedRange.startOn);
+                if (selectedRange.endOnExclusive) {
+                  params.set('endOnExclusive', selectedRange.endOnExclusive);
+                }
+                params.set('kind', source?.tone === 'income' ? 'income' : 'expense');
+                params.set('parentLabel', item.label);
+                params.set('includeShared', '1');
+                router.push((`/personal-history?${params.toString()}`) as never);
+              }}
+            />
+
+            <View style={[styles.section, styles.sectionFlush]}>
+              <TransactionList
+                title="Recent personal activity"
+                actions={
+                  recentSelectionMode
+                    ? [
+                      { label: 'Cancel', onPress: () => setRecentSelectionMode(false), tone: 'muted' },
+                      {
+                        label: selectedRecentCount > 0 ? `Delete ${selectedRecentCount}` : 'Delete',
+                        onPress: confirmDeleteSelectedRecentTransactions,
+                        tone: 'danger',
+                        disabled: selectedRecentCount === 0,
+                      },
+                    ]
+                    : [
+                      ...(hasAnyPersonalHistory
+                        ? [{ label: 'See more', onPress: () => router.push('/personal-history?includeShared=1' as never), tone: 'accent' as const }]
+                        : []),
+                    ]
+                }
+                items={recentItems}
+                emptyLabel="Log the first transaction to start building your personal history."
+                selectionMode={recentSelectionMode}
+                selectedIds={selectedRecentIds}
+                onToggleSelect={toggleRecentSelection}
+                onEdit={(row) => composer.openEdit(row)}
+                onDuplicate={(row) => {
+                  composer.openCreate({
+                    kind: row.kind,
+                    amount_minor: row.converted_amount_minor,
+                    original_amount_minor: row.original_amount_minor,
+                    currency_code: row.currency_code,
+                    category_id: row.category_id,
+                    name: row.name,
+                    comment: row.comment,
+                    occurred_on: row.occurred_on,
+                    recurring: row.recurring,
+                    shared: row.shared,
+                    shared_participant: row.shared_participant,
+                    is_salary: row.is_salary,
+                    is_shared_topup: row.is_shared_topup,
+                    country_iso: row.country_iso,
+                  });
+                }}
+                onDelete={(row) => {
+                  runDetached(deleteTransaction(row), 'home.delete-transaction');
+                }}
+              />
+            </View>
           </>
         ) : null}
       </Animated.ScrollView>
@@ -885,33 +817,13 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.12)',
   },
   heroArrowPressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
-  hero: {
-    borderRadius: radius.lg,
-    padding: spacing.xl,
-    gap: spacing.sm,
-    overflow: 'hidden',
-  },
   heroGlow: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: radius.lg,
     backgroundColor: 'rgba(124,92,255,0.16)',
   },
-  heroEyebrow: { ...typography.label, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
-  heroAmount: { ...typography.amount, color: colors.text },
-  heroStats: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap', paddingTop: spacing.xs },
   heroSkeletonCard: { marginHorizontal: spacing.lg, gap: spacing.sm },
   skeletonHeroStats: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap', paddingTop: spacing.xs },
-  heroStatChip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    gap: 2,
-  },
-  heroStatLabel: { ...typography.label, color: colors.textMuted, fontSize: 11, textTransform: 'uppercase' },
-  heroStatValue: { ...typography.label, color: colors.text, fontWeight: '600' },
   selectorBlock: { gap: spacing.sm },
   cycleCarousel: { paddingHorizontal: spacing.lg, gap: spacing.sm },
   cycleChip: {
@@ -987,7 +899,4 @@ const styles = StyleSheet.create({
   },
   errorTitle: { ...typography.body, color: colors.text, fontWeight: '700', marginBottom: spacing.xs },
   emptyText: { ...typography.body, color: colors.textMuted },
-  categoryCard: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.md, gap: spacing.sm },
-  categoryLabel: { ...typography.body, color: colors.text, flex: 1 },
-  categoryAmount: { ...typography.body, color: colors.text, fontWeight: '600' },
 });
