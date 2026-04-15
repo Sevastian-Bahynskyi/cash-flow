@@ -30,6 +30,7 @@ import { CategoryIcon } from '@/ui/CategoryIcon';
 import { NumericKeypad } from '@/ui/NumericKeypad';
 import { SkeletonBlock, SkeletonCard } from '@/ui/Skeleton';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
+import type { BudgetState } from '@/features/budgets/helpers';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -193,21 +194,33 @@ export default function BudgetScreen() {
         const children = data.categories
           .filter((category) => category.parent_id === parent.id)
           .sort((a, b) => a.name.localeCompare(b.name));
-        const hasBudget = Boolean(budgetByCategoryId.get(parent.id) || children.some((child) => budgetByCategoryId.get(child.id)));
+        const childRows = children.map((child) => ({
+          category: child,
+          label: categoryMeta[child.id]?.label ?? child.name,
+          icon: child.icon,
+          budget: budgetByCategoryId.get(child.id) ?? null,
+          state: budgetStates[child.id] ?? null,
+        }));
+        const hasBudget = childRows.some((child) => child.state !== null);
+        const parentAmountMinor = childRows.reduce((sum, child) => sum + (child.state?.amountMinor ?? 0), 0);
+        const parentSpentMinor = childRows.reduce((sum, child) => sum + (child.state?.spentMinor ?? 0), 0);
+        const parentRatio = parentAmountMinor === 0 ? 0 : parentSpentMinor / parentAmountMinor;
+        const parentState: BudgetState | null = hasBudget
+          ? {
+            categoryId: parent.id,
+            amountMinor: parentAmountMinor,
+            spentMinor: parentSpentMinor,
+            ratio: parentRatio,
+            tone: parentRatio >= 1 ? 'critical' : parentRatio >= 0.8 ? 'warning' : 'neutral',
+          }
+          : null;
         return {
           parent,
           label: categoryMeta[parent.id]?.label ?? parent.name,
           icon: parent.icon,
-          budget: budgetByCategoryId.get(parent.id) ?? null,
-          state: budgetStates[parent.id] ?? null,
+          state: parentState,
           hasBudget,
-          children: children.map((child) => ({
-            category: child,
-            label: categoryMeta[child.id]?.label ?? child.name,
-            icon: child.icon,
-            budget: budgetByCategoryId.get(child.id) ?? null,
-            state: budgetStates[child.id] ?? null,
-          })),
+          children: childRows,
         };
       })
       .sort((a, b) => {
@@ -391,7 +404,7 @@ export default function BudgetScreen() {
                   </View>
                 ) : null}
 
-                {filteredRows.map(({ parent, label, icon, budget, state, children }) => {
+                {filteredRows.map(({ parent, label, icon, state, children }) => {
                   const expanded = expandedParentIds.includes(parent.id);
                   const tone =
                     state?.tone === 'critical'
@@ -404,15 +417,7 @@ export default function BudgetScreen() {
                       <Pressable
                         style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
                         onPress={() => {
-                          Keyboard.dismiss();
-                          setKeypadOpen(true);
-                          setDraft({
-                            categoryId: parent.id,
-                            label,
-                            icon,
-                            amount: budget ? String((budget.amount_minor / 100).toFixed(2)) : '',
-                            budgetId: budget?.id,
-                          });
+                          toggleParent(parent.id);
                         }}
                       >
                         <View style={[styles.iconWrap, { backgroundColor: `${tone}22` }]}>
