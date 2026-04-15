@@ -102,22 +102,35 @@ const toSearchText = (value: string): string =>
     .trim();
 
 const splitSearchTokens = (query: string): string[] => {
-  const normalized = toSearchText(query);
-  if (!normalized) return [];
-  return normalized
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const parts = query
+    .trim()
     .split(/\s+/)
-    .filter((token) => token.length >= 2)
-    .slice(0, 6);
+    .filter(Boolean)
+    .slice(0, 10);
+
+  for (const part of parts) {
+    if (isDateLikeToken(part)) continue;
+    const normalized = toSearchText(part);
+    if (!normalized) continue;
+    const tokens = normalized.split(/\s+/).filter((token) => token.length >= 2);
+    for (const token of tokens) {
+      if (seen.has(token)) continue;
+      seen.add(token);
+      out.push(token);
+      if (out.length >= 6) return out;
+    }
+  }
+
+  return out;
 };
 
 const isDateLikeToken = (value: string): boolean => {
   const raw = value.trim();
   if (!raw) return false;
-  return /^\d{4}([-/.]\d{1,2}){0,2}$/.test(raw) || /^\d{1,2}([-/.]\d{1,2})([-/.]\d{2,4})?$/.test(raw);
-};
-
-const pushDateRangeClauses = (clauses: string[], startOn: string, endOnExclusive: string): void => {
-  clauses.push(`and(occurred_on.gte.${startOn},occurred_on.lt.${endOnExclusive})`);
+  if (/^\d{6,8}$/.test(raw)) return true;
+  return /^\d{1,4}([-/.]\d{1,4}){0,2}$/.test(raw);
 };
 
 const escapePostgrestValue = (value: string): string =>
@@ -127,149 +140,176 @@ const escapePostgrestValue = (value: string): string =>
     .replaceAll('(', '\\(')
     .replaceAll(')', '\\)');
 
-const buildSearchTerms = (query: string): string[] => {
-  const trimmed = query.trim();
-  if (!trimmed) return [];
-
-  const normalizedDots = trimmed.replace(/[\/-]/g, '.').replace(/\s+/g, '.');
-  const terms = new Set<string>([trimmed]);
+const buildDateSearchGroups = (query: string): string[] => {
   const nowYear = new Date().getFullYear();
+  const parts = query
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 8)
+    .filter((part) => isDateLikeToken(part));
 
-  const pushDayMonth = (day: string, month: string): void => {
-    const dayNum = Number(day);
-    const monthNum = Number(month);
-    if (!Number.isFinite(dayNum) || !Number.isFinite(monthNum) || dayNum < 1 || dayNum > 31 || monthNum < 1 || monthNum > 12) {
-      return;
-    }
-    terms.add(`-${pad2(month)}-${pad2(day)}`);
-    terms.add(`${nowYear}-${pad2(month)}-${pad2(day)}`);
+  const groups: string[] = [];
+
+  const pushGroup = (clauses: Set<string>): void => {
+    const values = [...clauses];
+    if (values.length === 0) return;
+    groups.push(values.length === 1 ? values[0] ?? '' : `or(${values.join(',')})`);
   };
 
-  const pushDayMonthYear = (day: string, month: string, year: string): void => {
-    const resolvedYear = year.length === 2 ? `20${year}` : year;
+  const pushYearRange = (clauses: Set<string>, year: string): void => {
+    const nextYear = String(Number(year) + 1);
+    clauses.add(`and(occurred_on.gte.${year}-01-01,occurred_on.lt.${nextYear}-01-01)`);
+  };
+
+  const pushMonthRange = (clauses: Set<string>, year: string, month: string): void => {
+    const monthNum = Number(month);
+    if (!Number.isFinite(monthNum) || monthNum < 1 || monthNum > 12) return;
+    const nextMonthNumber = monthNum === 12 ? 1 : monthNum + 1;
+    const nextMonthYear = monthNum === 12 ? String(Number(year) + 1) : year;
+    clauses.add(`and(occurred_on.gte.${year}-${pad2(month)}-01,occurred_on.lt.${nextMonthYear}-${String(nextMonthNumber).padStart(2, '0')}-01)`);
+  };
+
+  const pushDayMonth = (clauses: Set<string>, day: string, month: string): void => {
     const dayNum = Number(day);
     const monthNum = Number(month);
-    const yearNum = Number(resolvedYear);
-    if (!Number.isFinite(dayNum) || !Number.isFinite(monthNum) || !Number.isFinite(yearNum)) return;
+    if (!Number.isFinite(dayNum) || !Number.isFinite(monthNum)) return;
     if (dayNum < 1 || dayNum > 31 || monthNum < 1 || monthNum > 12) return;
-    terms.add(`${resolvedYear}-${pad2(month)}-${pad2(day)}`);
+    clauses.add(`occurred_on.like.%-${pad2(month)}-${pad2(day)}`);
+    clauses.add(`occurred_on.eq.${nowYear}-${pad2(month)}-${pad2(day)}`);
   };
 
-  const ddMmYyyyMatch = /^(\d{1,2})\.(\d{1,2})\.(\d{2,4})$/.exec(normalizedDots);
-  if (ddMmYyyyMatch) {
-    const day = ddMmYyyyMatch[1] ?? '';
-    const month = ddMmYyyyMatch[2] ?? '';
-    const year = ddMmYyyyMatch[3] ?? '';
-    const first = Number(day);
-    const second = Number(month);
-    if (first > 12) {
-      pushDayMonthYear(day, month, year);
-    } else if (second > 12) {
-      pushDayMonthYear(month, day, year);
-    } else {
-      pushDayMonthYear(day, month, year);
-      pushDayMonthYear(month, day, year);
+  const pushIsoDate = (clauses: Set<string>, year: string, month: string, day: string): void => {
+    const monthNum = Number(month);
+    const dayNum = Number(day);
+    if (!Number.isFinite(monthNum) || !Number.isFinite(dayNum)) return;
+    if (monthNum < 1 || monthNum > 12 || dayNum < 1 || dayNum > 31) return;
+    clauses.add(`occurred_on.eq.${year}-${pad2(month)}-${pad2(day)}`);
+  };
+
+  for (const part of parts) {
+    const normalized = part.replace(/[\/-]/g, '.');
+    const clauses = new Set<string>();
+
+    const ymd = /^(\d{4})\.(\d{1,2})\.(\d{1,2})$/.exec(normalized);
+    if (ymd) {
+      pushIsoDate(clauses, ymd[1] ?? '', ymd[2] ?? '', ymd[3] ?? '');
+      pushGroup(clauses);
+      continue;
+    }
+
+    const dmy = /^(\d{1,2})\.(\d{1,2})\.(\d{2,4})$/.exec(normalized);
+    if (dmy) {
+      const first = Number(dmy[1] ?? '');
+      const second = Number(dmy[2] ?? '');
+      const yearRaw = dmy[3] ?? '';
+      const year = yearRaw.length === 2 ? `20${yearRaw}` : yearRaw;
+      if (first > 12) {
+        pushIsoDate(clauses, year, dmy[2] ?? '', dmy[1] ?? '');
+      } else if (second > 12) {
+        pushIsoDate(clauses, year, dmy[1] ?? '', dmy[2] ?? '');
+      } else {
+        pushIsoDate(clauses, year, dmy[2] ?? '', dmy[1] ?? '');
+        pushIsoDate(clauses, year, dmy[1] ?? '', dmy[2] ?? '');
+      }
+      pushGroup(clauses);
+      continue;
+    }
+
+    const dm = /^(\d{1,2})\.(\d{1,2})$/.exec(normalized);
+    if (dm) {
+      const first = Number(dm[1] ?? '');
+      const second = Number(dm[2] ?? '');
+      if (first > 12) {
+        pushDayMonth(clauses, dm[1] ?? '', dm[2] ?? '');
+      } else if (second > 12) {
+        pushDayMonth(clauses, dm[2] ?? '', dm[1] ?? '');
+      } else {
+        pushDayMonth(clauses, dm[1] ?? '', dm[2] ?? '');
+        pushDayMonth(clauses, dm[2] ?? '', dm[1] ?? '');
+      }
+      pushGroup(clauses);
+      continue;
+    }
+
+    const my = /^(\d{1,2})\.(\d{4})$/.exec(normalized);
+    if (my) {
+      pushMonthRange(clauses, my[2] ?? '', my[1] ?? '');
+      pushGroup(clauses);
+      continue;
+    }
+
+    const ym = /^(\d{4})\.(\d{1,2})$/.exec(normalized);
+    if (ym) {
+      pushMonthRange(clauses, ym[1] ?? '', ym[2] ?? '');
+      pushGroup(clauses);
+      continue;
+    }
+
+    if (/^\d{4}$/.test(part)) {
+      pushYearRange(clauses, part);
+      pushGroup(clauses);
+      continue;
+    }
+
+    if (/^\d{8}$/.test(part)) {
+      if (part.startsWith('19') || part.startsWith('20')) {
+        pushIsoDate(clauses, part.slice(0, 4), part.slice(4, 6), part.slice(6, 8));
+      } else {
+        const day = part.slice(0, 2);
+        const month = part.slice(2, 4);
+        const year = part.slice(4, 8);
+        pushIsoDate(clauses, year, month, day);
+      }
+      pushGroup(clauses);
+      continue;
+    }
+
+    if (/^\d{6}$/.test(part)) {
+      const first = Number(part.slice(0, 2));
+      const second = Number(part.slice(2, 4));
+      const year = `20${part.slice(4, 6)}`;
+      if (first > 12) {
+        pushIsoDate(clauses, year, part.slice(2, 4), part.slice(0, 2));
+      } else if (second > 12) {
+        pushIsoDate(clauses, year, part.slice(0, 2), part.slice(2, 4));
+      } else {
+        pushIsoDate(clauses, year, part.slice(2, 4), part.slice(0, 2));
+        pushIsoDate(clauses, year, part.slice(0, 2), part.slice(2, 4));
+      }
+      pushGroup(clauses);
     }
   }
 
-  const yyyyMmDdMatch = /^(\d{4})[./-](\d{1,2})[./-](\d{1,2})$/.exec(trimmed);
-  if (yyyyMmDdMatch) {
-    const year = yyyyMmDdMatch[1] ?? '';
-    const month = yyyyMmDdMatch[2] ?? '';
-    const day = yyyyMmDdMatch[3] ?? '';
-    terms.add(`${year}-${pad2(month)}-${pad2(day)}`);
-  }
-
-  const ddMmMatch = /^(\d{1,2})\.(\d{1,2})$/.exec(normalizedDots);
-  if (ddMmMatch) {
-    const day = ddMmMatch[1] ?? '';
-    const month = ddMmMatch[2] ?? '';
-    const first = Number(day);
-    const second = Number(month);
-    if (first > 12) {
-      pushDayMonth(day, month);
-    } else if (second > 12) {
-      pushDayMonth(month, day);
-    } else {
-      pushDayMonth(day, month);
-      pushDayMonth(month, day);
-    }
-  }
-
-  const mmYyyyMatch = /^(\d{1,2})\.(\d{4})$/.exec(normalizedDots);
-  if (mmYyyyMatch) {
-    const month = mmYyyyMatch[1] ?? '';
-    const year = mmYyyyMatch[2] ?? '';
-    terms.add(`${year}-${pad2(month)}`);
-  }
-
-  if (/^\d{4}$/.test(trimmed)) {
-    terms.add(`${trimmed}-`);
-  }
-
-  return [...terms];
+  return groups.filter(Boolean);
 };
 
 const buildTransactionSearchFilter = (
   query: string,
-  matchedCategoryIds: readonly string[] = [],
+  textTokens: readonly string[],
+  categoryIdsByToken: Readonly<Record<string, readonly string[]>>,
 ): string | null => {
-  const terms = buildSearchTerms(query);
-  const textTokens = splitSearchTokens(query);
-  if (terms.length === 0 && textTokens.length === 0 && matchedCategoryIds.length === 0) return null;
-
-  const clauses: string[] = [];
-
-  if (matchedCategoryIds.length > 0) {
-    const ids = matchedCategoryIds
-      .filter((value) => /^[0-9a-fA-F-]{36}$/.test(value))
-      .slice(0, 25)
-      .join(',');
-    if (ids.length > 0) clauses.push(`category_id.in.(${ids})`);
-  }
-
-  for (const term of terms) {
-    if (/^\d{4}-\d{2}-\d{2}$/.test(term)) {
-      clauses.push(`occurred_on.eq.${term}`);
-      continue;
-    }
-
-    const yearPrefix = /^(\d{4})-$/.exec(term);
-    if (yearPrefix) {
-      const year = yearPrefix[1] ?? '';
-      const nextYear = String(Number(year) + 1);
-      pushDateRangeClauses(clauses, `${year}-01-01`, `${nextYear}-01-01`);
-      continue;
-    }
-
-    const yearMonth = /^(\d{4})-(\d{2})$/.exec(term);
-    if (yearMonth) {
-      const year = yearMonth[1] ?? '';
-      const month = yearMonth[2] ?? '';
-      const monthNumber = Number(month);
-      if (Number.isFinite(monthNumber) && monthNumber >= 1 && monthNumber <= 12) {
-        const nextMonthNumber = monthNumber === 12 ? 1 : monthNumber + 1;
-        const nextMonthYear = monthNumber === 12 ? String(Number(year) + 1) : year;
-        const nextMonth = String(nextMonthNumber).padStart(2, '0');
-        pushDateRangeClauses(clauses, `${year}-${month}-01`, `${nextMonthYear}-${nextMonth}-01`);
-      }
-      continue;
-    }
-
-    const monthDay = /^-(\d{2})-(\d{2})$/.exec(term);
-    if (monthDay) {
-      const month = monthDay[1] ?? '';
-      const day = monthDay[2] ?? '';
-      clauses.push(`occurred_on.like.%-${month}-${day}`);
-    }
-  }
+  const dateGroups = buildDateSearchGroups(query);
+  const mandatoryGroups: string[] = [...dateGroups];
 
   for (const token of textTokens) {
-    const escaped = escapePostgrestValue(token);
-    clauses.push(`name.ilike.%${escaped}%`, `comment.ilike.%${escaped}%`);
+    const escapedToken = escapePostgrestValue(token);
+    const tokenClauses = [`name.ilike.%${escapedToken}%`, `comment.ilike.%${escapedToken}%`];
+    const tokenCategoryIds = (categoryIdsByToken[token] ?? [])
+      .filter((value) => /^[0-9a-fA-F-]{36}$/.test(value))
+      .slice(0, 40)
+      .join(',');
+    if (tokenCategoryIds) tokenClauses.push(`category_id.in.(${tokenCategoryIds})`);
+    mandatoryGroups.push(`or(${tokenClauses.join(',')})`);
   }
 
-  const filter = clauses.join(',');
+  if (mandatoryGroups.length === 0) return null;
+
+  const filter = mandatoryGroups.length === 1
+    ? (mandatoryGroups[0] ?? null)
+    : `and(${mandatoryGroups.join(',')})`;
+
+  if (!filter) return null;
 
   // #region agent log
   fetch('http://127.0.0.1:7401/ingest/3868ff3d-2d0f-4946-999c-a38c9c4e1bb0', {
@@ -283,8 +323,9 @@ const buildTransactionSearchFilter = (
       message: 'Built search filter with date-safe clauses',
       data: {
         query,
-        termsCount: terms.length,
-        clausesCount: clauses.length,
+        textTokensCount: textTokens.length,
+        dateGroupCount: dateGroups.length,
+        mandatoryGroups: mandatoryGroups.length,
         hasOccurredOnEq: filter.includes('occurred_on.eq.'),
         hasOccurredOnGte: filter.includes('occurred_on.gte.'),
         hasOccurredOnLt: filter.includes('occurred_on.lt.'),
@@ -358,12 +399,21 @@ const loadCategories = async (): Promise<CategoryRow[]> => {
 const applySearchFilter = <T,>(
   queryBuilder: T,
   searchQuery: string,
-  matchedCategoryIds: readonly string[],
+  textTokens: readonly string[],
+  categoryIdsByToken: Readonly<Record<string, readonly string[]>>,
 ): T => {
-  const searchFilter = buildTransactionSearchFilter(searchQuery, matchedCategoryIds);
+  const searchFilter = buildTransactionSearchFilter(searchQuery, textTokens, categoryIdsByToken);
   if (!searchFilter) return queryBuilder;
 
   return (queryBuilder as { or: (filter: string) => T }).or(searchFilter);
+};
+
+const applyCategoryScopeFilter = <T,>(queryBuilder: T, scopedCategoryIds: readonly string[]): T => {
+  if (scopedCategoryIds.length === 0) return queryBuilder;
+
+  return (queryBuilder as {
+    in: (col: string, values: readonly string[]) => T;
+  }).in('category_id', scopedCategoryIds);
 };
 
 const applyBaseFilters = <T,>(queryBuilder: T, filters: HistoryFilters): T => {
@@ -383,7 +433,9 @@ const applyBaseFilters = <T,>(queryBuilder: T, filters: HistoryFilters): T => {
 const loadTransactionPage = async (
   offset: number,
   searchQuery: string,
-  matchedCategoryIds: readonly string[],
+  textTokens: readonly string[],
+  categoryIdsByToken: Readonly<Record<string, readonly string[]>>,
+  scopedCategoryIds: readonly string[],
   filters: HistoryFilters,
 ): Promise<TransactionRow[]> => {
   const startedAt = Date.now();
@@ -394,7 +446,8 @@ const loadTransactionPage = async (
   query = applySharedScopeFilter(query, filters);
 
   query = applyBaseFilters(query, filters);
-  query = applySearchFilter(query, searchQuery, matchedCategoryIds);
+  query = applyCategoryScopeFilter(query, scopedCategoryIds);
+  query = applySearchFilter(query, searchQuery, textTokens, categoryIdsByToken);
 
   const { data, error } = await query
     .order('occurred_on', { ascending: false })
@@ -452,7 +505,9 @@ const loadTransactionPage = async (
 
 const loadMatchingTransactionIds = async (
   searchQuery: string,
-  matchedCategoryIds: readonly string[],
+  textTokens: readonly string[],
+  categoryIdsByToken: Readonly<Record<string, readonly string[]>>,
+  scopedCategoryIds: readonly string[],
   filters: HistoryFilters,
 ): Promise<string[]> => {
   let query = supabase
@@ -462,7 +517,8 @@ const loadMatchingTransactionIds = async (
   query = applySharedScopeFilter(query, filters);
 
   query = applyBaseFilters(query, filters);
-  query = applySearchFilter(query, searchQuery, matchedCategoryIds);
+  query = applyCategoryScopeFilter(query, scopedCategoryIds);
+  query = applySearchFilter(query, searchQuery, textTokens, categoryIdsByToken);
 
   const { data, error } = await query
     .order('occurred_on', { ascending: false })
@@ -702,17 +758,13 @@ export default function PersonalHistoryScreen() {
       params.includeShared === 'true';
     return { startOn, endOnExclusive, kind, parentLabel, sharedOnly, includeShared };
   }, [params.endOnExclusive, params.includeShared, params.kind, params.parentLabel, params.shared, params.startOn]);
-  const matchedCategoryIds = useMemo(() => {
-    const rawQuery = debouncedQuery.trim();
-    const tokens = splitSearchTokens(rawQuery);
-    if (tokens.length === 0) return EMPTY_IDS;
+  const searchTextTokens = useMemo(() => splitSearchTokens(debouncedQuery), [debouncedQuery]);
+  const categoryIdsByToken = useMemo<Readonly<Record<string, readonly string[]>>>(() => {
+    if (searchTextTokens.length === 0) return {};
 
-    // Avoid treating pure date queries as category queries.
-    if (tokens.every((token) => isDateLikeToken(token) || /^\d+$/.test(token))) {
-      return EMPTY_IDS;
-    }
+    const out: Record<string, string[]> = {};
+    for (const token of searchTextTokens) out[token] = [];
 
-    const out: string[] = [];
     for (const row of categories) {
       const meta = categoryMeta[row.id];
       const haystack = toSearchText([
@@ -721,13 +773,23 @@ export default function PersonalHistoryScreen() {
         meta?.label ?? '',
         meta?.parentName ?? '',
       ].join(' '));
-      if (tokens.every((token) => haystack.includes(token))) out.push(row.id);
+
+      for (const token of searchTextTokens) {
+        if (!haystack.includes(token)) continue;
+        out[token]?.push(row.id);
+      }
     }
-    out.sort((a, b) => a.localeCompare(b));
+
+    for (const token of searchTextTokens) {
+      const ids = out[token] ?? [];
+      ids.sort((a, b) => a.localeCompare(b));
+      out[token] = ids;
+    }
+
     return out;
-  }, [categories, categoryMeta, debouncedQuery]);
-  const scopedCategoryIds = useMemo(() => {
-    if (!filters.parentLabel) return matchedCategoryIds;
+  }, [categories, categoryMeta, searchTextTokens]);
+  const hardScopedCategoryIds = useMemo(() => {
+    if (!filters.parentLabel) return EMPTY_IDS;
     const target = filters.parentLabel.trim().toLowerCase();
     const ids: string[] = [];
     for (const row of categories) {
@@ -737,12 +799,7 @@ export default function PersonalHistoryScreen() {
     }
     ids.sort((a, b) => a.localeCompare(b));
     return ids;
-  }, [categories, categoryMeta, filters.parentLabel, matchedCategoryIds]);
-  const scopedCategoryIdsKey = useMemo(() => scopedCategoryIds.join(','), [scopedCategoryIds]);
-  const stableScopedCategoryIds = useMemo<readonly string[]>(
-    () => (scopedCategoryIdsKey.length > 0 ? scopedCategoryIdsKey.split(',') : EMPTY_IDS),
-    [scopedCategoryIdsKey],
-  );
+  }, [categories, categoryMeta, filters.parentLabel]);
 
   const reload = useCallback(
     async (showSkeleton = false): Promise<void> => {
@@ -761,14 +818,15 @@ export default function PersonalHistoryScreen() {
           showSkeleton,
           debouncedQuery,
           filters,
-          scopedCategoryIds: stableScopedCategoryIds,
+          hardScopedCategoryIds,
+          searchTextTokens,
         },
       });
 
       try {
         const [nextCategories, firstPage] = await Promise.all([
           loadCategories(),
-          loadTransactionPage(0, debouncedQuery, stableScopedCategoryIds, filters),
+          loadTransactionPage(0, debouncedQuery, searchTextTokens, categoryIdsByToken, hardScopedCategoryIds, filters),
         ]);
 
         if (requestVersionRef.current !== requestVersion) return;
@@ -824,7 +882,7 @@ export default function PersonalHistoryScreen() {
         }
       }
     },
-    [debouncedQuery, filters, stableScopedCategoryIds],
+    [categoryIdsByToken, debouncedQuery, filters, hardScopedCategoryIds, searchTextTokens],
   );
 
   const loadMore = useCallback(async (): Promise<void> => {
@@ -842,12 +900,20 @@ export default function PersonalHistoryScreen() {
         startOffset,
         debouncedQuery,
         filters,
-        scopedCategoryIds: stableScopedCategoryIds,
+        hardScopedCategoryIds,
+        searchTextTokens,
       },
     });
 
     try {
-      const page = await loadTransactionPage(startOffset, debouncedQuery, stableScopedCategoryIds, filters);
+      const page = await loadTransactionPage(
+        startOffset,
+        debouncedQuery,
+        searchTextTokens,
+        categoryIdsByToken,
+        hardScopedCategoryIds,
+        filters,
+      );
       if (requestVersionRef.current !== requestVersion) return;
 
       setTransactions((current) => mergeUniqueTransactions(current, page));
@@ -888,7 +954,17 @@ export default function PersonalHistoryScreen() {
         setIsLoadingMore(false);
       }
     }
-  }, [debouncedQuery, filters, hasMore, isInitialLoading, isLoadingMore, nextOffset, stableScopedCategoryIds]);
+  }, [
+    categoryIdsByToken,
+    debouncedQuery,
+    filters,
+    hardScopedCategoryIds,
+    hasMore,
+    isInitialLoading,
+    isLoadingMore,
+    nextOffset,
+    searchTextTokens,
+  ]);
 
   useEffect(() => {
     runDetached(
@@ -1017,7 +1093,13 @@ export default function PersonalHistoryScreen() {
   const selectAllMatching = async (): Promise<void> => {
     setIsSelectingAll(true);
     try {
-      const ids = await loadMatchingTransactionIds(debouncedQuery, stableScopedCategoryIds, filters);
+      const ids = await loadMatchingTransactionIds(
+        debouncedQuery,
+        searchTextTokens,
+        categoryIdsByToken,
+        hardScopedCategoryIds,
+        filters,
+      );
       setSelectedIds(ids);
     } catch (selectAllError) {
       reportDevError('personal-history.select-all', selectAllError, {
