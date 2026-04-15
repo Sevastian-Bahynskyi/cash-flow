@@ -93,6 +93,33 @@ const applySharedScopeFilter = <T,>(queryBuilder: T, filters: HistoryFilters): T
 
 const pad2 = (value: string): string => value.padStart(2, '0');
 
+const toSearchText = (value: string): string =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+const splitSearchTokens = (query: string): string[] => {
+  const normalized = toSearchText(query);
+  if (!normalized) return [];
+  return normalized
+    .split(/\s+/)
+    .filter((token) => token.length >= 2)
+    .slice(0, 6);
+};
+
+const isDateLikeToken = (value: string): boolean => {
+  const raw = value.trim();
+  if (!raw) return false;
+  return /^\d{4}([-/.]\d{1,2}){0,2}$/.test(raw) || /^\d{1,2}([-/.]\d{1,2})([-/.]\d{2,4})?$/.test(raw);
+};
+
+const pushDateRangeClauses = (clauses: string[], startOn: string, endOnExclusive: string): void => {
+  clauses.push(`and(occurred_on.gte.${startOn},occurred_on.lt.${endOnExclusive})`);
+};
+
 const escapePostgrestValue = (value: string): string =>
   value
     .replaceAll('\\', '\\\\')
@@ -104,19 +131,48 @@ const buildSearchTerms = (query: string): string[] => {
   const trimmed = query.trim();
   if (!trimmed) return [];
 
-  const normalizedDots = trimmed.replace(/\//g, '.');
+  const normalizedDots = trimmed.replace(/[\/-]/g, '.').replace(/\s+/g, '.');
   const terms = new Set<string>([trimmed]);
+  const nowYear = new Date().getFullYear();
+
+  const pushDayMonth = (day: string, month: string): void => {
+    const dayNum = Number(day);
+    const monthNum = Number(month);
+    if (!Number.isFinite(dayNum) || !Number.isFinite(monthNum) || dayNum < 1 || dayNum > 31 || monthNum < 1 || monthNum > 12) {
+      return;
+    }
+    terms.add(`-${pad2(month)}-${pad2(day)}`);
+    terms.add(`${nowYear}-${pad2(month)}-${pad2(day)}`);
+  };
+
+  const pushDayMonthYear = (day: string, month: string, year: string): void => {
+    const resolvedYear = year.length === 2 ? `20${year}` : year;
+    const dayNum = Number(day);
+    const monthNum = Number(month);
+    const yearNum = Number(resolvedYear);
+    if (!Number.isFinite(dayNum) || !Number.isFinite(monthNum) || !Number.isFinite(yearNum)) return;
+    if (dayNum < 1 || dayNum > 31 || monthNum < 1 || monthNum > 12) return;
+    terms.add(`${resolvedYear}-${pad2(month)}-${pad2(day)}`);
+  };
 
   const ddMmYyyyMatch = /^(\d{1,2})\.(\d{1,2})\.(\d{2,4})$/.exec(normalizedDots);
   if (ddMmYyyyMatch) {
     const day = ddMmYyyyMatch[1] ?? '';
     const month = ddMmYyyyMatch[2] ?? '';
     const year = ddMmYyyyMatch[3] ?? '';
-    const resolvedYear = year.length === 2 ? `20${year}` : year;
-    terms.add(`${resolvedYear}-${pad2(month)}-${pad2(day)}`);
+    const first = Number(day);
+    const second = Number(month);
+    if (first > 12) {
+      pushDayMonthYear(day, month, year);
+    } else if (second > 12) {
+      pushDayMonthYear(month, day, year);
+    } else {
+      pushDayMonthYear(day, month, year);
+      pushDayMonthYear(month, day, year);
+    }
   }
 
-  const yyyyMmDdMatch = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(trimmed);
+  const yyyyMmDdMatch = /^(\d{4})[./-](\d{1,2})[./-](\d{1,2})$/.exec(trimmed);
   if (yyyyMmDdMatch) {
     const year = yyyyMmDdMatch[1] ?? '';
     const month = yyyyMmDdMatch[2] ?? '';
@@ -128,7 +184,16 @@ const buildSearchTerms = (query: string): string[] => {
   if (ddMmMatch) {
     const day = ddMmMatch[1] ?? '';
     const month = ddMmMatch[2] ?? '';
-    terms.add(`-${pad2(month)}-${pad2(day)}`);
+    const first = Number(day);
+    const second = Number(month);
+    if (first > 12) {
+      pushDayMonth(day, month);
+    } else if (second > 12) {
+      pushDayMonth(month, day);
+    } else {
+      pushDayMonth(day, month);
+      pushDayMonth(month, day);
+    }
   }
 
   const mmYyyyMatch = /^(\d{1,2})\.(\d{4})$/.exec(normalizedDots);
@@ -150,7 +215,8 @@ const buildTransactionSearchFilter = (
   matchedCategoryIds: readonly string[] = [],
 ): string | null => {
   const terms = buildSearchTerms(query);
-  if (terms.length === 0 && matchedCategoryIds.length === 0) return null;
+  const textTokens = splitSearchTokens(query);
+  if (terms.length === 0 && textTokens.length === 0 && matchedCategoryIds.length === 0) return null;
 
   const clauses: string[] = [];
 
@@ -163,9 +229,6 @@ const buildTransactionSearchFilter = (
   }
 
   for (const term of terms) {
-    const escaped = escapePostgrestValue(term);
-    clauses.push(`name.ilike.%${escaped}%`, `comment.ilike.%${escaped}%`);
-
     if (/^\d{4}-\d{2}-\d{2}$/.test(term)) {
       clauses.push(`occurred_on.eq.${term}`);
       continue;
@@ -175,7 +238,7 @@ const buildTransactionSearchFilter = (
     if (yearPrefix) {
       const year = yearPrefix[1] ?? '';
       const nextYear = String(Number(year) + 1);
-      clauses.push(`occurred_on.gte.${year}-01-01`, `occurred_on.lt.${nextYear}-01-01`);
+      pushDateRangeClauses(clauses, `${year}-01-01`, `${nextYear}-01-01`);
       continue;
     }
 
@@ -188,9 +251,22 @@ const buildTransactionSearchFilter = (
         const nextMonthNumber = monthNumber === 12 ? 1 : monthNumber + 1;
         const nextMonthYear = monthNumber === 12 ? String(Number(year) + 1) : year;
         const nextMonth = String(nextMonthNumber).padStart(2, '0');
-        clauses.push(`occurred_on.gte.${year}-${month}-01`, `occurred_on.lt.${nextMonthYear}-${nextMonth}-01`);
+        pushDateRangeClauses(clauses, `${year}-${month}-01`, `${nextMonthYear}-${nextMonth}-01`);
       }
+      continue;
     }
+
+    const monthDay = /^-(\d{2})-(\d{2})$/.exec(term);
+    if (monthDay) {
+      const month = monthDay[1] ?? '';
+      const day = monthDay[2] ?? '';
+      clauses.push(`occurred_on.like.%-${month}-${day}`);
+    }
+  }
+
+  for (const token of textTokens) {
+    const escaped = escapePostgrestValue(token);
+    clauses.push(`name.ilike.%${escaped}%`, `comment.ilike.%${escaped}%`);
   }
 
   const filter = clauses.join(',');
@@ -627,18 +703,25 @@ export default function PersonalHistoryScreen() {
     return { startOn, endOnExclusive, kind, parentLabel, sharedOnly, includeShared };
   }, [params.endOnExclusive, params.includeShared, params.kind, params.parentLabel, params.shared, params.startOn]);
   const matchedCategoryIds = useMemo(() => {
-    const q = debouncedQuery.trim().toLowerCase();
-    if (q.length < 2) return EMPTY_IDS;
+    const rawQuery = debouncedQuery.trim();
+    const tokens = splitSearchTokens(rawQuery);
+    if (tokens.length === 0) return EMPTY_IDS;
 
     // Avoid treating pure date queries as category queries.
-    if (/^\d{4}(-\d{2}(-\d{2})?)?$/.test(q) || /^\d{1,2}\.\d{1,2}(\.\d{2,4})?$/.test(q)) {
+    if (tokens.every((token) => isDateLikeToken(token) || /^\d+$/.test(token))) {
       return EMPTY_IDS;
     }
 
     const out: string[] = [];
     for (const row of categories) {
-      const label = categoryMeta[row.id]?.label ?? row.name;
-      if (label.toLowerCase().includes(q)) out.push(row.id);
+      const meta = categoryMeta[row.id];
+      const haystack = toSearchText([
+        row.name,
+        meta?.name ?? '',
+        meta?.label ?? '',
+        meta?.parentName ?? '',
+      ].join(' '));
+      if (tokens.every((token) => haystack.includes(token))) out.push(row.id);
     }
     out.sort((a, b) => a.localeCompare(b));
     return out;
