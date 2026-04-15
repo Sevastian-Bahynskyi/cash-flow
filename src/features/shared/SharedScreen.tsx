@@ -326,6 +326,18 @@ export default function SharedScreen() {
   ];
   const showCycleCarousel = filter === 'month' && cyclesWithTransactions.length > 0;
 
+  const openSharedHistory = useCallback(
+    (startOn: string | null, endOnExclusive: string | null): void => {
+      runDetached(Haptics.selectionAsync(), 'shared.hero.open-history.haptics');
+      const params = new URLSearchParams();
+      params.set('shared', '1');
+      if (startOn) params.set('startOn', startOn);
+      if (endOnExclusive) params.set('endOnExclusive', endOnExclusive);
+      router.push((`/personal-history?${params.toString()}`) as never);
+    },
+    [router],
+  );
+
   useEffect(() => {
     if (!showCycleCarousel || heroPagerWidth <= 0) return;
     const selectedIndex = Math.max(
@@ -391,22 +403,32 @@ export default function SharedScreen() {
                             key={cycle.id}
                             style={[styles.heroWrap, heroPagerWidth > 0 ? { width: heroPagerWidth } : null]}
                           >
-                            <HeroCard
-                              eyebrow="Month shared balance"
-                              dateRange={formatHeroCycleRange(cycle, new Date())}
-                              amount={formatMinor(cycleBalance)}
-                            />
+                            <Pressable
+                              style={({ pressed }) => [styles.heroPressable, pressed && styles.heroPressablePressed]}
+                              onPress={() => openSharedHistory(cycle.startOn, cycle.endOnExclusive)}
+                            >
+                              <HeroCard
+                                eyebrow="Month shared balance"
+                                dateRange={formatHeroCycleRange(cycle, new Date())}
+                                amount={formatMinor(cycleBalance)}
+                              />
+                            </Pressable>
                           </View>
                         );
                       })}
                     </ScrollView>
                   ) : (
                     <View style={styles.heroWrap}>
-                      <HeroCard
-                        eyebrow={heroEyebrow}
-                        dateRange={filter === 'month' && selectedCycle ? formatHeroCycleRange(selectedCycle, new Date()) : undefined}
-                        amount={formatMinor(sharedBalance)}
-                      />
+                      <Pressable
+                        style={({ pressed }) => [styles.heroPressable, pressed && styles.heroPressablePressed]}
+                        onPress={() => openSharedHistory(selectedRange.startOn, selectedRange.endOnExclusive)}
+                      >
+                        <HeroCard
+                          eyebrow={heroEyebrow}
+                          dateRange={filter === 'month' && selectedCycle ? formatHeroCycleRange(selectedCycle, new Date()) : undefined}
+                          amount={formatMinor(sharedBalance)}
+                        />
+                      </Pressable>
                     </View>
                   )}
 
@@ -512,31 +534,6 @@ export default function SharedScreen() {
                 </View>
               </MotionView>
 
-              <MotionView direction="right" distance={145} delayMs={360}>
-                <View style={styles.card}>
-                  <Text style={styles.sectionTitle}>Top-ups</Text>
-                  <View style={styles.timelineList}>
-                    {topups.length === 0 ? (
-                      <Text style={styles.metricMeta}>No top-ups in this range yet.</Text>
-                    ) : (
-                      topups.map((row) => (
-                        <View key={row.id} style={styles.timelineRow}>
-                          <Text style={styles.timelineLabel}>
-                            Shared top-up{' '}
-                            <Text style={row.shared_participant === 'gf' ? styles.participantGf : styles.participantMe}>
-                              · {row.shared_participant === 'gf' ? 'GF' : 'Me'}
-                            </Text>
-                            {' · '}
-                            {row.name}
-                          </Text>
-                          <Text style={styles.timelineAmount}>{formatMinor(row.amount_minor)}</Text>
-                        </View>
-                      ))
-                    )}
-                  </View>
-                </View>
-              </MotionView>
-
               <TopCategoriesSection
                 title="Top shared categories"
                 items={sharedTopCategoryItems}
@@ -592,6 +589,31 @@ export default function SharedScreen() {
                   runDetached(deleteTransaction(row), 'shared.deleteTransaction');
                 }}
               />
+
+              <MotionView direction="right" distance={145} delayMs={360}>
+                <View style={styles.card}>
+                  <Text style={styles.sectionTitle}>Top-ups</Text>
+                  <View style={styles.timelineList}>
+                    {topups.length === 0 ? (
+                      <Text style={styles.metricMeta}>No top-ups in this range yet.</Text>
+                    ) : (
+                      topups.map((row) => (
+                        <View key={row.id} style={styles.timelineRow}>
+                          <Text style={styles.timelineLabel}>
+                            Shared top-up{' '}
+                            <Text style={row.shared_participant === 'gf' ? styles.participantGf : styles.participantMe}>
+                              · {row.shared_participant === 'gf' ? 'GF' : 'Me'}
+                            </Text>
+                            {' · '}
+                            {row.name}
+                          </Text>
+                          <Text style={styles.timelineAmount}>{formatMinor(row.amount_minor)}</Text>
+                        </View>
+                      ))
+                    )}
+                  </View>
+                </View>
+              </MotionView>
             </>
           ) : null}
         </ScrollView>
@@ -619,6 +641,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { paddingBottom: spacing.xxl * 4, gap: spacing.lg },
   heroWrap: { paddingHorizontal: spacing.lg },
+  heroPressable: { borderRadius: radius.lg },
+  heroPressablePressed: { opacity: 0.9 },
   skeletonHeroCard: { marginHorizontal: spacing.lg, gap: spacing.sm },
   filterRow: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, flexWrap: 'wrap' },
   filterChip: {
