@@ -8,7 +8,7 @@ import { runDetached } from '@/lib/async';
 import { useOverview } from '@/features/overview/useOverview';
 import { useComposer } from '@/features/transactions/composer/context/ComposerContext';
 import { TransactionList } from '@/features/transactions/TransactionList';
-import { buildCategoryMeta, getCategoryMetaDisplayColor } from '@/features/categories/helpers';
+import { buildCategoryMeta, getCategoryDisplayColor, getCategoryMetaDisplayColor } from '@/features/categories/helpers';
 import { MotionScope } from '@/ui/MotionScope';
 import { MotionView } from '@/ui/MotionView';
 import { FilterChips } from '@/ui/FilterChips';
@@ -247,33 +247,78 @@ export default function SharedScreen() {
     categoryIcon: row.category_id ? categoryMeta[row.category_id]?.icon ?? 'account-group-outline' : 'cash-plus',
   }));
 
-  const sharedSpendByCategory = useMemo(() => {
-    const totals = new Map<string, number>();
+  const sharedTopCategoryTotals = useMemo(() => {
+    const rowById = new Map(data.categories.map((row) => [row.id, row]));
+    const byParent = new Map<
+      string,
+      {
+        parentCategoryId: string | null;
+        scopedCategoryIds: Set<string>;
+        label: string;
+        spentMinor: number;
+        color: string;
+      }
+    >();
+
     for (const row of sharedExpenses) {
-      if (!row.category_id) continue;
-      totals.set(row.category_id, (totals.get(row.category_id) ?? 0) + row.amount_minor);
+      const categoryId = row.category_id ?? null;
+      const parentId = categoryId ? (rowById.get(categoryId)?.parent_id ?? categoryId) : null;
+      const parentMeta = parentId ? categoryMeta[parentId] : null;
+      const label = parentMeta?.name?.trim() ? parentMeta.name : 'Uncategorized';
+      const color = parentId
+        ? getCategoryDisplayColor({
+          kind: 'expense',
+          parentName: label,
+          name: label,
+          parentColor: parentMeta?.color,
+          color: parentMeta?.color,
+        })
+        : colors.accent;
+
+      const key = parentId ?? label;
+      const current =
+        byParent.get(key) ?? {
+          parentCategoryId: parentId,
+          scopedCategoryIds: new Set<string>(),
+          label,
+          spentMinor: 0,
+          color,
+        };
+
+      if (categoryId) current.scopedCategoryIds.add(categoryId);
+      current.spentMinor += row.amount_minor;
+      byParent.set(key, current);
     }
-    return [...totals.entries()]
-      .map(([categoryId, spentMinor]) => ({
-        categoryId,
-        spentMinor,
-        label: categoryMeta[categoryId]?.label ?? 'Category',
-        color: getCategoryMetaDisplayColor(categoryMeta[categoryId], 'expense'),
+
+    return [...byParent.values()]
+      .map((item) => ({
+        parentCategoryId: item.parentCategoryId,
+        scopedCategoryIds: [...item.scopedCategoryIds].sort((a, b) => a.localeCompare(b)),
+        label: item.label,
+        spentMinor: item.spentMinor,
+        color: getCategoryDisplayColor({
+          kind: 'expense',
+          parentName: item.label,
+          name: item.label,
+          parentColor: item.color,
+          color: item.color,
+        }),
       }))
       .sort((a, b) => b.spentMinor - a.spentMinor)
       .slice(0, 5);
-  }, [categoryMeta, sharedExpenses]);
+  }, [categoryMeta, data.categories, sharedExpenses]);
   const sharedSpendTotal = sharedExpenses.reduce((sum, row) => sum + row.amount_minor, 0);
   const sharedTopCategoryItems = useMemo(
     () =>
-      sharedSpendByCategory.map((item) => ({
-        id: item.categoryId,
+      sharedTopCategoryTotals.map((item) => ({
+        id: item.label,
         label: item.label,
+        categoryIds: item.scopedCategoryIds,
         amountLabel: formatMinor(item.spentMinor),
         progress: sharedSpendTotal === 0 ? 0 : item.spentMinor / sharedSpendTotal,
         color: item.color,
       })),
-    [sharedSpendByCategory, sharedSpendTotal],
+    [sharedSpendTotal, sharedTopCategoryTotals],
   );
   const { meTopupTotal, gfTopupTotal, totalTopupTotal, userShareRatio: ratio, sharedBalance } = computeSharedCycle(
     topups.map((row) => ({ amount_minor: row.amount_minor, shared_participant: row.shared_participant })),
@@ -539,6 +584,9 @@ export default function SharedScreen() {
                   const params = new URLSearchParams();
                   params.set('shared', '1');
                   params.set('parentLabel', item.label);
+                  if (item.categoryIds && item.categoryIds.length > 0) {
+                    params.set('categoryIds', item.categoryIds.join(','));
+                  }
                   router.push((`/personal-history?${params.toString()}`) as never);
                 }}
               />
@@ -620,7 +668,6 @@ export default function SharedScreen() {
           bottom={fabBottom}
           right={spacing.xl}
           backgroundColor={colors.accentAlt}
-          animateOnMount
         />
       </View>
     </MotionScope>
