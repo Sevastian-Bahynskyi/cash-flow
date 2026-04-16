@@ -51,6 +51,7 @@ type HistoryFilters = {
   startOn: string | null;
   endOnExclusive: string | null;
   kind: 'income' | 'expense' | null;
+  categoryIds: string[];
   categoryId: string | null;
   parentLabel: string | null;
   sharedOnly: boolean;
@@ -409,6 +410,7 @@ export default function PersonalHistoryScreen() {
     startOn?: string;
     endOnExclusive?: string;
     kind?: string;
+    categoryIds?: string;
     categoryId?: string;
     parentLabel?: string;
     shared?: string;
@@ -470,6 +472,13 @@ export default function PersonalHistoryScreen() {
         : null;
     const kind =
       params.kind === 'income' || params.kind === 'expense' ? params.kind : null;
+    const categoryIds =
+      typeof params.categoryIds === 'string' && params.categoryIds.trim().length > 0
+        ? params.categoryIds
+          .split(',')
+          .map((value) => value.trim())
+          .filter((value, index, source) => value.length > 0 && source.indexOf(value) === index)
+        : [];
     const categoryId =
       typeof params.categoryId === 'string' && params.categoryId.trim() ? params.categoryId.trim() : null;
     const parentLabel =
@@ -480,13 +489,14 @@ export default function PersonalHistoryScreen() {
     const includeShared =
       params.includeShared === '1' ||
       params.includeShared === 'true';
-    return { startOn, endOnExclusive, kind, categoryId, parentLabel, sharedOnly, includeShared };
-  }, [params.categoryId, params.endOnExclusive, params.includeShared, params.kind, params.parentLabel, params.shared, params.startOn]);
+    return { startOn, endOnExclusive, kind, categoryIds, categoryId, parentLabel, sharedOnly, includeShared };
+  }, [params.categoryId, params.categoryIds, params.endOnExclusive, params.includeShared, params.kind, params.parentLabel, params.shared, params.startOn]);
   const hardScopedCategoryIds = useMemo(() => {
+    if (filters.categoryIds.length > 0) {
+      return filters.categoryIds;
+    }
     if (filters.categoryId) {
-      return categories.some((row) => row.id === filters.categoryId)
-        ? [filters.categoryId]
-        : EMPTY_IDS;
+      return [filters.categoryId];
     }
     if (!filters.parentLabel) return EMPTY_IDS;
     const target = filters.parentLabel.trim().toLowerCase();
@@ -498,7 +508,7 @@ export default function PersonalHistoryScreen() {
     }
     ids.sort((a, b) => a.localeCompare(b));
     return ids;
-  }, [categories, categoryMeta, filters.categoryId, filters.parentLabel]);
+  }, [categories, categoryMeta, filters.categoryId, filters.categoryIds, filters.parentLabel]);
 
   const reload = useCallback(
     async (showSkeleton = false): Promise<void> => {

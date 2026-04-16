@@ -7,6 +7,7 @@ import { colors, radius, spacing, typography } from '@/ui/tokens';
 export type TopCategoryItem = {
     id: string;
     label: string;
+    categoryIds?: string[];
     amountLabel: string;
     progress: number;
     color: string;
@@ -42,15 +43,15 @@ export function TopCategoriesSection({ title, items, emptyLabel, actions, onPres
                                 onPress={action.onPress}
                                 disabled={action.disabled}
                                 style={({ pressed }) => [
-                                    styles.actionButton,
-                                    action.tone === 'muted' ? styles.actionMuted : styles.actionAccent,
-                                    (pressed || action.disabled) && styles.pressed,
+                                    styles.action,
+                                    pressed && styles.actionPressed,
+                                    action.disabled && styles.actionDisabled,
                                 ]}
                             >
                                 <Text
                                     style={[
                                         styles.actionText,
-                                        action.tone === 'muted' ? styles.actionTextMuted : styles.actionTextAccent,
+                                        action.tone === 'muted' ? styles.actionTextMuted : null,
                                     ]}
                                 >
                                     {action.label}
@@ -107,16 +108,10 @@ const styles = StyleSheet.create({
     headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
     sectionTitle: { ...typography.label, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
     actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-    actionButton: {
-        borderRadius: radius.pill,
-        paddingHorizontal: spacing.sm,
-        paddingVertical: spacing.xs,
-        borderWidth: 1,
-    },
-    actionAccent: { borderColor: colors.accent, backgroundColor: 'rgba(245,185,66,0.18)' },
-    actionMuted: { borderColor: colors.border, backgroundColor: colors.surfaceAlt },
-    actionText: { ...typography.label, fontWeight: '600' },
-    actionTextAccent: { color: colors.text },
+    action: { paddingVertical: spacing.xs, paddingHorizontal: spacing.sm },
+    actionPressed: { opacity: 0.82 },
+    actionDisabled: { opacity: 0.4 },
+    actionText: { ...typography.label, color: colors.accent, fontWeight: '600' },
     actionTextMuted: { color: colors.textMuted },
     sectionBody: { gap: spacing.sm },
     emptyCard: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.lg },

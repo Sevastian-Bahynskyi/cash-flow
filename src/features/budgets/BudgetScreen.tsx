@@ -319,13 +319,14 @@ export default function BudgetScreen() {
     }
   };
 
-  const openBudgetTransactions = (scope: { categoryId?: string; parentLabel?: string }): void => {
+  const openBudgetTransactions = (scope: { categoryId?: string; parentLabel?: string; categoryIds?: string[] }): void => {
     if (!selectedCycle) return;
     const params = new URLSearchParams();
     params.set('startOn', selectedCycle.startOn);
     if (selectedCycle.endOnExclusive) params.set('endOnExclusive', selectedCycle.endOnExclusive);
     params.set('kind', 'expense');
     params.set('includeShared', '1');
+    if (scope.categoryIds && scope.categoryIds.length > 0) params.set('categoryIds', scope.categoryIds.join(','));
     if (scope.categoryId) params.set('categoryId', scope.categoryId);
     if (scope.parentLabel) params.set('parentLabel', scope.parentLabel);
     router.push((`/personal-history?${params.toString()}`) as never);
@@ -430,7 +431,7 @@ export default function BudgetScreen() {
                       <Pressable
                         style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
                         onPress={() => {
-                          openBudgetTransactions({ parentLabel: label });
+                          openBudgetTransactions({ parentLabel: label, categoryIds: children.map((child) => child.category.id) });
                         }}
                       >
                         <View style={[styles.iconWrap, { backgroundColor: `${tone}22` }]}>
@@ -482,7 +483,7 @@ export default function BudgetScreen() {
                                   key={category.id}
                                   style={({ pressed }) => [styles.childRow, pressed && styles.rowPressed]}
                                   onPress={() => {
-                                    openBudgetTransactions({ categoryId: category.id, parentLabel: label });
+                                    openBudgetTransactions({ categoryId: category.id, parentLabel: label, categoryIds: [category.id] });
                                   }}
                                   onLongPress={() => {
                                     Keyboard.dismiss();
