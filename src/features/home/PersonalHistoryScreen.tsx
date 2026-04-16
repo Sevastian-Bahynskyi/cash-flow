@@ -51,8 +51,6 @@ type HistoryFilters = {
   startOn: string | null;
   endOnExclusive: string | null;
   kind: 'income' | 'expense' | null;
-  categoryIds: string[];
-  categoryId: string | null;
   parentLabel: string | null;
   sharedOnly: boolean;
   includeShared: boolean;
@@ -410,8 +408,6 @@ export default function PersonalHistoryScreen() {
     startOn?: string;
     endOnExclusive?: string;
     kind?: string;
-    categoryIds?: string;
-    categoryId?: string;
     parentLabel?: string;
     shared?: string;
     includeShared?: string;
@@ -472,15 +468,6 @@ export default function PersonalHistoryScreen() {
         : null;
     const kind =
       params.kind === 'income' || params.kind === 'expense' ? params.kind : null;
-    const categoryIds =
-      typeof params.categoryIds === 'string' && params.categoryIds.trim().length > 0
-        ? params.categoryIds
-          .split(',')
-          .map((value) => value.trim())
-          .filter((value, index, source) => value.length > 0 && source.indexOf(value) === index)
-        : [];
-    const categoryId =
-      typeof params.categoryId === 'string' && params.categoryId.trim() ? params.categoryId.trim() : null;
     const parentLabel =
       typeof params.parentLabel === 'string' && params.parentLabel.trim() ? params.parentLabel.trim() : null;
     const sharedOnly =
@@ -489,15 +476,9 @@ export default function PersonalHistoryScreen() {
     const includeShared =
       params.includeShared === '1' ||
       params.includeShared === 'true';
-    return { startOn, endOnExclusive, kind, categoryIds, categoryId, parentLabel, sharedOnly, includeShared };
-  }, [params.categoryId, params.categoryIds, params.endOnExclusive, params.includeShared, params.kind, params.parentLabel, params.shared, params.startOn]);
+    return { startOn, endOnExclusive, kind, parentLabel, sharedOnly, includeShared };
+  }, [params.endOnExclusive, params.includeShared, params.kind, params.parentLabel, params.shared, params.startOn]);
   const hardScopedCategoryIds = useMemo(() => {
-    if (filters.categoryIds.length > 0) {
-      return filters.categoryIds;
-    }
-    if (filters.categoryId) {
-      return [filters.categoryId];
-    }
     if (!filters.parentLabel) return EMPTY_IDS;
     const target = filters.parentLabel.trim().toLowerCase();
     const ids: string[] = [];
@@ -508,7 +489,7 @@ export default function PersonalHistoryScreen() {
     }
     ids.sort((a, b) => a.localeCompare(b));
     return ids;
-  }, [categories, categoryMeta, filters.categoryId, filters.categoryIds, filters.parentLabel]);
+  }, [categories, categoryMeta, filters.parentLabel]);
 
   const reload = useCallback(
     async (showSkeleton = false): Promise<void> => {

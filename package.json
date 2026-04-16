@@ -50,7 +50,8 @@
     "react-native-svg": "^15.15.4",
     "react-native-url-polyfill": "^2.0.0",
     "react-native-web": "^0.21.2",
-    "simple-icons": "^16.15.0"
+    "simple-icons": "^16.15.0",
+    "three": "^0.184.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
