@@ -27,7 +27,7 @@ import { MotionView } from '@/ui/MotionView';
 import { FilterChips } from '@/ui/FilterChips';
 import { ScreenHeader } from '@/ui/ScreenHeader';
 import { SkeletonBlock, SkeletonCard } from '@/ui/Skeleton';
-import { TopCategoriesSection } from '@/ui/TopCategoriesSection';
+import { TopCategoriesSection, type TopCategoryItem } from '@/ui/TopCategoriesSection';
 import { HeroCard } from '@/ui/HeroCard';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 import { transactionBalance } from '@/lib/balance';
@@ -282,6 +282,7 @@ export default function HomeScreen() {
       string,
       {
         parentCategoryId: string | null;
+        scopedCategoryIds: Set<string>;
         label: string;
         incomeMinor: number;
         expenseMinor: number;
@@ -310,11 +311,13 @@ export default function HomeScreen() {
       const current =
         byParent.get(key) ?? {
           parentCategoryId: parentId,
+          scopedCategoryIds: new Set<string>(),
           label,
           incomeMinor: 0,
           expenseMinor: 0,
           color,
         };
+      if (categoryId) current.scopedCategoryIds.add(categoryId);
       if (row.kind === 'income') current.incomeMinor += row.amount_minor;
       else current.expenseMinor += row.amount_minor;
       byParent.set(key, current);
@@ -326,6 +329,7 @@ export default function HomeScreen() {
       const tone = netMinor >= 0 ? ('income' as const) : ('expense' as const);
       return {
         parentCategoryId: item.parentCategoryId,
+        scopedCategoryIds: [...item.scopedCategoryIds].sort((a, b) => a.localeCompare(b)),
         label: item.label,
         netMinor,
         absMinor,
@@ -348,11 +352,12 @@ export default function HomeScreen() {
     ? topCategoryTotals
     : topCategoryTotals.slice(0, TOP_CATEGORIES_COLLAPSED_COUNT);
   const spendTotal = visibleTopCategoryTotals.reduce((sum, item) => sum + item.absMinor, 0);
-  const topCategoryItems = useMemo(
+  const topCategoryItems = useMemo<TopCategoryItem[]>(
     () =>
       visibleTopCategoryTotals.map((item) => ({
         id: item.label,
         label: item.label,
+        categoryIds: item.scopedCategoryIds,
         amountLabel: `${item.tone === 'income' ? '+' : '-'}${formatMinor(Math.abs(item.netMinor))}`,
         amountColor: item.tone === 'income' ? colors.success : colors.danger,
         progress: spendTotal === 0 ? 0 : item.absMinor / spendTotal,
@@ -668,6 +673,10 @@ export default function HomeScreen() {
                 const params = new URLSearchParams();
                 params.set('kind', source?.tone === 'income' ? 'income' : 'expense');
                 params.set('parentLabel', item.label);
+                const scopedCategoryIds = source?.scopedCategoryIds ?? [];
+                if (scopedCategoryIds.length > 0) {
+                  params.set('categoryIds', scopedCategoryIds.join(','));
+                }
                 params.set('includeShared', '1');
                 router.push((`/personal-history?${params.toString()}`) as never);
               }}

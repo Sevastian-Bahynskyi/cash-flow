@@ -495,6 +495,7 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { paddingBottom: spacing.xxl * 4, gap: spacing.lg },
+  contentDesktop: { width: '100%', maxWidth: 1360, alignSelf: 'center', paddingHorizontal: spacing.xl },
   heroWrap: { marginHorizontal: spacing.lg },
   heroArrows: {
     position: 'absolute',

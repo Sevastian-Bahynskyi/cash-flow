@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { colors } from '@/ui/tokens';
+import { WebBackdrop } from '@/ui/WebBackdrop';
 import { AuthProvider, useAuth } from '@/features/auth/AuthProvider';
 import { ComposerProvider } from '@/features/transactions/composer/context/ComposerContext';
 
@@ -65,6 +66,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }}>
       <SafeAreaProvider>
         <StatusBar style="light" />
+        <WebBackdrop />
         <AuthProvider>
           <AuthGate />
         </AuthProvider>
