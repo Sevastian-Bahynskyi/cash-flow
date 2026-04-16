@@ -678,6 +678,15 @@ export default function HomeScreen() {
                   params.set('categoryIds', scopedCategoryIds.join(','));
                 }
                 params.set('includeShared', '1');
+                if (filter === 'month' && selectedCycle) {
+                  params.set('startOn', selectedCycle.startOn);
+                  if (selectedCycle.endOnExclusive) {
+                    params.set('endOnExclusive', selectedCycle.endOnExclusive);
+                  }
+                } else if (filter === 'year') {
+                  params.set('startOn', `${currentYear}-01-01`);
+                  params.set('endOnExclusive', `${currentYear + 1}-01-01`);
+                }
                 router.push((`/personal-history?${params.toString()}`) as never);
               }}
             />

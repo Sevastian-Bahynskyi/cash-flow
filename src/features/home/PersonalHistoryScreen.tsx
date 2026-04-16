@@ -58,6 +58,23 @@ type HistoryFilters = {
 
 const EMPTY_IDS: readonly string[] = [];
 
+const computeScopedIds = (
+  cats: CategoryRow[],
+  parentLabel: string | null,
+): readonly string[] => {
+  if (!parentLabel) return EMPTY_IDS;
+  const meta = buildCategoryMeta(cats);
+  const target = parentLabel.trim().toLowerCase();
+  const ids: string[] = [];
+  for (const row of cats) {
+    const m = meta[row.id];
+    const label = m?.parentName?.trim() ? m.parentName : m?.name ?? row.name;
+    if (label.trim().toLowerCase() === target) ids.push(row.id);
+  }
+  ids.sort((a, b) => a.localeCompare(b));
+  return ids;
+};
+
 const pushHistoryDebug = (payload: Record<string, unknown>): void => {
   fetch('http://127.0.0.1:7401/ingest/3868ff3d-2d0f-4946-999c-a38c9c4e1bb0', {
     method: 'POST',
@@ -424,12 +441,12 @@ export default function PersonalHistoryScreen() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [hasMore, setHasMore] = useState(true);
-  const [nextOffset, setNextOffset] = useState(0);
   const [motionRun, setMotionRun] = useState(0);
   const requestVersionRef = useRef(0);
   const hasLoadedOnceRef = useRef(false);
   const skipNextComposerRefreshRef = useRef(false);
   const loadMoreInProgressRef = useRef(false);
+  const nextOffsetRef = useRef(0);
 
   useEffect(() => {
     // #region agent log
@@ -499,7 +516,7 @@ export default function PersonalHistoryScreen() {
       if (showSkeleton || isSearchReload) setIsInitialLoading(true);
       setIsLoadingMore(false);
       setHasMore(false);
-      setNextOffset(0);
+      nextOffsetRef.current = 0;
       setError(null);
 
       pushHistoryDebug({
@@ -511,28 +528,28 @@ export default function PersonalHistoryScreen() {
           showSkeleton,
           debouncedQuery,
           filters,
-          hardScopedCategoryIds,
         },
       });
 
       try {
-        const [nextCategories, firstPage] = await Promise.all([
-          loadCategories(),
-          loadTransactionPage(
-            0,
-            debouncedQuery,
-            hardScopedCategoryIds,
-            filters,
-          ),
-        ]);
+        const nextCategories = await loadCategories();
+        if (requestVersionRef.current !== requestVersion) return;
 
+        const freshScopedIds = computeScopedIds(nextCategories, filters.parentLabel);
+
+        const firstPage = await loadTransactionPage(
+          0,
+          debouncedQuery,
+          freshScopedIds,
+          filters,
+        );
         if (requestVersionRef.current !== requestVersion) return;
 
         const hasMoreRows = firstPage.length === PAGE_SIZE;
 
         setCategories(nextCategories);
         setTransactions(firstPage);
-        setNextOffset(firstPage.length);
+        nextOffsetRef.current = firstPage.length;
         setHasMore(hasMoreRows);
 
         pushHistoryDebug({
@@ -553,7 +570,7 @@ export default function PersonalHistoryScreen() {
         });
         setError(getErrorMessage(loadError, 'Failed to load personal history.'));
         setTransactions([]);
-        setNextOffset(0);
+        nextOffsetRef.current = 0;
         setHasMore(false);
 
         pushHistoryDebug({
@@ -582,14 +599,15 @@ export default function PersonalHistoryScreen() {
         }
       }
     },
-    [debouncedQuery, filters, hardScopedCategoryIds],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [debouncedQuery, filters],
   );
 
   const loadMore = useCallback(async (): Promise<void> => {
     if (isInitialLoading || loadMoreInProgressRef.current || !hasMore) return;
     loadMoreInProgressRef.current = true;
     const requestVersion = requestVersionRef.current;
-    const startOffset = nextOffset;
+    const startOffset = nextOffsetRef.current;
     setIsLoadingMore(true);
 
     pushHistoryDebug({
@@ -615,7 +633,7 @@ export default function PersonalHistoryScreen() {
       if (requestVersionRef.current !== requestVersion) return;
 
       setTransactions((current) => mergeUniqueTransactions(current, page));
-      setNextOffset(startOffset + page.length);
+      nextOffsetRef.current = startOffset + page.length;
       setHasMore(page.length === PAGE_SIZE);
 
       pushHistoryDebug({
@@ -659,7 +677,6 @@ export default function PersonalHistoryScreen() {
     hardScopedCategoryIds,
     hasMore,
     isInitialLoading,
-    nextOffset,
   ]);
 
   useEffect(() => {
@@ -732,14 +749,6 @@ export default function PersonalHistoryScreen() {
     return result;
   }, [categoryMeta, transactions]);
 
-  const stickyHeaderIndices = useMemo(
-    () => flatData.reduce<number[]>((acc, item, i) => {
-      if (item.type === 'header') acc.push(i);
-      return acc;
-    }, []),
-    [flatData],
-  );
-
   const deleteTransaction = async (row: TransactionRow): Promise<void> => {
     await Haptics.selectionAsync();
     const { error: deleteError } = await supabase.from('transactions').delete().eq('id', row.id);
@@ -747,7 +756,7 @@ export default function PersonalHistoryScreen() {
 
     setTransactions((current) => current.filter((item) => item.id !== row.id));
     setSelectedIds((current) => current.filter((id) => id !== row.id));
-    setNextOffset((current) => Math.max(0, current - 1));
+    nextOffsetRef.current = Math.max(0, nextOffsetRef.current - 1);
     skipNextComposerRefreshRef.current = true;
     composer.bumpRefresh();
   };
@@ -764,7 +773,7 @@ export default function PersonalHistoryScreen() {
     if (!hasUnknownSelections) {
       const selectedSet = new Set(selectedIds);
       setTransactions((current) => current.filter((row) => !selectedSet.has(row.id)));
-      setNextOffset((current) => Math.max(0, current - selectedSet.size));
+      nextOffsetRef.current = Math.max(0, nextOffsetRef.current - selectedSet.size);
     } else {
       await reload(false);
     }
@@ -851,7 +860,8 @@ export default function PersonalHistoryScreen() {
         <Text style={styles.footerText}>No older transactions to load.</Text>
       ) : null}
     </View>
-  ), [hasMore, isLoadingMore, loadMore, transactions.length]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [hasMore, isLoadingMore, transactions.length]);
 
   return (
     <MotionScope value={motionRun}>
@@ -948,7 +958,6 @@ export default function PersonalHistoryScreen() {
           <FlatList
             data={flatData}
             keyExtractor={(item) => item.key}
-            stickyHeaderIndices={stickyHeaderIndices}
             refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void onRefresh()} tintColor={colors.text} />}
             contentContainerStyle={flatData.length === 0 ? styles.emptyContainer : styles.listContent}
             renderItem={({ item }) => {
