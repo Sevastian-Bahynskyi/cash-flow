@@ -327,13 +327,9 @@ export default function SharedScreen() {
   const showCycleCarousel = filter === 'month' && cyclesWithTransactions.length > 0;
 
   const openSharedHistory = useCallback(
-    (startOn: string | null, endOnExclusive: string | null): void => {
+    (_startOn: string | null, _endOnExclusive: string | null): void => {
       runDetached(Haptics.selectionAsync(), 'shared.hero.open-history.haptics');
-      const params = new URLSearchParams();
-      params.set('shared', '1');
-      if (startOn) params.set('startOn', startOn);
-      if (endOnExclusive) params.set('endOnExclusive', endOnExclusive);
-      router.push((`/personal-history?${params.toString()}`) as never);
+      router.push('/personal-history?shared=1' as never);
     },
     [router],
   );
@@ -543,8 +539,6 @@ export default function SharedScreen() {
                   const params = new URLSearchParams();
                   params.set('shared', '1');
                   params.set('parentLabel', item.label);
-                  if (selectedRange.startOn) params.set('startOn', selectedRange.startOn);
-                  if (selectedRange.endOnExclusive) params.set('endOnExclusive', selectedRange.endOnExclusive);
                   router.push((`/personal-history?${params.toString()}`) as never);
                 }}
               />
@@ -556,11 +550,7 @@ export default function SharedScreen() {
                     label: 'See more',
                     tone: 'accent',
                     onPress: () => {
-                      const params = new URLSearchParams();
-                      params.set('shared', '1');
-                      if (selectedRange.startOn) params.set('startOn', selectedRange.startOn);
-                      if (selectedRange.endOnExclusive) params.set('endOnExclusive', selectedRange.endOnExclusive);
-                      router.push((`/personal-history?${params.toString()}`) as never);
+                      router.push('/personal-history?shared=1' as never);
                     },
                   },
                 ]}
