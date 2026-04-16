@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useOverview } from '@/features/overview/useOverview';
 import { buildCategoryMeta } from '@/features/categories/helpers';
 import { buildBudgetStateByCategory } from '@/features/budgets/helpers';
@@ -124,6 +124,7 @@ function BudgetSkeleton() {
 }
 
 export default function BudgetScreen() {
+  const router = useRouter();
   const { cycleId } = useLocalSearchParams<{ cycleId?: string | string[] }>();
   const initialCycleId = Array.isArray(cycleId) ? cycleId[0] ?? null : cycleId ?? null;
   const data = useOverview();
@@ -318,6 +319,18 @@ export default function BudgetScreen() {
     }
   };
 
+  const openBudgetTransactions = (scope: { categoryId?: string; parentLabel?: string }): void => {
+    if (!selectedCycle) return;
+    const params = new URLSearchParams();
+    params.set('startOn', selectedCycle.startOn);
+    if (selectedCycle.endOnExclusive) params.set('endOnExclusive', selectedCycle.endOnExclusive);
+    params.set('kind', 'expense');
+    params.set('includeShared', '1');
+    if (scope.categoryId) params.set('categoryId', scope.categoryId);
+    if (scope.parentLabel) params.set('parentLabel', scope.parentLabel);
+    router.push((`/personal-history?${params.toString()}`) as never);
+  };
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <ScrollView
@@ -417,7 +430,7 @@ export default function BudgetScreen() {
                       <Pressable
                         style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
                         onPress={() => {
-                          toggleParent(parent.id);
+                          openBudgetTransactions({ parentLabel: label });
                         }}
                       >
                         <View style={[styles.iconWrap, { backgroundColor: `${tone}22` }]}>
@@ -425,16 +438,16 @@ export default function BudgetScreen() {
                         </View>
                         <View style={styles.rowBody}>
                           <View style={styles.rowHead}>
-                            <Text style={styles.rowLabel}>{label}</Text>
-                            <View style={styles.rowAmountWrap}>
-                              <Text style={styles.rowAmount}>
-                                {state ? formatMinor(state.amountMinor) : 'No budget'}
-                              </Text>
+                            <View style={styles.rowIdentity}>
+                              <Text style={styles.rowLabel}>{label}</Text>
                             </View>
+                            <Text style={[styles.rowRatio, state ? { color: tone } : styles.rowRatioMuted]}>
+                              {state ? formatPercent(state.ratio) : '--'}
+                            </Text>
                           </View>
                           <Text style={styles.rowMeta}>
                             {state
-                              ? `${formatMinor(state.spentMinor)} spent · ${formatPercent(state.ratio)}`
+                              ? `${formatMinor(state.spentMinor)} of ${formatMinor(state.amountMinor)}`
                               : 'Tap to set a target for this cycle'}
                           </Text>
                           <ProgressBar value={state?.ratio ?? 0} color={tone} />
@@ -469,6 +482,9 @@ export default function BudgetScreen() {
                                   key={category.id}
                                   style={({ pressed }) => [styles.childRow, pressed && styles.rowPressed]}
                                   onPress={() => {
+                                    openBudgetTransactions({ categoryId: category.id, parentLabel: label });
+                                  }}
+                                  onLongPress={() => {
                                     Keyboard.dismiss();
                                     setKeypadOpen(true);
                                     setDraft({
@@ -485,14 +501,16 @@ export default function BudgetScreen() {
                                   </View>
                                   <View style={styles.rowBody}>
                                     <View style={styles.rowHead}>
-                                      <Text style={[styles.rowLabel, styles.rowLabelChild]}>{childLabel}</Text>
-                                      <Text style={styles.rowAmount}>
-                                        {childState ? formatMinor(childState.amountMinor) : 'No budget'}
+                                      <View style={styles.rowIdentity}>
+                                        <Text style={styles.rowLabel}>{childLabel}</Text>
+                                      </View>
+                                      <Text style={[styles.rowRatio, childState ? { color: childTone } : styles.rowRatioMuted]}>
+                                        {childState ? formatPercent(childState.ratio) : '--'}
                                       </Text>
                                     </View>
                                     <Text style={styles.rowMeta}>
                                       {childState
-                                        ? `${formatMinor(childState.spentMinor)} spent · ${formatPercent(childState.ratio)}`
+                                        ? `${formatMinor(childState.spentMinor)} of ${formatMinor(childState.amountMinor)}`
                                         : 'Tap to set a target for this cycle'}
                                     </Text>
                                     <ProgressBar value={childState?.ratio ?? 0} color={childTone} />
@@ -692,10 +710,10 @@ const styles = StyleSheet.create({
   },
   rowBody: { flex: 1, gap: spacing.xs },
   rowHead: { flexDirection: 'row', gap: spacing.md, alignItems: 'center' },
+  rowIdentity: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   rowLabel: { ...typography.body, color: colors.text, flex: 1, fontWeight: '600' },
-  rowLabelChild: { color: colors.textMuted },
-  rowAmountWrap: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  rowAmount: { ...typography.label, color: colors.text },
+  rowRatio: { ...typography.body, fontWeight: '700' },
+  rowRatioMuted: { color: colors.textMuted },
   rowMeta: { ...typography.label, color: colors.textMuted },
   groupCard: { gap: spacing.sm },
   chevronHitbox: {
