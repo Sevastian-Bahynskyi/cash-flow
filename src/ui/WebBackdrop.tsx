@@ -11,35 +11,29 @@ export function WebBackdrop(): null | React.ReactElement {
                 <LightPillar
                     topColor="#7C5CFF"
                     bottomColor="#F5B942"
-                    intensity={1.12}
+                    intensity={0.34}
                     rotationSpeed={0.22}
-                    glowAmount={0.009}
+                    glowAmount={0.0028}
                     pillarWidth={2.5}
                     pillarHeight={0.42}
-                    noiseIntensity={0.2}
+                    noiseIntensity={0.12}
                     pillarRotation={8}
                     interactive={false}
-                    mixBlendMode="screen"
-                    quality="high"
+                    mixBlendMode="soft-light"
+                    quality="medium"
                 />
             </View>
             <LinearGradient
-                colors={['rgba(124,92,255,0.3)', 'rgba(11,11,15,0)']}
+                colors={['rgba(124,92,255,0.12)', 'rgba(11,11,15,0)']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.leftGlow}
             />
             <LinearGradient
-                colors={['rgba(245,185,66,0.2)', 'rgba(11,11,15,0)']}
+                colors={['rgba(245,185,66,0.08)', 'rgba(11,11,15,0)']}
                 start={{ x: 1, y: 0 }}
                 end={{ x: 0, y: 1 }}
                 style={styles.rightGlow}
-            />
-            <LinearGradient
-                colors={['rgba(61,214,140,0.18)', 'rgba(11,11,15,0)']}
-                start={{ x: 0.5, y: 0 }}
-                end={{ x: 0.5, y: 1 }}
-                style={styles.centerGlow}
             />
             <View style={styles.leftOrb} />
             <View style={styles.rightOrb} />
@@ -55,15 +49,15 @@ export function WebBackdrop(): null | React.ReactElement {
 
 const styles = StyleSheet.create({
     root: {
-        zIndex: 20,
+        zIndex: 0,
     },
     pillarWrap: {
         position: 'absolute',
-        top: -80,
+        top: -160,
         left: -80,
         right: -80,
-        height: 620,
-        opacity: 0.9,
+        height: 500,
+        opacity: 0.36,
     },
     leftGlow: {
         position: 'absolute',
@@ -81,14 +75,6 @@ const styles = StyleSheet.create({
         height: 560,
         borderRadius: 280,
     },
-    centerGlow: {
-        position: 'absolute',
-        top: 120,
-        left: '20%',
-        width: '60%',
-        height: 520,
-        borderRadius: 240,
-    },
     leftOrb: {
         position: 'absolute',
         top: '38%',
@@ -96,9 +82,9 @@ const styles = StyleSheet.create({
         width: 240,
         height: 240,
         borderRadius: 999,
-        backgroundColor: 'rgba(61,214,140,0.08)',
+        backgroundColor: 'rgba(61,214,140,0.03)',
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.04)',
+        borderColor: 'rgba(255,255,255,0.02)',
     },
     rightOrb: {
         position: 'absolute',
@@ -107,20 +93,20 @@ const styles = StyleSheet.create({
         width: 320,
         height: 320,
         borderRadius: 999,
-        backgroundColor: 'rgba(124,92,255,0.08)',
+        backgroundColor: 'rgba(124,92,255,0.03)',
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.04)',
+        borderColor: 'rgba(255,255,255,0.02)',
     },
     balanceCard: {
         position: 'absolute',
-        right: 20,
-        bottom: 92,
-        width: 320,
-        padding: 16,
-        borderRadius: 18,
-        backgroundColor: 'rgba(20,20,28,0.55)',
+        right: 24,
+        top: 84,
+        width: 296,
+        padding: 14,
+        borderRadius: 16,
+        backgroundColor: 'rgba(20,20,28,0.36)',
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.2)',
+        borderColor: 'rgba(255,255,255,0.1)',
     },
     balanceEyebrow: {
         color: 'rgba(255,255,255,0.65)',
