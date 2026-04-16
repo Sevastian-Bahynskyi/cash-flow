@@ -19,14 +19,15 @@ function AuthGate() {
     if (loading || !pathname) return;
     const rootSegment = segments[0];
     const onSignIn = rootSegment === 'sign-in';
+    const onSignUp = rootSegment === 'sign-up';
     const onAuthCallback = rootSegment === 'auth-callback';
     const onOAuthRoute = rootSegment === 'oauth';
-    const isPublicRoute = onSignIn || onAuthCallback || onOAuthRoute;
+    const isPublicRoute = onSignIn || onSignUp || onAuthCallback || onOAuthRoute;
     if (!session && !isPublicRoute && pathname !== '/sign-in') {
       router.replace('/sign-in');
       return;
     }
-    if (session && onSignIn && pathname !== '/') {
+    if (session && (onSignIn || onSignUp) && pathname !== '/') {
       router.replace('/');
     }
   }, [session, loading, pathname, segments, router]);
@@ -54,6 +55,7 @@ function AuthGate() {
         <Stack.Screen name="ai-rules" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="personal-history" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="sign-in" />
+        <Stack.Screen name="sign-up" />
         <Stack.Screen name="auth-callback" />
         <Stack.Screen name="oauth/consent" />
       </Stack>
