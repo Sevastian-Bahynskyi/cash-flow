@@ -2,9 +2,9 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   Pressable,
   RefreshControl,
-  SectionList,
   StyleSheet,
   Text,
   TextInput,
@@ -20,7 +20,7 @@ import {
 } from '@/features/categories/helpers';
 import type { CategoryOverrideRow, CategoryRow } from '@/features/categories/types';
 import { useComposer } from '@/features/transactions/composer/context/ComposerContext';
-import type { TransactionDraft, TransactionRow } from '@/features/transactions/types';
+import type { TransactionDraft, TransactionKind, TransactionRow } from '@/features/transactions/types';
 import { runDetached } from '@/lib/async';
 import { getErrorMessage, reportDevError } from '@/lib/errors';
 import { formatDateLabel, formatMinor } from '@/lib/format';
@@ -35,8 +35,6 @@ const PAGE_SIZE = 20;
 const DELETE_CHUNK_SIZE = 100;
 const SEARCH_DEBOUNCE_MS = 250;
 const DEBUG_BUILD_TAG = 'personal-history-v2-2026-04-13';
-const TRANSACTION_SELECT =
-  'id, user_id, kind, amount_minor, occurred_on, name, comment, category_id, country_iso, recurring, shared, shared_participant, is_shared_topup, is_salary, currency_code, original_amount_minor, converted_amount_minor, fx_rate, created_at, updated_at';
 
 type HistoryItem = {
   row: TransactionRow;
@@ -45,15 +43,15 @@ type HistoryItem = {
   categoryIcon: string;
 };
 
-type HistorySection = {
-  title: string;
-  data: HistoryItem[];
-};
+type FlatHistoryItem =
+  | { type: 'header'; key: string; title: string }
+  | { type: 'row'; key: string; item: HistoryItem };
 
 type HistoryFilters = {
   startOn: string | null;
   endOnExclusive: string | null;
   kind: 'income' | 'expense' | null;
+  categoryId: string | null;
   parentLabel: string | null;
   sharedOnly: boolean;
   includeShared: boolean;
@@ -74,269 +72,19 @@ const pushHistoryDebug = (payload: Record<string, unknown>): void => {
   }).catch(() => { });
 };
 
-const applySharedScopeFilter = <T,>(queryBuilder: T, filters: HistoryFilters): T => {
-  const query = queryBuilder as unknown as {
-    eq: (col: string, value: boolean) => T;
-    or: (filter: string) => T;
-  };
-
-  if (filters.sharedOnly) {
-    return query.or('shared.eq.true,is_shared_topup.eq.true');
-  }
-
-  if (filters.includeShared) {
-    return queryBuilder;
-  }
-
-  return query.eq('shared', false);
+type SearchTransactionsRpcArgs = {
+  p_query: string | null;
+  p_kind: TransactionKind | null;
+  p_start_on: string | null;
+  p_end_on_exclusive: string | null;
+  p_shared_only: boolean;
+  p_include_shared: boolean;
+  p_scoped_category_ids: string[] | null;
+  p_limit: number;
+  p_offset: number;
 };
 
-const pad2 = (value: string): string => value.padStart(2, '0');
-
-const toSearchText = (value: string): string =>
-  value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
-
-const splitSearchTokens = (query: string): string[] => {
-  const out: string[] = [];
-  const seen = new Set<string>();
-  const parts = query
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 10);
-
-  for (const part of parts) {
-    if (isDateLikeToken(part)) continue;
-    const normalized = toSearchText(part);
-    if (!normalized) continue;
-    const tokens = normalized.split(/\s+/).filter((token) => token.length >= 2);
-    for (const token of tokens) {
-      if (seen.has(token)) continue;
-      seen.add(token);
-      out.push(token);
-      if (out.length >= 6) return out;
-    }
-  }
-
-  return out;
-};
-
-const isDateLikeToken = (value: string): boolean => {
-  const raw = value.trim();
-  if (!raw) return false;
-  if (/^\d{6,8}$/.test(raw)) return true;
-  return /^\d{1,4}([-/.]\d{1,4}){0,2}$/.test(raw);
-};
-
-const escapePostgrestValue = (value: string): string =>
-  value
-    .replaceAll('\\', '\\\\')
-    .replaceAll(',', '\\,')
-    .replaceAll('(', '\\(')
-    .replaceAll(')', '\\)');
-
-const buildDateSearchGroups = (query: string): string[] => {
-  const nowYear = new Date().getFullYear();
-  const parts = query
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 8)
-    .filter((part) => isDateLikeToken(part));
-
-  const groups: string[] = [];
-
-  const pushGroup = (clauses: Set<string>): void => {
-    const values = [...clauses];
-    if (values.length === 0) return;
-    groups.push(values.length === 1 ? values[0] ?? '' : `or(${values.join(',')})`);
-  };
-
-  const pushYearRange = (clauses: Set<string>, year: string): void => {
-    const nextYear = String(Number(year) + 1);
-    clauses.add(`and(occurred_on.gte.${year}-01-01,occurred_on.lt.${nextYear}-01-01)`);
-  };
-
-  const pushMonthRange = (clauses: Set<string>, year: string, month: string): void => {
-    const monthNum = Number(month);
-    if (!Number.isFinite(monthNum) || monthNum < 1 || monthNum > 12) return;
-    const nextMonthNumber = monthNum === 12 ? 1 : monthNum + 1;
-    const nextMonthYear = monthNum === 12 ? String(Number(year) + 1) : year;
-    clauses.add(`and(occurred_on.gte.${year}-${pad2(month)}-01,occurred_on.lt.${nextMonthYear}-${String(nextMonthNumber).padStart(2, '0')}-01)`);
-  };
-
-  const pushDayMonth = (clauses: Set<string>, day: string, month: string): void => {
-    const dayNum = Number(day);
-    const monthNum = Number(month);
-    if (!Number.isFinite(dayNum) || !Number.isFinite(monthNum)) return;
-    if (dayNum < 1 || dayNum > 31 || monthNum < 1 || monthNum > 12) return;
-    clauses.add(`occurred_on.like.%-${pad2(month)}-${pad2(day)}`);
-    clauses.add(`occurred_on.eq.${nowYear}-${pad2(month)}-${pad2(day)}`);
-  };
-
-  const pushIsoDate = (clauses: Set<string>, year: string, month: string, day: string): void => {
-    const monthNum = Number(month);
-    const dayNum = Number(day);
-    if (!Number.isFinite(monthNum) || !Number.isFinite(dayNum)) return;
-    if (monthNum < 1 || monthNum > 12 || dayNum < 1 || dayNum > 31) return;
-    clauses.add(`occurred_on.eq.${year}-${pad2(month)}-${pad2(day)}`);
-  };
-
-  for (const part of parts) {
-    const normalized = part.replace(/[\/-]/g, '.');
-    const clauses = new Set<string>();
-
-    const ymd = /^(\d{4})\.(\d{1,2})\.(\d{1,2})$/.exec(normalized);
-    if (ymd) {
-      pushIsoDate(clauses, ymd[1] ?? '', ymd[2] ?? '', ymd[3] ?? '');
-      pushGroup(clauses);
-      continue;
-    }
-
-    const dmy = /^(\d{1,2})\.(\d{1,2})\.(\d{2,4})$/.exec(normalized);
-    if (dmy) {
-      const first = Number(dmy[1] ?? '');
-      const second = Number(dmy[2] ?? '');
-      const yearRaw = dmy[3] ?? '';
-      const year = yearRaw.length === 2 ? `20${yearRaw}` : yearRaw;
-      if (first > 12) {
-        pushIsoDate(clauses, year, dmy[2] ?? '', dmy[1] ?? '');
-      } else if (second > 12) {
-        pushIsoDate(clauses, year, dmy[1] ?? '', dmy[2] ?? '');
-      } else {
-        pushIsoDate(clauses, year, dmy[2] ?? '', dmy[1] ?? '');
-        pushIsoDate(clauses, year, dmy[1] ?? '', dmy[2] ?? '');
-      }
-      pushGroup(clauses);
-      continue;
-    }
-
-    const dm = /^(\d{1,2})\.(\d{1,2})$/.exec(normalized);
-    if (dm) {
-      const first = Number(dm[1] ?? '');
-      const second = Number(dm[2] ?? '');
-      if (first > 12) {
-        pushDayMonth(clauses, dm[1] ?? '', dm[2] ?? '');
-      } else if (second > 12) {
-        pushDayMonth(clauses, dm[2] ?? '', dm[1] ?? '');
-      } else {
-        pushDayMonth(clauses, dm[1] ?? '', dm[2] ?? '');
-        pushDayMonth(clauses, dm[2] ?? '', dm[1] ?? '');
-      }
-      pushGroup(clauses);
-      continue;
-    }
-
-    const my = /^(\d{1,2})\.(\d{4})$/.exec(normalized);
-    if (my) {
-      pushMonthRange(clauses, my[2] ?? '', my[1] ?? '');
-      pushGroup(clauses);
-      continue;
-    }
-
-    const ym = /^(\d{4})\.(\d{1,2})$/.exec(normalized);
-    if (ym) {
-      pushMonthRange(clauses, ym[1] ?? '', ym[2] ?? '');
-      pushGroup(clauses);
-      continue;
-    }
-
-    if (/^\d{4}$/.test(part)) {
-      pushYearRange(clauses, part);
-      pushGroup(clauses);
-      continue;
-    }
-
-    if (/^\d{8}$/.test(part)) {
-      if (part.startsWith('19') || part.startsWith('20')) {
-        pushIsoDate(clauses, part.slice(0, 4), part.slice(4, 6), part.slice(6, 8));
-      } else {
-        const day = part.slice(0, 2);
-        const month = part.slice(2, 4);
-        const year = part.slice(4, 8);
-        pushIsoDate(clauses, year, month, day);
-      }
-      pushGroup(clauses);
-      continue;
-    }
-
-    if (/^\d{6}$/.test(part)) {
-      const first = Number(part.slice(0, 2));
-      const second = Number(part.slice(2, 4));
-      const year = `20${part.slice(4, 6)}`;
-      if (first > 12) {
-        pushIsoDate(clauses, year, part.slice(2, 4), part.slice(0, 2));
-      } else if (second > 12) {
-        pushIsoDate(clauses, year, part.slice(0, 2), part.slice(2, 4));
-      } else {
-        pushIsoDate(clauses, year, part.slice(2, 4), part.slice(0, 2));
-        pushIsoDate(clauses, year, part.slice(0, 2), part.slice(2, 4));
-      }
-      pushGroup(clauses);
-    }
-  }
-
-  return groups.filter(Boolean);
-};
-
-const buildTransactionSearchFilter = (
-  query: string,
-  textTokens: readonly string[],
-  categoryIdsByToken: Readonly<Record<string, readonly string[]>>,
-): string | null => {
-  const dateGroups = buildDateSearchGroups(query);
-  const mandatoryGroups: string[] = [...dateGroups];
-
-  for (const token of textTokens) {
-    const escapedToken = escapePostgrestValue(token);
-    const tokenClauses = [`name.ilike.%${escapedToken}%`, `comment.ilike.%${escapedToken}%`];
-    const tokenCategoryIds = (categoryIdsByToken[token] ?? [])
-      .filter((value) => /^[0-9a-fA-F-]{36}$/.test(value))
-      .slice(0, 40)
-      .join(',');
-    if (tokenCategoryIds) tokenClauses.push(`category_id.in.(${tokenCategoryIds})`);
-    mandatoryGroups.push(`or(${tokenClauses.join(',')})`);
-  }
-
-  if (mandatoryGroups.length === 0) return null;
-
-  const filter = mandatoryGroups.length === 1
-    ? (mandatoryGroups[0] ?? null)
-    : `and(${mandatoryGroups.join(',')})`;
-
-  if (!filter) return null;
-
-  // #region agent log
-  fetch('http://127.0.0.1:7401/ingest/3868ff3d-2d0f-4946-999c-a38c9c4e1bb0', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '41e759' },
-    body: JSON.stringify({
-      sessionId: '41e759',
-      runId: 'post-fix-candidate',
-      hypothesisId: 'H1',
-      location: 'PersonalHistoryScreen.tsx:buildTransactionSearchFilter',
-      message: 'Built search filter with date-safe clauses',
-      data: {
-        query,
-        textTokensCount: textTokens.length,
-        dateGroupCount: dateGroups.length,
-        mandatoryGroups: mandatoryGroups.length,
-        hasOccurredOnEq: filter.includes('occurred_on.eq.'),
-        hasOccurredOnGte: filter.includes('occurred_on.gte.'),
-        hasOccurredOnLt: filter.includes('occurred_on.lt.'),
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => { });
-  // #endregion
-
-  return filter;
-};
+type SearchTransactionIdsRpcArgs = Omit<SearchTransactionsRpcArgs, 'p_limit' | 'p_offset'>;
 
 const toDuplicateDraft = (row: TransactionRow): TransactionDraft => ({
   kind: row.kind,
@@ -396,63 +144,46 @@ const loadCategories = async (): Promise<CategoryRow[]> => {
   );
 };
 
-const applySearchFilter = <T,>(
-  queryBuilder: T,
+const buildSearchTransactionsRpcArgs = (
   searchQuery: string,
-  textTokens: readonly string[],
-  categoryIdsByToken: Readonly<Record<string, readonly string[]>>,
-): T => {
-  const searchFilter = buildTransactionSearchFilter(searchQuery, textTokens, categoryIdsByToken);
-  if (!searchFilter) return queryBuilder;
+  offset: number,
+  scopedCategoryIds: readonly string[],
+  filters: HistoryFilters,
+): SearchTransactionsRpcArgs => ({
+  p_query: searchQuery.trim() ? searchQuery.trim() : null,
+  p_kind: filters.kind,
+  p_start_on: filters.startOn,
+  p_end_on_exclusive: filters.endOnExclusive,
+  p_shared_only: filters.sharedOnly,
+  p_include_shared: filters.includeShared,
+  p_scoped_category_ids: scopedCategoryIds.length > 0 ? [...scopedCategoryIds] : null,
+  p_limit: PAGE_SIZE,
+  p_offset: offset,
+});
 
-  return (queryBuilder as { or: (filter: string) => T }).or(searchFilter);
-};
-
-const applyCategoryScopeFilter = <T,>(queryBuilder: T, scopedCategoryIds: readonly string[]): T => {
-  if (scopedCategoryIds.length === 0) return queryBuilder;
-
-  return (queryBuilder as {
-    in: (col: string, values: readonly string[]) => T;
-  }).in('category_id', scopedCategoryIds);
-};
-
-const applyBaseFilters = <T,>(queryBuilder: T, filters: HistoryFilters): T => {
-  let query = queryBuilder as unknown as {
-    gte: (col: string, value: string) => typeof queryBuilder;
-    lt: (col: string, value: string) => typeof queryBuilder;
-    eq: (col: string, value: string) => typeof queryBuilder;
-  };
-
-  if (filters.startOn) query = query.gte('occurred_on', filters.startOn) as unknown as typeof query;
-  if (filters.endOnExclusive) query = query.lt('occurred_on', filters.endOnExclusive) as unknown as typeof query;
-  if (filters.kind) query = query.eq('kind', filters.kind) as unknown as typeof query;
-
-  return query as unknown as T;
-};
+const buildSearchTransactionIdsRpcArgs = (
+  searchQuery: string,
+  scopedCategoryIds: readonly string[],
+  filters: HistoryFilters,
+): SearchTransactionIdsRpcArgs => ({
+  p_query: searchQuery.trim() ? searchQuery.trim() : null,
+  p_kind: filters.kind,
+  p_start_on: filters.startOn,
+  p_end_on_exclusive: filters.endOnExclusive,
+  p_shared_only: filters.sharedOnly,
+  p_include_shared: filters.includeShared,
+  p_scoped_category_ids: scopedCategoryIds.length > 0 ? [...scopedCategoryIds] : null,
+});
 
 const loadTransactionPage = async (
   offset: number,
   searchQuery: string,
-  textTokens: readonly string[],
-  categoryIdsByToken: Readonly<Record<string, readonly string[]>>,
   scopedCategoryIds: readonly string[],
   filters: HistoryFilters,
 ): Promise<TransactionRow[]> => {
   const startedAt = Date.now();
-  let query = supabase
-    .from('transactions')
-    .select(TRANSACTION_SELECT);
-
-  query = applySharedScopeFilter(query, filters);
-
-  query = applyBaseFilters(query, filters);
-  query = applyCategoryScopeFilter(query, scopedCategoryIds);
-  query = applySearchFilter(query, searchQuery, textTokens, categoryIdsByToken);
-
-  const { data, error } = await query
-    .order('occurred_on', { ascending: false })
-    .order('updated_at', { ascending: false })
-    .range(offset, offset + PAGE_SIZE - 1);
+  const rpcArgs = buildSearchTransactionsRpcArgs(searchQuery, offset, scopedCategoryIds, filters);
+  const { data, error } = await supabase.rpc('search_transactions_v1', rpcArgs);
 
   if (error) {
     // #region agent log
@@ -468,6 +199,7 @@ const loadTransactionPage = async (
         data: {
           offset,
           searchQuery,
+          rpcArgs,
           code: (error as { code?: string }).code ?? null,
           message: (error as { message?: string }).message ?? null,
           elapsedMs: Date.now() - startedAt,
@@ -492,6 +224,7 @@ const loadTransactionPage = async (
       data: {
         offset,
         searchQueryLength: searchQuery.length,
+        rpcArgs,
         rows: (data ?? []).length,
         elapsedMs: Date.now() - startedAt,
       },
@@ -505,27 +238,14 @@ const loadTransactionPage = async (
 
 const loadMatchingTransactionIds = async (
   searchQuery: string,
-  textTokens: readonly string[],
-  categoryIdsByToken: Readonly<Record<string, readonly string[]>>,
   scopedCategoryIds: readonly string[],
   filters: HistoryFilters,
 ): Promise<string[]> => {
-  let query = supabase
-    .from('transactions')
-    .select('id');
-
-  query = applySharedScopeFilter(query, filters);
-
-  query = applyBaseFilters(query, filters);
-  query = applyCategoryScopeFilter(query, scopedCategoryIds);
-  query = applySearchFilter(query, searchQuery, textTokens, categoryIdsByToken);
-
-  const { data, error } = await query
-    .order('occurred_on', { ascending: false })
-    .order('updated_at', { ascending: false });
+  const rpcArgs = buildSearchTransactionIdsRpcArgs(searchQuery, scopedCategoryIds, filters);
+  const { data, error } = await supabase.rpc('search_transaction_ids_v1', rpcArgs);
 
   if (error) throw error;
-  return (data ?? []).map((row) => row.id as string);
+  return (data ?? []).map((row: { id: string }) => row.id);
 };
 
 const deleteTransactionIds = async (ids: readonly string[]): Promise<void> => {
@@ -689,6 +409,7 @@ export default function PersonalHistoryScreen() {
     startOn?: string;
     endOnExclusive?: string;
     kind?: string;
+    categoryId?: string;
     parentLabel?: string;
     shared?: string;
     includeShared?: string;
@@ -710,6 +431,7 @@ export default function PersonalHistoryScreen() {
   const requestVersionRef = useRef(0);
   const hasLoadedOnceRef = useRef(false);
   const skipNextComposerRefreshRef = useRef(false);
+  const loadMoreInProgressRef = useRef(false);
 
   useEffect(() => {
     // #region agent log
@@ -748,6 +470,8 @@ export default function PersonalHistoryScreen() {
         : null;
     const kind =
       params.kind === 'income' || params.kind === 'expense' ? params.kind : null;
+    const categoryId =
+      typeof params.categoryId === 'string' && params.categoryId.trim() ? params.categoryId.trim() : null;
     const parentLabel =
       typeof params.parentLabel === 'string' && params.parentLabel.trim() ? params.parentLabel.trim() : null;
     const sharedOnly =
@@ -756,39 +480,14 @@ export default function PersonalHistoryScreen() {
     const includeShared =
       params.includeShared === '1' ||
       params.includeShared === 'true';
-    return { startOn, endOnExclusive, kind, parentLabel, sharedOnly, includeShared };
-  }, [params.endOnExclusive, params.includeShared, params.kind, params.parentLabel, params.shared, params.startOn]);
-  const searchTextTokens = useMemo(() => splitSearchTokens(debouncedQuery), [debouncedQuery]);
-  const categoryIdsByToken = useMemo<Readonly<Record<string, readonly string[]>>>(() => {
-    if (searchTextTokens.length === 0) return {};
-
-    const out: Record<string, string[]> = {};
-    for (const token of searchTextTokens) out[token] = [];
-
-    for (const row of categories) {
-      const meta = categoryMeta[row.id];
-      const haystack = toSearchText([
-        row.name,
-        meta?.name ?? '',
-        meta?.label ?? '',
-        meta?.parentName ?? '',
-      ].join(' '));
-
-      for (const token of searchTextTokens) {
-        if (!haystack.includes(token)) continue;
-        out[token]?.push(row.id);
-      }
-    }
-
-    for (const token of searchTextTokens) {
-      const ids = out[token] ?? [];
-      ids.sort((a, b) => a.localeCompare(b));
-      out[token] = ids;
-    }
-
-    return out;
-  }, [categories, categoryMeta, searchTextTokens]);
+    return { startOn, endOnExclusive, kind, categoryId, parentLabel, sharedOnly, includeShared };
+  }, [params.categoryId, params.endOnExclusive, params.includeShared, params.kind, params.parentLabel, params.shared, params.startOn]);
   const hardScopedCategoryIds = useMemo(() => {
+    if (filters.categoryId) {
+      return categories.some((row) => row.id === filters.categoryId)
+        ? [filters.categoryId]
+        : EMPTY_IDS;
+    }
     if (!filters.parentLabel) return EMPTY_IDS;
     const target = filters.parentLabel.trim().toLowerCase();
     const ids: string[] = [];
@@ -799,14 +498,17 @@ export default function PersonalHistoryScreen() {
     }
     ids.sort((a, b) => a.localeCompare(b));
     return ids;
-  }, [categories, categoryMeta, filters.parentLabel]);
+  }, [categories, categoryMeta, filters.categoryId, filters.parentLabel]);
 
   const reload = useCallback(
     async (showSkeleton = false): Promise<void> => {
       const requestVersion = requestVersionRef.current + 1;
       requestVersionRef.current = requestVersion;
-      if (showSkeleton) setIsInitialLoading(true);
+      const isSearchReload = debouncedQuery.length > 0;
+      if (showSkeleton || isSearchReload) setIsInitialLoading(true);
       setIsLoadingMore(false);
+      setHasMore(false);
+      setNextOffset(0);
       setError(null);
 
       pushHistoryDebug({
@@ -819,22 +521,28 @@ export default function PersonalHistoryScreen() {
           debouncedQuery,
           filters,
           hardScopedCategoryIds,
-          searchTextTokens,
         },
       });
 
       try {
         const [nextCategories, firstPage] = await Promise.all([
           loadCategories(),
-          loadTransactionPage(0, debouncedQuery, searchTextTokens, categoryIdsByToken, hardScopedCategoryIds, filters),
+          loadTransactionPage(
+            0,
+            debouncedQuery,
+            hardScopedCategoryIds,
+            filters,
+          ),
         ]);
 
         if (requestVersionRef.current !== requestVersion) return;
 
+        const hasMoreRows = firstPage.length === PAGE_SIZE;
+
         setCategories(nextCategories);
         setTransactions(firstPage);
         setNextOffset(firstPage.length);
-        setHasMore(firstPage.length === PAGE_SIZE);
+        setHasMore(hasMoreRows);
 
         pushHistoryDebug({
           hypothesisId: 'reload-success',
@@ -843,7 +551,8 @@ export default function PersonalHistoryScreen() {
           data: {
             requestVersion,
             rows: firstPage.length,
-            hasMore: firstPage.length === PAGE_SIZE,
+            hasMore: hasMoreRows,
+            isSearchReload,
           },
         });
       } catch (loadError) {
@@ -882,11 +591,12 @@ export default function PersonalHistoryScreen() {
         }
       }
     },
-    [categoryIdsByToken, debouncedQuery, filters, hardScopedCategoryIds, searchTextTokens],
+    [debouncedQuery, filters, hardScopedCategoryIds],
   );
 
   const loadMore = useCallback(async (): Promise<void> => {
-    if (isInitialLoading || isLoadingMore || !hasMore) return;
+    if (isInitialLoading || loadMoreInProgressRef.current || !hasMore) return;
+    loadMoreInProgressRef.current = true;
     const requestVersion = requestVersionRef.current;
     const startOffset = nextOffset;
     setIsLoadingMore(true);
@@ -901,7 +611,6 @@ export default function PersonalHistoryScreen() {
         debouncedQuery,
         filters,
         hardScopedCategoryIds,
-        searchTextTokens,
       },
     });
 
@@ -909,8 +618,6 @@ export default function PersonalHistoryScreen() {
       const page = await loadTransactionPage(
         startOffset,
         debouncedQuery,
-        searchTextTokens,
-        categoryIdsByToken,
         hardScopedCategoryIds,
         filters,
       );
@@ -951,19 +658,17 @@ export default function PersonalHistoryScreen() {
       });
     } finally {
       if (requestVersionRef.current === requestVersion) {
+        loadMoreInProgressRef.current = false;
         setIsLoadingMore(false);
       }
     }
   }, [
-    categoryIdsByToken,
     debouncedQuery,
     filters,
     hardScopedCategoryIds,
     hasMore,
     isInitialLoading,
-    isLoadingMore,
     nextOffset,
-    searchTextTokens,
   ]);
 
   useEffect(() => {
@@ -1000,7 +705,7 @@ export default function PersonalHistoryScreen() {
   const isSearchPending = query.trim() !== debouncedQuery;
   const shouldShowSkeleton = isInitialLoading;
 
-  const sections = useMemo<HistorySection[]>(() => {
+  const flatData = useMemo<FlatHistoryItem[]>(() => {
     const grouped = new Map<string, HistoryItem[]>();
     for (const row of transactions) {
       const meta = row.category_id ? categoryMeta[row.category_id] : null;
@@ -1022,20 +727,27 @@ export default function PersonalHistoryScreen() {
           ? 'bank-outline'
           : 'cash';
       const current = grouped.get(row.occurred_on) ?? [];
-      current.push({
-        row,
-        categoryLabel,
-        categoryColor,
-        categoryIcon,
-      });
+      current.push({ row, categoryLabel, categoryColor, categoryIcon });
       grouped.set(row.occurred_on, current);
     }
 
-    return [...grouped.entries()].map(([date, items]) => ({
-      title: formatDateLabel(date),
-      data: items,
-    }));
+    const result: FlatHistoryItem[] = [];
+    for (const [date, items] of grouped.entries()) {
+      result.push({ type: 'header', key: `h-${date}`, title: formatDateLabel(date) });
+      for (const item of items) {
+        result.push({ type: 'row', key: item.row.id, item });
+      }
+    }
+    return result;
   }, [categoryMeta, transactions]);
+
+  const stickyHeaderIndices = useMemo(
+    () => flatData.reduce<number[]>((acc, item, i) => {
+      if (item.type === 'header') acc.push(i);
+      return acc;
+    }, []),
+    [flatData],
+  );
 
   const deleteTransaction = async (row: TransactionRow): Promise<void> => {
     await Haptics.selectionAsync();
@@ -1095,8 +807,6 @@ export default function PersonalHistoryScreen() {
     try {
       const ids = await loadMatchingTransactionIds(
         debouncedQuery,
-        searchTextTokens,
-        categoryIdsByToken,
         hardScopedCategoryIds,
         filters,
       );
@@ -1132,23 +842,25 @@ export default function PersonalHistoryScreen() {
     );
   };
 
-  const footer = isLoadingMore ? (
+  const footer = useMemo(() => (
     <View style={styles.footer}>
-      <ActivityIndicator color={colors.textMuted} />
-      <Text style={styles.footerText}>Loading older transactions...</Text>
+      {isLoadingMore ? (
+        <>
+          <ActivityIndicator color={colors.textMuted} />
+          <Text style={styles.footerText}>Loading older transactions...</Text>
+        </>
+      ) : hasMore && transactions.length > 0 ? (
+        <Pressable
+          style={({ pressed }) => [styles.footerButton, pressed && styles.footerButtonPressed]}
+          onPress={() => runDetached(loadMore(), 'personal-history.load-more.tap')}
+        >
+          <Text style={styles.footerButtonText}>Load older transactions</Text>
+        </Pressable>
+      ) : transactions.length > 0 ? (
+        <Text style={styles.footerText}>No older transactions to load.</Text>
+      ) : null}
     </View>
-  ) : hasMore && transactions.length > 0 ? (
-    <Pressable
-      style={({ pressed }) => [styles.footerButton, pressed && styles.footerButtonPressed]}
-      onPress={() => runDetached(loadMore(), 'personal-history.load-more.tap')}
-    >
-      <Text style={styles.footerButtonText}>Load older transactions</Text>
-    </Pressable>
-  ) : transactions.length > 0 ? (
-    <View style={styles.footer}>
-      <Text style={styles.footerText}>No older transactions to load.</Text>
-    </View>
-  ) : null;
+  ), [hasMore, isLoadingMore, loadMore, transactions.length]);
 
   return (
     <MotionScope value={motionRun}>
@@ -1242,32 +954,36 @@ export default function PersonalHistoryScreen() {
         {shouldShowSkeleton ? (
           <PersonalHistorySkeleton />
         ) : (
-          <SectionList
-            sections={sections}
-            keyExtractor={(item) => item.row.id}
-            stickySectionHeadersEnabled
+          <FlatList
+            data={flatData}
+            keyExtractor={(item) => item.key}
+            stickyHeaderIndices={stickyHeaderIndices}
             refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void onRefresh()} tintColor={colors.text} />}
-            contentContainerStyle={sections.length === 0 ? styles.emptyContainer : styles.listContent}
-            renderSectionHeader={({ section }) => (
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>{section.title}</Text>
-              </View>
-            )}
-            renderItem={({ item }) => (
-              <PersonalHistoryRow
-                item={item}
-                selectionMode={selectionMode}
-                selected={selectedIdSet.has(item.row.id)}
-                onToggleSelect={toggleSelectRow}
-                onEdit={(row) => composer.openEdit(row)}
-                onDuplicate={(row) => composer.openCreate(toDuplicateDraft(row))}
-                onDelete={(row) => {
-                  runDetached(deleteTransaction(row), 'personal-history.delete-transaction');
-                }}
-              />
-            )}
-            ItemSeparatorComponent={() => <View style={styles.itemGap} />}
-            SectionSeparatorComponent={() => <View style={styles.sectionGap} />}
+            contentContainerStyle={flatData.length === 0 ? styles.emptyContainer : styles.listContent}
+            renderItem={({ item }) => {
+              if (item.type === 'header') {
+                return (
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>{item.title}</Text>
+                  </View>
+                );
+              }
+              return (
+                <View style={styles.rowWrap}>
+                  <PersonalHistoryRow
+                    item={item.item}
+                    selectionMode={selectionMode}
+                    selected={selectedIdSet.has(item.item.row.id)}
+                    onToggleSelect={toggleSelectRow}
+                    onEdit={(row) => composer.openEdit(row)}
+                    onDuplicate={(row) => composer.openCreate(toDuplicateDraft(row))}
+                    onDelete={(row) => {
+                      runDetached(deleteTransaction(row), 'personal-history.delete-transaction');
+                    }}
+                  />
+                </View>
+              );
+            }}
             ListFooterComponent={footer}
             ListEmptyComponent={
               <View style={styles.emptyCard}>
@@ -1287,9 +1003,10 @@ export default function PersonalHistoryScreen() {
                 </Text>
               </View>
             }
-            onEndReachedThreshold={0.45}
+            removeClippedSubviews={false}
+            onEndReachedThreshold={0.2}
             onEndReached={() => {
-              if (!hasMore || isLoadingMore) return;
+              if (!hasMore) return;
               runDetached(loadMore(), 'personal-history.load-more.end');
             }}
           />
@@ -1301,7 +1018,7 @@ export default function PersonalHistoryScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
-  listContent: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl * 4 },
+  listContent: { paddingBottom: spacing.xxl * 4 },
   emptyContainer: { flexGrow: 1, paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl * 4 },
   searchWrap: {
     marginHorizontal: spacing.lg,
@@ -1366,9 +1083,13 @@ const styles = StyleSheet.create({
   skeletonCopy: { flex: 1, gap: spacing.xs },
   sectionHeader: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
+    paddingTop: spacing.md,
     paddingBottom: spacing.sm,
     backgroundColor: colors.bg,
+  },
+  rowWrap: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
   },
   sectionTitle: { ...typography.label, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
   row: {
@@ -1432,8 +1153,6 @@ const styles = StyleSheet.create({
   chipText: { ...typography.label, color: colors.textMuted },
   chipTextMe: { color: '#60A5FA', fontWeight: '600' },
   chipTextGf: { color: '#F472B6', fontWeight: '600' },
-  sectionGap: { height: spacing.md },
-  itemGap: { height: spacing.sm },
   emptyCard: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
