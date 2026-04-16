@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
+import { Platform } from 'react-native';
 import { supabase, supabaseAuthUrl, supabaseUrl } from '@/lib/supabase';
 import { runDetached } from '@/lib/async';
 import { reportDevError } from '@/lib/errors';
@@ -28,12 +29,27 @@ const extractTokens = (url: string): { access_token: string; refresh_token: stri
   return { access_token, refresh_token };
 };
 
-const buildGoogleOAuthUrl = (redirectTo: string): string => {
+const buildGoogleOAuthUrl = (redirectTo: string, skipHttpRedirect: boolean): string => {
   const authUrl = new URL('/auth/v1/authorize', `${supabaseAuthUrl}/`);
   authUrl.searchParams.set('provider', 'google');
   authUrl.searchParams.set('redirect_to', redirectTo);
-  authUrl.searchParams.set('skip_http_redirect', 'true');
+  if (skipHttpRedirect) {
+    authUrl.searchParams.set('skip_http_redirect', 'true');
+  }
   return authUrl.toString();
+};
+
+const buildRedirectTo = (nextPath?: string): string => {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    const redirectUrl = new URL('/auth-callback', window.location.origin);
+    if (nextPath) {
+      redirectUrl.searchParams.set('next', nextPath);
+    }
+    return redirectUrl.toString();
+  }
+  return Linking.createURL('auth-callback', {
+    queryParams: nextPath ? { next: nextPath } : undefined,
+  });
 };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -71,13 +87,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signInWithGoogle = useCallback(async (nextPath?: string): Promise<void> => {
-    const redirectTo = Linking.createURL('auth-callback', {
-      queryParams: nextPath ? { next: nextPath } : undefined,
-    });
+    const redirectTo = buildRedirectTo(nextPath);
+
+    if (Platform.OS === 'web') {
+      if (supabaseAuthUrl && supabaseAuthUrl !== supabaseUrl) {
+        window.location.assign(buildGoogleOAuthUrl(redirectTo, false));
+        return;
+      }
+
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo },
+      });
+      if (error) {
+        reportDevError('auth.signInWithGoogle', error);
+      }
+      return;
+    }
+
     let authUrl: string | null = null;
 
     if (supabaseAuthUrl && supabaseAuthUrl !== supabaseUrl) {
-      authUrl = buildGoogleOAuthUrl(redirectTo);
+      authUrl = buildGoogleOAuthUrl(redirectTo, true);
     } else {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
