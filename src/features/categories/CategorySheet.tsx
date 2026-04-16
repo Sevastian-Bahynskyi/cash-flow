@@ -17,7 +17,7 @@ import { getCategoryDisplayColor } from './helpers';
 import { useCategories } from './useCategories';
 import type { CategoryOption } from './types';
 import type { TransactionKind } from '@/features/transactions/types';
-import { isAllowedIncomeCategoryOption, isIncomeCategoryOption } from './rules';
+import { isIncomeCategoryOption } from './rules';
 
 type BudgetIndicator = {
   tone: 'neutral' | 'warning' | 'critical';
@@ -64,13 +64,11 @@ function CategoryRow({
     parentColor: item.parentColor,
     color: item.color,
   });
-  const incomeOutlined = isAllowedIncomeCategoryOption(item);
 
   return (
     <Pressable
       style={({ pressed }) => [
         styles.row,
-        incomeOutlined && styles.rowIncomeOutline,
         pressed && styles.rowPressed,
       ]}
       onPress={() => {
@@ -113,7 +111,7 @@ export function CategorySheet({
     const visibleOptions =
       kind === 'expense'
         ? state.options.filter((option) => !isIncomeCategoryOption(option))
-        : state.options.filter((option) => isAllowedIncomeCategoryOption(option));
+        : state.options.filter((option) => isIncomeCategoryOption(option));
     const q = query.trim().toLowerCase();
     if (q.length === 0) return visibleOptions;
     return visibleOptions.filter((option) => option.searchKey.includes(q));
@@ -124,7 +122,7 @@ export function CategorySheet({
     const visibleOptions =
       kind === 'expense'
         ? state.options.filter((option) => !isIncomeCategoryOption(option))
-        : state.options.filter((option) => isAllowedIncomeCategoryOption(option));
+        : state.options.filter((option) => isIncomeCategoryOption(option));
     const optionsById = new Map(visibleOptions.map((option) => [option.id, option]));
     const frequent = (frequentIds ?? [])
       .map((id) => optionsById.get(id))
@@ -144,7 +142,7 @@ export function CategorySheet({
     const visibleOptions =
       kind === 'expense'
         ? state.options.filter((option) => !isIncomeCategoryOption(option))
-        : state.options.filter((option) => isAllowedIncomeCategoryOption(option));
+        : state.options.filter((option) => isIncomeCategoryOption(option));
     for (const option of visibleOptions) {
       const existing = groups.get(option.parentId);
       if (existing) existing.items.push(option);
@@ -339,10 +337,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     borderRadius: radius.md,
     backgroundColor: colors.surface,
-  },
-  rowIncomeOutline: {
-    borderWidth: 1,
-    borderColor: colors.accentAlt,
   },
   rowPressed: { opacity: 0.86 },
   rowIconWrap: {
