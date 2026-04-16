@@ -30,7 +30,6 @@ import {
   findOtherIncomeCategoryOption,
   findSharedTopupCategoryOption,
   normalizeIncomeCategoryOption,
-  isAllowedIncomeCategoryOption,
   isIncomeCategoryOption,
   isMobilePayCategoryOption,
   isSalaryCategoryOption,

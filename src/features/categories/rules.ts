@@ -27,17 +27,17 @@ export const isOtherIncomeCategoryOption = (option: CategoryOption | null | unde
 export const isAllowedIncomeCategoryOption = (option: CategoryOption | null | undefined): boolean =>
   Boolean(
     option &&
-      (isSalaryCategoryOption(option) ||
-        isTransferCategoryOption(option) ||
-        isOtherIncomeCategoryOption(option)),
+    (isSalaryCategoryOption(option) ||
+      isTransferCategoryOption(option) ||
+      isOtherIncomeCategoryOption(option)),
   );
 
 export const isMobilePayCategoryOption = (option: CategoryOption | null | undefined): boolean =>
   Boolean(
     option &&
-      ((isTransferParentName(option.parentName) &&
-        normalize(option.name) === 'mobilepay') ||
-        option.icon === 'brand:mobilepay'),
+    ((isTransferParentName(option.parentName) &&
+      normalize(option.name) === 'mobilepay') ||
+      option.icon === 'brand:mobilepay'),
   );
 
 export const findSalaryCategoryOption = (
@@ -73,7 +73,7 @@ export const normalizeIncomeCategoryOption = (
   option: CategoryOption | null | undefined,
   options: readonly CategoryOption[],
 ): CategoryOption | null => {
-  if (option && isAllowedIncomeCategoryOption(option)) return option;
+  if (option && isIncomeCategoryOption(option)) return option;
   return findOtherIncomeCategoryOption(options);
 };
 

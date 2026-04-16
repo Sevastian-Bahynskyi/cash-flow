@@ -4,7 +4,7 @@ import { NumericKeypad } from '@/ui/NumericKeypad';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 import { formatDateLabel } from '@/lib/format';
 import { getCategoryDisplayColor } from '@/features/categories/helpers';
-import { isAllowedIncomeCategoryOption, isIncomeCategoryOption } from '@/features/categories/rules';
+import { isIncomeCategoryOption } from '@/features/categories/rules';
 import type { CategoryOption } from '@/features/categories/types';
 import { formatMerchantCategorySource } from '@/features/transactions/suggestions';
 import type { ImportedTransactionDraft } from '@/features/transactions/imageImport';
@@ -62,12 +62,12 @@ export function ImportReviewTransactionCard({
   const categoryLabel = category ? `${category.parentName} · ${category.name}` : '';
   const categoryAccentColor = category
     ? getCategoryDisplayColor({
-        kind: row.kind,
-        parentName: category.parentName,
-        name: category.name,
-        parentColor: category.parentColor,
-        color: category.color,
-      })
+      kind: row.kind,
+      parentName: category.parentName,
+      name: category.name,
+      parentColor: category.parentColor,
+      color: category.color,
+    })
     : colors.textMuted;
 
   return (
@@ -168,7 +168,7 @@ export function ImportReviewTransactionCard({
                 kind: option,
                 categoryId:
                   option === 'income'
-                    ? category && isAllowedIncomeCategoryOption(category)
+                    ? category && isIncomeCategoryOption(category)
                       ? row.categoryId
                       : incomeFallbackCategoryId
                     : category && isIncomeCategoryOption(category)
