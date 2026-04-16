@@ -13,7 +13,7 @@ import Animated, {
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
-import { useOverview, type BudgetAlert } from '@/features/overview/useOverview';
+import { useOverview } from '@/features/overview/useOverview';
 import { useComposer } from '@/features/transactions/composer/context/ComposerContext';
 import { TransactionList } from '@/features/transactions/TransactionList';
 import {
@@ -25,19 +25,19 @@ import { runDetached } from '@/lib/async';
 import { MotionScope } from '@/ui/MotionScope';
 import { MotionView } from '@/ui/MotionView';
 import { FilterChips } from '@/ui/FilterChips';
-import { ProgressBar } from '@/ui/ProgressBar';
 import { ScreenHeader } from '@/ui/ScreenHeader';
 import { SkeletonBlock, SkeletonCard } from '@/ui/Skeleton';
 import { TopCategoriesSection } from '@/ui/TopCategoriesSection';
 import { HeroCard } from '@/ui/HeroCard';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 import { transactionBalance } from '@/lib/balance';
-import { formatMinor, formatPercent } from '@/lib/format';
+import { formatMinor } from '@/lib/format';
 import { buildNavigableCycles, findCycleFor, type SalaryCycle } from '@/lib/cycles';
 import type { TransactionRow } from '@/features/transactions/types';
 import { supabase } from '@/lib/supabase';
 
 type RangeFilter = 'month' | 'year' | 'all';
+const TOP_CATEGORIES_COLLAPSED_COUNT = 5;
 
 const toLocalIsoDay = (date: Date): string => {
   const year = date.getFullYear();
@@ -152,6 +152,7 @@ export default function HomeScreen() {
   const composer = useComposer();
   const [filter, setFilter] = useState<RangeFilter>('month');
   const [selectedCycleId, setSelectedCycleId] = useState<string | null>(null);
+  const [topCategoriesExpanded, setTopCategoriesExpanded] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [recentSelectionMode, setRecentSelectionMode] = useState(false);
   const [selectedRecentIds, setSelectedRecentIds] = useState<string[]>([]);
@@ -218,24 +219,6 @@ export default function HomeScreen() {
     () => cycles.filter((cycle) => cycle.label.endsWith(String(currentYear))),
     [currentYear, cycles],
   );
-  const selectedRange = useMemo(() => {
-    if (filter === 'month') {
-      return {
-        startOn: selectedCycle?.startOn ?? null,
-        endOnExclusive: selectedCycle?.endOnExclusive ?? null,
-      };
-    }
-    if (filter === 'year') {
-      return {
-        startOn: `${currentYear}-01-01`,
-        endOnExclusive: `${currentYear + 1}-01-01`,
-      };
-    }
-    return {
-      startOn: null,
-      endOnExclusive: null,
-    };
-  }, [currentYear, filter, selectedCycle?.endOnExclusive, selectedCycle?.startOn]);
   const rangeTransactions = useMemo(() => {
     if (filter === 'year') {
       return data.transactions.filter((row) => {
@@ -357,13 +340,17 @@ export default function HomeScreen() {
       };
     });
 
-    return items.sort((a, b) => b.absMinor - a.absMinor).slice(0, 5);
+    return items.sort((a, b) => b.absMinor - a.absMinor);
   }, [categoryMeta, data.categories, personalTransactions]);
 
-  const spendTotal = topCategoryTotals.reduce((sum, item) => sum + item.absMinor, 0);
+  const hasMoreTopCategories = topCategoryTotals.length > TOP_CATEGORIES_COLLAPSED_COUNT;
+  const visibleTopCategoryTotals = topCategoriesExpanded
+    ? topCategoryTotals
+    : topCategoryTotals.slice(0, TOP_CATEGORIES_COLLAPSED_COUNT);
+  const spendTotal = visibleTopCategoryTotals.reduce((sum, item) => sum + item.absMinor, 0);
   const topCategoryItems = useMemo(
     () =>
-      topCategoryTotals.map((item) => ({
+      visibleTopCategoryTotals.map((item) => ({
         id: item.label,
         label: item.label,
         amountLabel: `${item.tone === 'income' ? '+' : '-'}${formatMinor(Math.abs(item.netMinor))}`,
@@ -371,35 +358,14 @@ export default function HomeScreen() {
         progress: spendTotal === 0 ? 0 : item.absMinor / spendTotal,
         color: item.color,
       })),
-    [spendTotal, topCategoryTotals],
+    [spendTotal, visibleTopCategoryTotals],
   );
 
-  const filteredBudgetAlerts: BudgetAlert[] = useMemo(() => {
-    if (filter !== 'month') return [];
-    const targetCycle = selectedCycle;
-    if (!targetCycle) return [];
-    const totals = new Map<string, number>();
-    for (const row of personalTransactions) {
-      if (row.kind !== 'expense' || row.is_shared_topup || !row.category_id) continue;
-      totals.set(row.category_id, (totals.get(row.category_id) ?? 0) + row.amount_minor);
+  useEffect(() => {
+    if (!hasMoreTopCategories && topCategoriesExpanded) {
+      setTopCategoriesExpanded(false);
     }
-    return data.budgets
-      .filter((budget) => budget.salary_cycle_id === targetCycle.id)
-      .map((budget) => {
-        const spentMinor = totals.get(budget.category_id) ?? 0;
-        const ratio = spentMinor / budget.amount_minor;
-        if (ratio < 0.8) return null;
-        return {
-          categoryId: budget.category_id,
-          label: categoryMeta[budget.category_id]?.label ?? 'Category',
-          spentMinor,
-          amountMinor: budget.amount_minor,
-          level: ratio >= 1 ? 'critical' : 'warning',
-        } satisfies BudgetAlert;
-      })
-      .filter((value): value is BudgetAlert => value !== null)
-      .sort((a, b) => b.spentMinor / b.amountMinor - a.spentMinor / a.amountMinor);
-  }, [categoryMeta, data.budgets, filter, personalTransactions, selectedCycle]);
+  }, [hasMoreTopCategories, topCategoriesExpanded]);
 
   const deleteTransaction = async (row: TransactionRow): Promise<void> => {
     await Haptics.selectionAsync();
@@ -569,11 +535,7 @@ export default function HomeScreen() {
                             style={({ pressed }) => [styles.heroPressable, pressed && styles.heroPressed]}
                             onPress={() => {
                               Haptics.selectionAsync().catch(() => undefined);
-                              const params = new URLSearchParams();
-                              params.set('startOn', cycle.startOn);
-                              if (cycle.endOnExclusive) params.set('endOnExclusive', cycle.endOnExclusive);
-                              params.set('includeShared', '1');
-                              router.push((`/personal-history?${params.toString()}`) as never);
+                              router.push('/personal-history?includeShared=1' as never);
                             }}
                           >
                             <HeroCard
@@ -593,13 +555,7 @@ export default function HomeScreen() {
                       style={({ pressed }) => [styles.heroPressable, pressed && styles.heroPressed]}
                       onPress={() => {
                         Haptics.selectionAsync().catch(() => undefined);
-                        const params = new URLSearchParams();
-                        if (selectedRange.startOn) params.set('startOn', selectedRange.startOn);
-                        if (selectedRange.endOnExclusive) {
-                          params.set('endOnExclusive', selectedRange.endOnExclusive);
-                        }
-                        params.set('includeShared', '1');
-                        router.push((`/personal-history?${params.toString()}`) as never);
+                        router.push('/personal-history?includeShared=1' as never);
                       }}
                     >
                       <HeroCard
@@ -688,44 +644,28 @@ export default function HomeScreen() {
               </View>
             ) : null}
 
-            {filteredBudgetAlerts.length > 0 ? (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Budget pressure</Text>
-                <View style={styles.sectionBody}>
-                  {filteredBudgetAlerts.map((alert, index) => {
-                    const ratio = alert.spentMinor / alert.amountMinor;
-                    const tone = alert.level === 'critical' ? colors.danger : '#F5B942';
-                    return (
-                      <MotionView key={alert.categoryId} index={index} direction="right" distance={150} delayMs={210}>
-                        <View style={styles.alertCard}>
-                          <View style={styles.alertRow}>
-                            <Text style={styles.alertTitle}>{alert.label}</Text>
-                            <Text style={[styles.alertRatio, { color: tone }]}>{formatPercent(ratio)}</Text>
-                          </View>
-                          <Text style={styles.alertMeta}>
-                            {formatMinor(alert.spentMinor)} of {formatMinor(alert.amountMinor)}
-                          </Text>
-                          <ProgressBar value={ratio} color={tone} />
-                        </View>
-                      </MotionView>
-                    );
-                  })}
-                </View>
-              </View>
-            ) : null}
-
             <TopCategoriesSection
               title="Top categories"
               items={topCategoryItems}
               emptyLabel="No spending in this range yet."
+              actions={
+                hasMoreTopCategories
+                  ? [
+                    {
+                      label: topCategoriesExpanded ? 'See less' : 'See more',
+                      onPress: () => {
+                        setTopCategoriesExpanded((current) => !current);
+                        Haptics.selectionAsync().catch(() => undefined);
+                      },
+                      tone: 'accent',
+                    },
+                  ]
+                  : undefined
+              }
               onPressItem={(item) => {
                 Haptics.selectionAsync().catch(() => undefined);
                 const source = topCategoryTotals.find((topCategory) => topCategory.label === item.label);
                 const params = new URLSearchParams();
-                if (selectedRange.startOn) params.set('startOn', selectedRange.startOn);
-                if (selectedRange.endOnExclusive) {
-                  params.set('endOnExclusive', selectedRange.endOnExclusive);
-                }
                 params.set('kind', source?.tone === 'income' ? 'income' : 'expense');
                 params.set('parentLabel', item.label);
                 params.set('includeShared', '1');
@@ -879,16 +819,6 @@ const styles = StyleSheet.create({
   skeletonRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
   skeletonTransactionRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   skeletonTransactionCopy: { flex: 1, gap: spacing.xs },
-  alertCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    gap: spacing.sm,
-  },
-  alertRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
-  alertTitle: { ...typography.body, color: colors.text, flex: 1, fontWeight: '600' },
-  alertRatio: { ...typography.body, fontWeight: '700' },
-  alertMeta: { ...typography.label, color: colors.textMuted },
   emptyCard: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.lg },
   errorCard: {
     backgroundColor: 'rgba(255,92,122,0.12)',
