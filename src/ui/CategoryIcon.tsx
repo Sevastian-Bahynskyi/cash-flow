@@ -111,6 +111,7 @@ const legacyToFontAwesome6: Record<string, string> = {
   'dots-horizontal-circle-outline': 'ellipsis',
   beach: 'umbrella-beach',
   'cellphone-marker': 'mobile-screen-button',
+  'account-heart-outline': 'heart',
 };
 
 export function CategoryIcon({ name, size, color }: Props) {

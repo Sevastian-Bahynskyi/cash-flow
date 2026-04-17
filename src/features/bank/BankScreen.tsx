@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { FontAwesome6 } from '@expo/vector-icons';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { bankIconOptions, categoryColorOptions } from '@/features/categories/presentation';
 import { useOverview } from '@/features/overview/useOverview';
@@ -509,7 +509,7 @@ export default function BankScreen() {
           <ScreenHeader
             title="Bank"
             subtitle="Savings and loans as first-class objects"
-            actions={[{ icon: 'logout', onPress: () => void signOut() }]}
+            actions={[{ icon: 'right-from-bracket', onPress: () => void signOut() }]}
           />
 
           {data.isInitialLoading ? <BankSkeleton /> : null}
@@ -728,7 +728,7 @@ export default function BankScreen() {
                         >
                           <View style={styles.itemHead}>
                             <View style={[styles.iconWrap, { backgroundColor: 'rgba(124,92,255,0.18)' }]}>
-                              <MaterialCommunityIcons name="bank-outline" size={22} color={colors.accent} />
+                              <FontAwesome6 name="building-columns" size={22} color={colors.accent} />
                             </View>
                             <View style={styles.itemCopy}>
                               <Text style={styles.itemTitle}>{loan.name}</Text>
@@ -853,7 +853,7 @@ export default function BankScreen() {
                         >
                           <View style={styles.itemHead}>
                             <View style={[styles.iconWrap, { backgroundColor: 'rgba(245,185,66,0.18)' }]}>
-                              <MaterialCommunityIcons name="cash-refund" size={22} color={colors.accentAlt} />
+                              <FontAwesome6 name="money-bill-transfer" size={22} color={colors.accentAlt} />
                             </View>
                             <View style={styles.itemCopy}>
                               <Text style={styles.itemTitle}>{receivable.name}</Text>

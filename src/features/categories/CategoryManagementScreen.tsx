@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { FontAwesome6 } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { clearCategoryCache } from '@/features/categories/useCategories';
 import type { CategoryRow } from '@/features/categories/types';
@@ -123,7 +123,7 @@ const buildUsageBadges = ({
 function SwipeDeleteAction({ label, onPress }: { label: string; onPress: () => void }) {
   return (
     <Pressable style={({ pressed }) => [styles.swipeDeleteAction, pressed && styles.buttonPressed]} onPress={onPress}>
-      <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.text} />
+      <FontAwesome6 name="trash-can" size={18} color={colors.text} />
       <Text style={styles.swipeDeleteText}>{label}</Text>
     </Pressable>
   );
@@ -825,7 +825,7 @@ export default function CategoryManagementScreen() {
                                 }}
                               >
                                 <Text style={styles.transferPersonName}>{person.name}</Text>
-                                <MaterialCommunityIcons name="pencil-outline" size={18} color={colors.textMuted} />
+                                <FontAwesome6 name="pen" size={18} color={colors.textMuted} />
                               </Pressable>
                             </Swipeable>
                           ))}

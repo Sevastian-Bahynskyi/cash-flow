@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { FontAwesome6 } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from './tokens';
 
 type Props = {
@@ -71,7 +71,7 @@ export const NumericKeypad = memo(function NumericKeypad({ value, onChange, onCl
             accessibilityRole="button"
             accessibilityLabel="Hide keypad"
           >
-            <MaterialCommunityIcons name="keyboard-close-outline" size={16} color={colors.text} />
+            <FontAwesome6 name="delete-left" size={16} color={colors.text} />
             <Text style={styles.closeButtonText}>Hide</Text>
           </Pressable>
         </View>

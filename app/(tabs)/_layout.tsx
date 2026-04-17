@@ -1,23 +1,23 @@
 import { StyleSheet, View } from 'react-native';
 import { Tabs, usePathname } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { FontAwesome6 } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useComposer } from '@/features/transactions/composer/context/ComposerContext';
 import { FloatingActionButton } from '@/ui/FloatingActionButton';
 import { colors, spacing, typography } from '@/ui/tokens';
 
-const iconForRoute = (name: string, focused: boolean): keyof typeof MaterialCommunityIcons.glyphMap => {
+const iconForRoute = (name: string, focused: boolean): keyof typeof FontAwesome6.glyphMap => {
   switch (name) {
     case 'index':
-      return focused ? 'home-variant' : 'home-variant-outline';
+      return focused ? 'house' : 'house';
     case 'dashboard':
-      return focused ? 'chart-donut' : 'chart-donut-variant';
+      return focused ? 'chart-pie' : 'chart-pie';
     case 'shared':
-      return focused ? 'account-group' : 'account-group-outline';
+      return focused ? 'users' : 'users';
     case 'bank':
-      return focused ? 'bank' : 'bank-outline';
+      return focused ? 'building-columns' : 'building-columns';
     default:
-      return 'circle-outline';
+      return 'circle';
   }
 };
 
@@ -56,7 +56,7 @@ export default function TabsLayout() {
           tabBarStyle: styles.tabBar,
           tabBarLabelStyle: styles.tabLabel,
           tabBarIcon: ({ focused, color }) => (
-            <MaterialCommunityIcons
+            <FontAwesome6
               name={iconForRoute(route.name, focused)}
               size={22}
               color={color}

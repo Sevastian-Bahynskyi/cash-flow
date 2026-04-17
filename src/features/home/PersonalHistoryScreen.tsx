@@ -10,7 +10,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { FontAwesome6 } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import {
@@ -412,7 +412,7 @@ const PersonalHistoryRow = memo(function PersonalHistoryRow({
       </View>
       {selectionMode ? (
         <View style={[styles.selectionIndicator, selected && styles.selectionIndicatorActive]}>
-          {selected ? <MaterialCommunityIcons name="check" size={14} color={colors.text} /> : null}
+          {selected ? <FontAwesome6 name="check" size={14} color={colors.text} /> : null}
         </View>
       ) : null}
     </Pressable>
@@ -599,7 +599,7 @@ export default function PersonalHistoryScreen() {
         }
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
     [debouncedQuery, filters],
   );
 
@@ -891,7 +891,7 @@ export default function PersonalHistoryScreen() {
         />
 
         <View style={styles.searchWrap}>
-          <MaterialCommunityIcons name="magnify" size={18} color={colors.textMuted} />
+          <FontAwesome6 name="magnifying-glass" size={18} color={colors.textMuted} />
           <TextInput
             value={query}
             onChangeText={setQuery}
@@ -904,7 +904,7 @@ export default function PersonalHistoryScreen() {
           {isSearchPending ? <ActivityIndicator size="small" color={colors.textMuted} /> : null}
           {!isSearchPending && query.trim().length > 0 ? (
             <Pressable onPress={() => setQuery('')} hitSlop={12}>
-              <MaterialCommunityIcons name="close-circle" size={18} color={colors.textMuted} />
+              <FontAwesome6 name="circle-xmark" size={18} color={colors.textMuted} />
             </Pressable>
           ) : null}
         </View>

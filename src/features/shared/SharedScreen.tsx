@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { FontAwesome6 } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -244,7 +244,7 @@ export default function SharedScreen() {
         ? categoryMeta[row.category_id]?.label ?? 'Shared'
         : 'Shared',
     categoryColor: row.category_id ? getCategoryMetaDisplayColor(categoryMeta[row.category_id], row.kind) : colors.accent,
-    categoryIcon: row.category_id ? categoryMeta[row.category_id]?.icon ?? 'account-group-outline' : 'cash-plus',
+    categoryIcon: row.category_id ? categoryMeta[row.category_id]?.icon ?? 'users' : 'money-bill-trend-up',
   }));
 
   const sharedTopCategoryTotals = useMemo(() => {
@@ -491,7 +491,7 @@ export default function SharedScreen() {
                               runDetached(Haptics.selectionAsync(), 'shared.carousel.prev.haptics');
                             }}
                           >
-                            <MaterialCommunityIcons name="chevron-left" size={24} color={colors.text} />
+                            <FontAwesome6 name="chevron-left" size={24} color={colors.text} />
                           </Pressable>
                         ) : <View style={styles.heroArrowSpacer} />}
 
@@ -506,7 +506,7 @@ export default function SharedScreen() {
                               runDetached(Haptics.selectionAsync(), 'shared.carousel.next.haptics');
                             }}
                           >
-                            <MaterialCommunityIcons name="chevron-right" size={24} color={colors.text} />
+                            <FontAwesome6 name="chevron-right" size={24} color={colors.text} />
                           </Pressable>
                         ) : <View style={styles.heroArrowSpacer} />}
                       </View>
@@ -656,7 +656,7 @@ export default function SharedScreen() {
           ) : null}
         </ScrollView>
         <FloatingActionButton
-          icon="account-multiple-plus"
+          icon="user-plus"
           label="Shared"
           accessibilityLabel="Add shared transaction"
           onPress={() =>

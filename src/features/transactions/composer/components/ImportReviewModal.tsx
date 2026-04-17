@@ -1,7 +1,7 @@
 import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { FontAwesome6 } from '@expo/vector-icons';
 import { ScreenHeader } from '@/ui/ScreenHeader';
 import { CategorySheet } from '@/features/categories/CategorySheet';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
@@ -143,7 +143,7 @@ export function ImportReviewModal({
 
           {rows.length === 0 ? (
             <View style={styles.emptyState}>
-              <MaterialCommunityIcons name="image-off-outline" size={28} color={colors.textMuted} />
+              <FontAwesome6 name="image-slash" size={28} color={colors.textMuted} />
               <Text style={styles.emptyTitle}>No transactions left</Text>
               <Text style={styles.emptyText}>Close this review and pick another image when you want to try again.</Text>
             </View>

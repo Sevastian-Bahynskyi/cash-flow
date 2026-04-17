@@ -10,7 +10,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { FontAwesome6 } from '@expo/vector-icons';
 import { CategoryIcon } from '@/ui/CategoryIcon';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 import { currencyOptions } from '@/lib/currency';
@@ -160,10 +160,10 @@ export function TransactionCurrencySelector({
             appearance === 'inline'
               ? styles.currencyInlineTrigger
               : [
-                  styles.currencyTrigger,
-                  { backgroundColor: chipBackgroundColor(variant) },
-                  open && styles.currencyTriggerOpen,
-                ],
+                styles.currencyTrigger,
+                { backgroundColor: chipBackgroundColor(variant) },
+                open && styles.currencyTriggerOpen,
+              ],
             pressed && styles.rowPressed,
           ]}
           onPress={openMenu}
@@ -177,7 +177,7 @@ export function TransactionCurrencySelector({
           >
             {selectedCurrency?.label ?? value}
           </Text>
-          <MaterialCommunityIcons
+          <FontAwesome6
             name={open ? 'chevron-up' : 'chevron-down'}
             size={appearance === 'inline' ? 14 : 16}
             color={open && appearance === 'inline' ? colors.text : colors.textMuted}
@@ -311,10 +311,10 @@ export function SharedTopupParticipantSelector({
             appearance === 'inline'
               ? [styles.currencyInlineTrigger, dimmed && styles.sharedTopupTriggerDimmed]
               : [
-                  styles.currencyTrigger,
-                  { backgroundColor: chipBackgroundColor(variant) },
-                  (open || active) && styles.currencyTriggerOpen,
-                ],
+                styles.currencyTrigger,
+                { backgroundColor: chipBackgroundColor(variant) },
+                (open || active) && styles.currencyTriggerOpen,
+              ],
             pressed && styles.rowPressed,
           ]}
           onPress={openMenu}
@@ -328,7 +328,7 @@ export function SharedTopupParticipantSelector({
           >
             {labelPrefix ? `${labelPrefix}: ${selected.label}` : selected.label}
           </Text>
-          <MaterialCommunityIcons
+          <FontAwesome6
             name={open ? 'chevron-up' : 'chevron-down'}
             size={appearance === 'inline' ? 14 : 16}
             color={(open || active) && appearance === 'inline' ? colors.text : colors.textMuted}
@@ -401,7 +401,7 @@ export function TransactionPickerField({
   placeholder?: string;
   onPress: () => void;
   variant?: FieldVariant;
-  leadingMaterialIcon?: keyof typeof MaterialCommunityIcons.glyphMap;
+  leadingMaterialIcon?: keyof typeof FontAwesome6.glyphMap;
   leadingCategoryIcon?: string;
   leadingIconColor?: string;
   leadingIconBackgroundColor?: string;
@@ -431,7 +431,7 @@ export function TransactionPickerField({
             {leadingCategoryIcon ? (
               <CategoryIcon name={leadingCategoryIcon} size={18} color={leadingIconColor} />
             ) : (
-              <MaterialCommunityIcons name={leadingMaterialIcon as never} size={18} color={leadingIconColor} />
+              <FontAwesome6 name={leadingMaterialIcon as never} size={18} color={leadingIconColor} />
             )}
           </View>
         ) : null}
@@ -440,7 +440,7 @@ export function TransactionPickerField({
         </Text>
       </View>
       <View style={styles.fieldTrailing}>
-        {trailing ?? <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textMuted} />}
+        {trailing ?? <FontAwesome6 name="chevron-right" size={20} color={colors.textMuted} />}
       </View>
     </Pressable>
   );

@@ -7,7 +7,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { FontAwesome6 } from '@expo/vector-icons';
 import { useOverview } from '@/features/overview/useOverview';
 import { buildCategoryMeta } from '@/features/categories/helpers';
 import { formatMinor } from '@/lib/format';
@@ -86,58 +86,58 @@ export default function AlertsScreen() {
 
         {!data.isInitialLoading ? (
           <>
-        <View style={styles.hero}>
-          <Text style={styles.heroTitle}>Heads-up only</Text>
-          <Text style={styles.heroBody}>
-            This screen stays focused on live budget pressure and useful nudges inside the app.
-          </Text>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Budget alerts</Text>
-          {data.budgetAlerts.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>Nothing urgent right now. Budgets stay visible here once a category crosses 80%.</Text>
+            <View style={styles.hero}>
+              <Text style={styles.heroTitle}>Heads-up only</Text>
+              <Text style={styles.heroBody}>
+                This screen stays focused on live budget pressure and useful nudges inside the app.
+              </Text>
             </View>
-          ) : (
-            data.budgetAlerts.map((alert) => {
-              const tone = alert.level === 'critical' ? colors.danger : '#F5B942';
-              return (
-                <View key={alert.categoryId} style={[styles.alertCard, { borderColor: `${tone}66` }]}>
-                  <View style={styles.alertHead}>
-                    <MaterialCommunityIcons
-                      name={alert.level === 'critical' ? 'alert-circle' : 'alert-outline'}
-                      size={18}
-                      color={tone}
-                    />
-                    <Text style={styles.alertTitle}>
-                      {categoryMeta[alert.categoryId]?.label ?? alert.label}
-                    </Text>
-                  </View>
-                  <Text style={styles.alertMeta}>
-                    {formatMinor(alert.spentMinor)} of {formatMinor(alert.amountMinor)}
-                  </Text>
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Budget alerts</Text>
+              {data.budgetAlerts.length === 0 ? (
+                <View style={styles.emptyCard}>
+                  <Text style={styles.emptyText}>Nothing urgent right now. Budgets stay visible here once a category crosses 80%.</Text>
                 </View>
-              );
-            })
-          )}
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Helpful nudges</Text>
-          {hints.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>Your setup is in a good place. This screen will stay quiet unless it has something useful to say.</Text>
+              ) : (
+                data.budgetAlerts.map((alert) => {
+                  const tone = alert.level === 'critical' ? colors.danger : '#F5B942';
+                  return (
+                    <View key={alert.categoryId} style={[styles.alertCard, { borderColor: `${tone}66` }]}>
+                      <View style={styles.alertHead}>
+                        <FontAwesome6
+                          name={alert.level === 'critical' ? 'circle-exclamation' : 'circle-exclamation'}
+                          size={18}
+                          color={tone}
+                        />
+                        <Text style={styles.alertTitle}>
+                          {categoryMeta[alert.categoryId]?.label ?? alert.label}
+                        </Text>
+                      </View>
+                      <Text style={styles.alertMeta}>
+                        {formatMinor(alert.spentMinor)} of {formatMinor(alert.amountMinor)}
+                      </Text>
+                    </View>
+                  );
+                })
+              )}
             </View>
-          ) : (
-            hints.map((hint) => (
-              <View key={hint} style={styles.hintCard}>
-                <MaterialCommunityIcons name="lightbulb-outline" size={18} color={colors.accent} />
-                <Text style={styles.hintText}>{hint}</Text>
-              </View>
-            ))
-          )}
-        </View>
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Helpful nudges</Text>
+              {hints.length === 0 ? (
+                <View style={styles.emptyCard}>
+                  <Text style={styles.emptyText}>Your setup is in a good place. This screen will stay quiet unless it has something useful to say.</Text>
+                </View>
+              ) : (
+                hints.map((hint) => (
+                  <View key={hint} style={styles.hintCard}>
+                    <FontAwesome6 name="lightbulb" size={18} color={colors.accent} />
+                    <Text style={styles.hintText}>{hint}</Text>
+                  </View>
+                ))
+              )}
+            </View>
           </>
         ) : null}
       </ScrollView>

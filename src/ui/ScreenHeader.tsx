@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { FontAwesome6 } from '@expo/vector-icons';
 import { useNavigation, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing, typography } from './tokens';
@@ -46,7 +46,7 @@ export function ScreenHeader({
       <MotionView style={styles.leading} direction="left" distance={150} delayMs={30}>
         {back ? (
           <Pressable onPress={handleBack} hitSlop={12} style={styles.back}>
-            <MaterialCommunityIcons name="chevron-left" size={22} color={colors.text} />
+            <FontAwesome6 name="chevron-left" size={22} color={colors.text} />
           </Pressable>
         ) : null}
         <View>
@@ -70,7 +70,7 @@ export function ScreenHeader({
               hitSlop={12}
               style={[styles.iconButton, action.disabled && styles.iconButtonDisabled]}
             >
-              <MaterialCommunityIcons
+              <FontAwesome6
                 name={action.icon as never}
                 size={20}
                 color={action.tone === 'accent' && !action.disabled ? colors.accent : colors.text}

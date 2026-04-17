@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { FontAwesome6 } from '@expo/vector-icons';
 import { MotionView } from '@/ui/MotionView';
 import { ProgressBar } from '@/ui/ProgressBar';
 import { colors, radius, spacing, typography } from '@/ui/tokens';

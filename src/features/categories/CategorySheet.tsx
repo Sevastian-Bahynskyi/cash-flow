@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { FontAwesome6 } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 import { CategoryIcon } from '@/ui/CategoryIcon';
 import { getCategoryDisplayColor } from './helpers';
@@ -87,7 +87,7 @@ function CategoryRow({
         {budget ? (
           <Text style={[styles.budgetTag, { color: toneColor(budget.tone) }]}>{budget.label}</Text>
         ) : null}
-        {selected ? <MaterialCommunityIcons name="check" size={18} color={colors.accent} /> : null}
+        {selected ? <FontAwesome6 name="check" size={18} color={colors.accent} /> : null}
       </View>
     </Pressable>
   );

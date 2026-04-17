@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { FontAwesome6 } from '@expo/vector-icons';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 import { formatDateLabel, formatMinor } from '@/lib/format';
@@ -143,7 +143,7 @@ function TransactionRowCard({
         </View>
         {selectionMode ? (
           <View style={[styles.selectionIndicator, selected && styles.selectionIndicatorActive]}>
-            {selected ? <MaterialCommunityIcons name="check" size={14} color={colors.text} /> : null}
+            {selected ? <FontAwesome6 name="check" size={14} color={colors.text} /> : null}
           </View>
         ) : null}
       </Pressable>

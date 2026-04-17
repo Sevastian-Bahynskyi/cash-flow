@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { FontAwesome6 } from '@expo/vector-icons';
 import { buildCategoryMeta } from '@/features/categories/helpers';
 import { CategorySheet } from '@/features/categories/CategorySheet';
 import { useOverview } from '@/features/overview/useOverview';
@@ -208,13 +208,13 @@ export default function AiRulesScreen() {
                 style={({ pressed }) => [styles.newRuleButton, pressed && styles.rowPressed]}
                 onPress={openCreateRule}
               >
-                <MaterialCommunityIcons name="plus" size={18} color={colors.bg} />
+                <FontAwesome6 name="plus" size={18} color={colors.bg} />
                 <Text style={styles.newRuleButtonText}>Add rule</Text>
               </Pressable>
             </View>
 
             <View style={styles.searchWrap}>
-              <MaterialCommunityIcons name="magnify" size={18} color={colors.textMuted} />
+              <FontAwesome6 name="magnifying-glass" size={18} color={colors.textMuted} />
               <TextInput
                 value={searchQuery}
                 onChangeText={setSearchQuery}
@@ -226,7 +226,7 @@ export default function AiRulesScreen() {
               />
               {searchQuery.length > 0 ? (
                 <Pressable onPress={() => setSearchQuery('')} hitSlop={12}>
-                  <MaterialCommunityIcons name="close-circle" size={18} color={colors.textMuted} />
+                  <FontAwesome6 name="circle-xmark" size={18} color={colors.textMuted} />
                 </Pressable>
               ) : null}
             </View>
@@ -325,10 +325,10 @@ export default function AiRulesScreen() {
                     setDraft((current) =>
                       current
                         ? {
-                            ...current,
-                            kind,
-                            is_shared_topup: kind === 'expense' ? current.is_shared_topup : false,
-                          }
+                          ...current,
+                          kind,
+                          is_shared_topup: kind === 'expense' ? current.is_shared_topup : false,
+                        }
                         : current,
                     )
                   }
@@ -350,8 +350,8 @@ export default function AiRulesScreen() {
                   When blocked, the merchant no longer auto-suggests a category.
                 </Text>
               </View>
-              <MaterialCommunityIcons
-                name={draft?.is_blocked ? 'check-circle' : 'checkbox-blank-circle-outline'}
+              <FontAwesome6
+                name={draft?.is_blocked ? 'circle-check' : 'circle'}
                 size={22}
                 color={draft?.is_blocked ? colors.danger : colors.textMuted}
               />
@@ -368,7 +368,7 @@ export default function AiRulesScreen() {
                   {draft?.category_id ? categoryMeta[draft.category_id]?.label ?? 'Unknown category' : 'Choose a category'}
                 </Text>
               </View>
-              <MaterialCommunityIcons name="chevron-right" size={22} color={colors.textMuted} />
+              <FontAwesome6 name="chevron-right" size={22} color={colors.textMuted} />
             </Pressable>
 
             {draft?.kind === 'expense' ? (
@@ -386,8 +386,8 @@ export default function AiRulesScreen() {
                     Matching expenses will default to the shared top-up flow.
                   </Text>
                 </View>
-                <MaterialCommunityIcons
-                  name={draft?.is_shared_topup ? 'check-circle' : 'checkbox-blank-circle-outline'}
+                <FontAwesome6
+                  name={draft?.is_shared_topup ? 'circle-check' : 'circle'}
                   size={22}
                   color={draft?.is_shared_topup ? colors.accent : colors.textMuted}
                 />

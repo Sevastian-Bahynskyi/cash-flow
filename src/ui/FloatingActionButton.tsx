@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, ViewStyle } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { FontAwesome6 } from '@expo/vector-icons';
 import Animated, {
     Easing,
     interpolate,
@@ -14,7 +14,7 @@ const DEFAULT_HIDE_TRANSLATE = 110;
 const DEFAULT_TOGGLE_MS = 300;
 
 type FloatingActionButtonProps = {
-    icon: keyof typeof MaterialCommunityIcons.glyphMap;
+    icon: keyof typeof FontAwesome6.glyphMap;
     label: string;
     accessibilityLabel: string;
     onPress: () => void;
@@ -65,7 +65,7 @@ export function FloatingActionButton({
                 onPress={onPress}
                 style={({ pressed }) => [styles.fab, { backgroundColor }, pressed && styles.fabPressed]}
             >
-                <MaterialCommunityIcons name={icon} size={30} color={colors.text} />
+                <FontAwesome6 name={icon} size={24} color={colors.text} />
                 <Text style={styles.fabLabel}>{label}</Text>
             </Pressable>
         </Animated.View>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Keyboard,
+  KeyboardAvoidingView,
   LayoutAnimation,
   Modal,
   Platform,
@@ -14,7 +15,7 @@ import {
   UIManager,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { FontAwesome6 } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useOverview } from '@/features/overview/useOverview';
 import { buildCategoryMeta } from '@/features/categories/helpers';
@@ -376,6 +377,25 @@ export default function BudgetScreen() {
     }
   };
 
+  const openKeypad = (): void => {
+    Keyboard.dismiss();
+    setKeypadOpen(true);
+  };
+
+  const closeKeypad = (): void => {
+    setKeypadOpen(false);
+  };
+
+  useEffect(() => {
+    const subscription = Keyboard.addListener('keyboardDidShow', () => {
+      setKeypadOpen((current) => (current ? false : current));
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
   const openBudgetTransactions = (scope: { categoryId?: string; parentLabel?: string; categoryIds?: string[] }): void => {
     if (!selectedCycle) return;
     const params = new URLSearchParams();
@@ -414,7 +434,7 @@ export default function BudgetScreen() {
               }}
               disabled={cyclesWithTransactions.findIndex((cycle) => cycle.id === selectedCycle.id) <= 0}
             >
-              <MaterialCommunityIcons name="chevron-left" size={22} color={colors.text} />
+              <FontAwesome6 name="chevron-left" size={22} color={colors.text} />
             </Pressable>
             <View style={styles.cycleBody}>
               <Text style={styles.cycleLabel}>Cycle</Text>
@@ -431,7 +451,7 @@ export default function BudgetScreen() {
               }}
               disabled={cyclesWithTransactions.findIndex((cycle) => cycle.id === selectedCycle.id) >= cyclesWithTransactions.length - 1}
             >
-              <MaterialCommunityIcons name="chevron-right" size={22} color={colors.text} />
+              <FontAwesome6 name="chevron-right" size={22} color={colors.text} />
             </Pressable>
           </View>
         ) : null}
@@ -442,7 +462,7 @@ export default function BudgetScreen() {
           <>
 
             <View style={styles.searchWrap}>
-              <MaterialCommunityIcons name="magnify" size={18} color={colors.textMuted} />
+              <FontAwesome6 name="magnifying-glass" size={18} color={colors.textMuted} />
               <TextInput
                 value={query}
                 onChangeText={setQuery}
@@ -454,7 +474,7 @@ export default function BudgetScreen() {
               />
               {query.trim().length > 0 ? (
                 <Pressable onPress={() => setQuery('')} hitSlop={12}>
-                  <MaterialCommunityIcons name="close-circle" size={18} color={colors.textMuted} />
+                  <FontAwesome6 name="circle-xmark" size={18} color={colors.textMuted} />
                 </Pressable>
               ) : null}
             </View>
@@ -533,7 +553,7 @@ export default function BudgetScreen() {
                           style={({ pressed }) => [styles.chevronHitbox, pressed && styles.buttonPressed]}
                           onPress={() => toggleParent(parent.id)}
                         >
-                          <MaterialCommunityIcons
+                          <FontAwesome6
                             name={expanded ? 'chevron-up' : 'chevron-down'}
                             size={20}
                             color={colors.textMuted}
@@ -633,8 +653,16 @@ export default function BudgetScreen() {
               },
             ]}
           />
-          <View style={styles.modalContent}>
-            <View style={styles.modalBody}>
+          <KeyboardAvoidingView
+            style={styles.modalContent}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            keyboardVerticalOffset={spacing.md}
+          >
+            <ScrollView
+              style={styles.modalBody}
+              contentContainerStyle={styles.modalBodyContent}
+              keyboardShouldPersistTaps="handled"
+            >
               <Text style={styles.label}>Cycle target</Text>
               <View style={styles.amountCard}>
                 <Text style={styles.amountValue}>
@@ -658,6 +686,7 @@ export default function BudgetScreen() {
                 <RichTextEditor
                   value={draft.notes}
                   onChange={(value) => setDraft((current) => (current ? { ...current, notes: value } : current))}
+                  onFocus={closeKeypad}
                   placeholder="Add notes with **bold** formatting..."
                 />
               ) : null}
@@ -676,30 +705,27 @@ export default function BudgetScreen() {
               >
                 <Text style={styles.secondaryButtonText}>No budget</Text>
               </Pressable>
-            </View>
+            </ScrollView>
 
             {keypadOpen ? (
               <NumericKeypad
                 value={draft?.amount ?? ''}
                 onChange={(value) => setDraft((current) => (current ? { ...current, amount: value } : current))}
-                onClose={() => setKeypadOpen(false)}
+                onClose={closeKeypad}
               />
             ) : (
               <View style={styles.keyboardDock}>
                 <Pressable
                   style={({ pressed }) => [styles.keyboardDockButton, pressed && styles.buttonPressed]}
-                  onPress={() => {
-                    Keyboard.dismiss();
-                    setKeypadOpen(true);
-                  }}
+                  onPress={openKeypad}
                 >
-                  <MaterialCommunityIcons name="keyboard-outline" size={18} color={colors.text} />
+                  <FontAwesome6 name="keyboard" size={18} color={colors.text} />
                   <Text style={styles.keyboardDockText}>Open keypad</Text>
-                  <MaterialCommunityIcons name="chevron-up" size={18} color={colors.text} />
+                  <FontAwesome6 name="chevron-up" size={18} color={colors.text} />
                 </Pressable>
               </View>
             )}
-          </View>
+          </KeyboardAvoidingView>
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
@@ -852,8 +878,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   modalSafeArea: { flex: 1, backgroundColor: colors.bg },
-  modalContent: { flex: 1, justifyContent: 'space-between' },
-  modalBody: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, gap: spacing.md },
+  modalContent: { flex: 1 },
+  modalBody: { flex: 1 },
+  modalBodyContent: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xl,
+    gap: spacing.md,
+  },
   label: {
     ...typography.label,
     color: colors.textMuted,

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { FontAwesome6 } from '@expo/vector-icons';
 import Animated, {
   cancelAnimation,
   Extrapolation,
@@ -485,7 +485,7 @@ export default function HomeScreen() {
           title="Home"
           subtitle="Personal flow"
           actions={[
-            { icon: 'bell-outline', onPress: () => router.push('/alerts') },
+            { icon: 'bell', onPress: () => router.push('/alerts') },
             { icon: 'brain', onPress: () => router.push('/ai-rules') }
           ]}
         />
@@ -590,7 +590,7 @@ export default function HomeScreen() {
                             Haptics.selectionAsync().catch(() => undefined);
                           }}
                         >
-                          <MaterialCommunityIcons name="chevron-left" size={24} color={colors.text} />
+                          <FontAwesome6 name="chevron-left" size={24} color={colors.text} />
                         </Pressable>
                       ) : <View style={styles.heroArrowSpacer} />}
                       {hasNext ? (
@@ -604,7 +604,7 @@ export default function HomeScreen() {
                             Haptics.selectionAsync().catch(() => undefined);
                           }}
                         >
-                          <MaterialCommunityIcons name="chevron-right" size={24} color={colors.text} />
+                          <FontAwesome6 name="chevron-right" size={24} color={colors.text} />
                         </Pressable>
                       ) : <View style={styles.heroArrowSpacer} />}
                     </View>
@@ -622,7 +622,7 @@ export default function HomeScreen() {
                     router.push(selectedCycle ? `/budgets?cycleId=${encodeURIComponent(selectedCycle.id)}` : '/budgets');
                   }}
                 >
-                  <MaterialCommunityIcons name="target" size={20} color={colors.accent} />
+                  <FontAwesome6 name="bullseye" size={20} color={colors.accent} />
                   <Text style={styles.quickTitle}>Budgets</Text>
                 </Pressable>
               </MotionView>
@@ -634,7 +634,7 @@ export default function HomeScreen() {
                     router.push('/categories');
                   }}
                 >
-                  <MaterialCommunityIcons name="shape-outline" size={20} color={colors.success} />
+                  <FontAwesome6 name="shapes" size={20} color={colors.success} />
                   <Text style={styles.quickTitle}>Categories</Text>
                 </Pressable>
               </MotionView>

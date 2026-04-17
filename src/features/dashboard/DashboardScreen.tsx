@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { FontAwesome6 } from '@expo/vector-icons';
 import { BarChart, LineChart } from 'react-native-gifted-charts';
 import { runDetached } from '@/lib/async';
 import { MotionScope } from '@/ui/MotionScope';
@@ -29,14 +29,14 @@ function MetricCard({
   value,
   tone = colors.text,
 }: {
-  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  icon: keyof typeof FontAwesome6.glyphMap;
   label: string;
   value: string;
   tone?: string;
 }) {
   return (
     <View style={styles.metricCard}>
-      <MaterialCommunityIcons name={icon} size={18} color={tone} />
+      <FontAwesome6 name={icon} size={18} color={tone} />
       <Text style={styles.metricLabel}>{label}</Text>
       <Text style={[styles.metricValue, { color: tone }]} numberOfLines={1}>
         {value}
@@ -203,7 +203,7 @@ export default function DashboardScreen() {
                         Haptics.selectionAsync().catch(() => undefined);
                       }}
                     >
-                      <MaterialCommunityIcons name="chevron-left" size={24} color={colors.text} />
+                      <FontAwesome6 name="chevron-left" size={24} color={colors.text} />
                     </Pressable>
                   ) : (
                     <View style={styles.heroArrowSpacer} />
@@ -219,7 +219,7 @@ export default function DashboardScreen() {
                         Haptics.selectionAsync().catch(() => undefined);
                       }}
                     >
-                      <MaterialCommunityIcons name="chevron-right" size={24} color={colors.text} />
+                      <FontAwesome6 name="chevron-right" size={24} color={colors.text} />
                     </Pressable>
                   ) : (
                     <View style={styles.heroArrowSpacer} />
@@ -240,17 +240,17 @@ export default function DashboardScreen() {
             <View style={styles.section}>
               <View style={styles.metricsGrid}>
                 <MotionView style={styles.metricMotion} direction="left" distance={130} delayMs={140}>
-                  <MetricCard icon="cash-plus" label="Income" value={formatMinor(analytics.summary.incomeMinor)} tone={colors.success} />
+                  <MetricCard icon="money-bill-trend-up" label="Income" value={formatMinor(analytics.summary.incomeMinor)} tone={colors.success} />
                 </MotionView>
                 <MotionView style={styles.metricMotion} direction="right" distance={130} delayMs={180}>
-                  <MetricCard icon="cash-minus" label="Outflow" value={formatMinor(analytics.summary.outflowMinor)} tone={colors.accentAlt} />
+                  <MetricCard icon="money-bill-wave" label="Outflow" value={formatMinor(analytics.summary.outflowMinor)} tone={colors.accentAlt} />
                 </MotionView>
                 <MotionView style={styles.metricMotion} direction="left" distance={130} delayMs={220}>
-                  <MetricCard icon="trending-up" label="Net flow" value={formatMinor(analytics.summary.cashFlowMinor)} tone={analytics.summary.cashFlowMinor >= 0 ? colors.success : colors.danger} />
+                  <MetricCard icon="chart-line" label="Net flow" value={formatMinor(analytics.summary.cashFlowMinor)} tone={analytics.summary.cashFlowMinor >= 0 ? colors.success : colors.danger} />
                 </MotionView>
                 <MotionView style={styles.metricMotion} direction="right" distance={130} delayMs={260}>
                   <MetricCard
-                    icon="star-circle-outline"
+                    icon="star"
                     label="Largest category"
                     value={analytics.summary.largestCategory ? analytics.summary.largestCategory.label : 'No expense data'}
                     tone={analytics.summary.largestCategory?.color ?? colors.text}

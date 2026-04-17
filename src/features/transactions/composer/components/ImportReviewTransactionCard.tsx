@@ -1,5 +1,5 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { FontAwesome6 } from '@expo/vector-icons';
 import { NumericKeypad } from '@/ui/NumericKeypad';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 import { formatDateLabel } from '@/lib/format';
@@ -77,13 +77,13 @@ export function ImportReviewTransactionCard({
           <Text style={styles.cardTitle}>Transaction {index + 1}</Text>
           {categoryFailed ? (
             <View style={styles.warningBadge}>
-              <MaterialCommunityIcons name="alert-outline" size={14} color={colors.accentAlt} />
+              <FontAwesome6 name="triangle-exclamation" size={14} color={colors.accentAlt} />
               <Text style={styles.warningBadgeText}>Needs category</Text>
             </View>
           ) : null}
         </View>
         <Pressable onPress={onRemove} hitSlop={12}>
-          <MaterialCommunityIcons name="close" size={18} color={colors.textMuted} />
+          <FontAwesome6 name="xmark" size={18} color={colors.textMuted} />
         </Pressable>
       </View>
 
@@ -101,7 +101,7 @@ export function ImportReviewTransactionCard({
         text={formatDateLabel(row.occurredOn)}
         variant="card"
         leadingMaterialIcon="calendar-month-outline"
-        trailing={<MaterialCommunityIcons name="calendar-month-outline" size={18} color={colors.textMuted} />}
+        trailing={<FontAwesome6 name="calendar" size={18} color={colors.textMuted} />}
         onPress={onOpenDatePicker}
       />
 
@@ -138,7 +138,7 @@ export function ImportReviewTransactionCard({
         text={formatAmountDisplay(row.amount)}
         variant="card"
         leadingMaterialIcon="cash"
-        trailing={<MaterialCommunityIcons name="keyboard-outline" size={18} color={colors.textMuted} />}
+        trailing={<FontAwesome6 name="keyboard" size={18} color={colors.textMuted} />}
         onPress={onToggleAmountPicker}
       />
 
@@ -150,7 +150,7 @@ export function ImportReviewTransactionCard({
 
       <Pressable style={({ pressed }) => [styles.showMoreButton, pressed && styles.rowPressed]} onPress={onToggleExpanded}>
         <Text style={styles.showMoreText}>{expanded ? 'Show less' : 'Show more'}</Text>
-        <MaterialCommunityIcons
+        <FontAwesome6
           name={expanded ? 'chevron-up' : 'chevron-down'}
           size={16}
           color={colors.textMuted}

@@ -18,7 +18,7 @@ import DateTimePicker, { type DateTimePickerEvent } from '@react-native-communit
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { FontAwesome6 } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 import { NumericKeypad } from '@/ui/NumericKeypad';
 import { supabase } from '@/lib/supabase';
@@ -1383,7 +1383,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
                         : formatMinor(row.amount_minor)}
                     </Text>
                   </View>
-                  <MaterialCommunityIcons name="history" size={18} color={colors.textMuted} />
+                  <FontAwesome6 name="clock" size={18} color={colors.textMuted} />
                 </Pressable>
               ))}
             </View>
@@ -1396,7 +1396,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
                 text={formatDateLabel(date)}
                 onPress={openDatePicker}
                 leadingMaterialIcon="calendar-month-outline"
-                trailing={<MaterialCommunityIcons name="chevron-down" size={18} color={colors.textMuted} />}
+                trailing={<FontAwesome6 name="chevron-down" size={18} color={colors.textMuted} />}
               />
             </View>
             <Pressable
@@ -1406,7 +1406,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
               <View style={styles.detailValueRow}>
                 <Text style={styles.flagValue}>{formatCountryFlag(countryIso)}</Text>
               </View>
-              <MaterialCommunityIcons name="chevron-down" size={18} color={colors.textMuted} />
+              <FontAwesome6 name="chevron-down" size={18} color={colors.textMuted} />
             </Pressable>
           </View>
 
@@ -1508,7 +1508,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
                 {imageImportBusy ? (
                   <ActivityIndicator size="small" color={colors.text} />
                 ) : (
-                  <MaterialCommunityIcons name="image-plus" size={22} color={colors.text} />
+                  <FontAwesome6 name="image-plus" size={22} color={colors.text} />
                 )}
               </Pressable>
 
@@ -1527,7 +1527,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
                 {csvImportBusy ? (
                   <ActivityIndicator size="small" color={colors.text} />
                 ) : (
-                  <MaterialCommunityIcons name="file-delimited-outline" size={22} color={colors.text} />
+                  <FontAwesome6 name="file-csv" size={22} color={colors.text} />
                 )}
               </Pressable>
             </View>
@@ -1589,7 +1589,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
                 style={({ pressed }) => [styles.keypadHideButton, pressed && styles.rowPressed]}
                 onPress={closeKeypad}
               >
-                <MaterialCommunityIcons name="keyboard-close-outline" size={16} color={colors.text} />
+                <FontAwesome6 name="delete-left" size={16} color={colors.text} />
                 <Text style={styles.keypadHideText}>Hide</Text>
               </Pressable>
             </View>
@@ -1601,9 +1601,9 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
               style={({ pressed }) => [styles.keyboardDockButton, pressed && styles.rowPressed]}
               onPress={openKeypad}
             >
-              <MaterialCommunityIcons name="keyboard-outline" size={18} color={colors.text} />
+              <FontAwesome6 name="keyboard" size={18} color={colors.text} />
               <Text style={styles.keyboardDockText}>Open keypad</Text>
-              <MaterialCommunityIcons name="chevron-up" size={18} color={colors.text} />
+              <FontAwesome6 name="chevron-up" size={18} color={colors.text} />
             </Pressable>
           </View>
         )}
@@ -1724,7 +1724,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
           <View style={styles.successOverlay}>
             <View style={styles.successCard}>
               <View style={styles.successIconWrap}>
-                <MaterialCommunityIcons name="check" size={28} color={colors.success} />
+                <FontAwesome6 name="check" size={28} color={colors.success} />
               </View>
               <Text style={styles.successTitle}>{saveState.title}</Text>
               {!saveState.editing ? (
