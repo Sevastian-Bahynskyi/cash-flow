@@ -1,4 +1,4 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { FontAwesome6 } from '@expo/vector-icons';
 import { Path, Svg } from 'react-native-svg';
 import {
   siAirbnb,
@@ -52,10 +52,72 @@ const brandPaths: Record<string, string> = {
   'brand:youtube-music': siYoutubemusic.path,
 };
 
+const legacyToFontAwesome6: Record<string, string> = {
+  'shape-outline': 'shapes',
+  'cart-outline': 'cart-shopping',
+  'storefront-outline': 'store',
+  'silverware-fork-knife': 'utensils',
+  'coffee-outline': 'mug-saucer',
+  'train-car': 'train',
+  bus: 'bus',
+  taxi: 'taxi',
+  'gas-station-outline': 'gas-pump',
+  'home-outline': 'house',
+  'home-city-outline': 'city',
+  'flash-outline': 'bolt',
+  wifi: 'wifi',
+  cellphone: 'mobile-screen-button',
+  'meter-gas-outline': 'gauge-high',
+  'car-outline': 'car',
+  'shield-car': 'shield-halved',
+  'heart-pulse': 'heart-pulse',
+  pill: 'pills',
+  stethoscope: 'stethoscope',
+  'movie-open-outline': 'film',
+  'party-popper': 'champagne-glasses',
+  'shopping-outline': 'bag-shopping',
+  'tshirt-crew-outline': 'shirt',
+  laptop: 'laptop',
+  'gift-outline': 'gift',
+  airplane: 'plane',
+  'book-open-variant': 'book-open',
+  dumbbell: 'dumbbell',
+  'paw-outline': 'paw',
+  paw: 'paw',
+  'baby-face-outline': 'baby',
+  'lotion-outline': 'pump-soap',
+  'receipt-text-outline': 'receipt',
+  'wallet-outline': 'wallet',
+  'piggy-bank-outline': 'piggy-bank',
+  'bank-outline': 'building-columns',
+  'gamepad-variant-outline': 'gamepad',
+  'dots-grid': 'grip',
+  'hammer-wrench': 'screwdriver-wrench',
+  'music-note-outline': 'music',
+  'cash-plus': 'money-bill-trend-up',
+  'cash-refund': 'money-bill-transfer',
+  'swap-horizontal': 'right-left',
+  'briefcase-outline': 'briefcase',
+  'chart-line': 'chart-line',
+  'account-cash-outline': 'sack-dollar',
+  parking: 'square-parking',
+  'bank-transfer': 'money-bill-transfer',
+  'palette-outline': 'palette',
+  'school-outline': 'graduation-cap',
+  'shield-check-outline': 'shield-halved',
+  'heart-outline': 'heart',
+  'spray-bottle': 'pump-soap',
+  'file-document-outline': 'file-lines',
+  'dots-horizontal-circle-outline': 'ellipsis',
+  beach: 'umbrella-beach',
+  'cellphone-marker': 'mobile-screen-button',
+};
+
 export function CategoryIcon({ name, size, color }: Props) {
   const path = brandPaths[name];
   if (!path) {
-    return <MaterialCommunityIcons name={name as never} size={size} color={color} />;
+    const resolvedName = legacyToFontAwesome6[name] ?? name;
+    return <FontAwesome6 name={resolvedName as never} size={size} color={color} />;
   }
 
   return (

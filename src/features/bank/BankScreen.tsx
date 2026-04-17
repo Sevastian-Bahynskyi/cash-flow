@@ -22,6 +22,7 @@ import type { SavingsAction } from '@/features/savings/types';
 import { runDetached } from '@/lib/async';
 import { formatDateLabel, formatMinor } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
+import { CategoryIcon } from '@/ui/CategoryIcon';
 import { MotionScope } from '@/ui/MotionScope';
 import { MotionView } from '@/ui/MotionView';
 import { ProgressBar } from '@/ui/ProgressBar';
@@ -611,7 +612,7 @@ export default function BankScreen() {
                 >
                   <View style={styles.itemHead}>
                     <View style={[styles.iconWrap, { backgroundColor: `${account.color}22` }]}>
-                      <MaterialCommunityIcons name={account.icon as never} size={22} color={account.color} />
+                      <CategoryIcon name={account.icon} size={22} color={account.color} />
                     </View>
                     <View style={styles.itemCopy}>
                       <Text style={styles.itemTitle}>{account.name}</Text>
@@ -971,7 +972,7 @@ export default function BankScreen() {
                     ]}
                     onPress={() => setAccountDraft((current) => (current ? { ...current, icon } : current))}
                   >
-                    <MaterialCommunityIcons name={icon as never} size={18} color={active ? colors.text : colors.textMuted} />
+                    <CategoryIcon name={icon} size={18} color={active ? colors.text : colors.textMuted} />
                   </Pressable>
                 );
               })}
