@@ -27,7 +27,7 @@ export const isOtherIncomeCategoryOption = (option: CategoryOption | null | unde
 export const isAllowedIncomeCategoryOption = (option: CategoryOption | null | undefined): boolean =>
   Boolean(
     option &&
-    (isSalaryCategoryOption(option) ||
+    (isIncomeCategoryOption(option) ||
       isTransferCategoryOption(option) ||
       isOtherIncomeCategoryOption(option)),
   );
@@ -73,7 +73,7 @@ export const normalizeIncomeCategoryOption = (
   option: CategoryOption | null | undefined,
   options: readonly CategoryOption[],
 ): CategoryOption | null => {
-  if (option && isIncomeCategoryOption(option)) return option;
+  if (option && (isIncomeCategoryOption(option) || isTransferCategoryOption(option))) return option;
   return findOtherIncomeCategoryOption(options);
 };
 
