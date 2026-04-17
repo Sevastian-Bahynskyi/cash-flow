@@ -341,6 +341,22 @@ export default function BudgetScreen() {
 
   const remainingAfterBudgetsMinor = cycleSalaryMinor - totalDefinedBudgetsMinor;
 
+  const realAvailableMoneyMinor = useMemo(() => {
+    if (!selectedCycle) return 0;
+    const allTransactionsMinor = data.transactions
+      .filter(
+        (row) =>
+          row.occurred_on >= selectedCycle.startOn &&
+          (selectedCycle.endOnExclusive === null || row.occurred_on < selectedCycle.endOnExclusive),
+      )
+      .reduce((sum, row) => {
+        if (row.kind === 'income') return sum + row.amount_minor;
+        if (row.kind === 'expense') return sum - row.amount_minor;
+        return sum;
+      }, 0);
+    return cycleSalaryMinor - allTransactionsMinor;
+  }, [cycleSalaryMinor, data.transactions, selectedCycle]);
+
   const unbudgetedParentUsage = useMemo(() => {
     if (!selectedCycle) return [] as { id: string; label: string; color: string }[];
     const usedParentIds = new Set<string>();
@@ -721,6 +737,17 @@ export default function BudgetScreen() {
                       ]}
                     >
                       {formatMinor(remainingAfterBudgetsMinor)}
+                    </Text>
+                  </View>
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>Real available to save</Text>
+                    <Text
+                      style={[
+                        styles.summaryValue,
+                        realAvailableMoneyMinor < 0 ? styles.summaryValueNegative : styles.summaryValuePositive,
+                      ]}
+                    >
+                      {formatMinor(realAvailableMoneyMinor)}
                     </Text>
                   </View>
 
