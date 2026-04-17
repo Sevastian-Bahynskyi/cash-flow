@@ -27,6 +27,7 @@ import {
 } from '@/features/transfers/people';
 import type { TransferPersonRow } from '@/features/transfers/types';
 import { useOverview } from '@/features/overview/useOverview';
+import type { BudgetRow } from '@/features/overview/useOverview';
 import { buildBudgetStateByCategory } from '@/features/budgets/helpers';
 import { runDetached } from '@/lib/async';
 import { supabase } from '@/lib/supabase';
@@ -190,7 +191,7 @@ export default function CategoryManagementScreen() {
     [data.activeCycle, data.budgets, data.categories, data.transactions],
   );
   const activeCycleBudgetByCategoryId = useMemo(() => {
-    const map = new Map<string, (typeof data.budgets)[number]>();
+    const map = new Map<string, BudgetRow>();
     if (!data.activeCycle) return map;
     for (const budget of data.budgets) {
       if (budget.salary_cycle_id === data.activeCycle.id) {
@@ -310,8 +311,8 @@ export default function CategoryManagementScreen() {
       readOnly: category.is_system && category.level === 1,
       canDelete: !category.is_system,
       saveMode: isSystemSubcategory ? 'override' : 'category',
-      budgetId: activeCycleBudgetByCategoryId.get(category.id)?.id,
-      budgetAmount: minorToAmountInput(activeCycleBudgetByCategoryId.get(category.id)?.amount_minor),
+      budgetId: category.level === 1 ? activeCycleBudgetByCategoryId.get(category.id)?.id : undefined,
+      budgetAmount: category.level === 1 ? minorToAmountInput(activeCycleBudgetByCategoryId.get(category.id)?.amount_minor) : '',
     });
   };
 
@@ -388,12 +389,18 @@ export default function CategoryManagementScreen() {
           return;
         }
 
+        if (typeof insertedCategory.id !== 'string') {
+          Alert.alert('Could not create category', 'Invalid category identifier returned.');
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          return;
+        }
+
         savedCategoryId = insertedCategory.id;
         clearCategoryCache();
         await data.reload();
       }
 
-      if (savedCategoryId && data.activeCycle) {
+      if (savedCategoryId && data.activeCycle && draft.level === 1) {
         if (resolvedBudgetMinor !== null) {
           const { error } = await supabase.from('budgets').upsert(
             {
@@ -607,6 +614,9 @@ export default function CategoryManagementScreen() {
             <View style={styles.section}>
               {visibleParents.map(({ parent, children, usageBadges }) => (
                 <View key={parent.id} style={styles.parentCard}>
+                  {(() => {
+                    const parentBudgetState = budgetStates[parent.id] ?? null;
+                    return (
                   <View style={styles.parentHead}>
                     <View
                       style={[
@@ -635,35 +645,37 @@ export default function CategoryManagementScreen() {
                         <Text style={styles.parentMeta}>
                           {parent.is_system ? 'System category' : 'Custom category'}
                         </Text>
-                        {budgetStates[parent.id] ? (
+                        {parentBudgetState ? (
                           <Text
                             style={[
                               styles.budgetTag,
-                              { color: toneForBudget(budgetStates[parent.id]?.tone ?? null) },
+                              { color: toneForBudget(parentBudgetState.tone) },
                             ]}
                           >
-                            Budget {Math.round((budgetStates[parent.id]?.ratio ?? 0) * 100)}%
+                            Budget {Math.round(parentBudgetState.ratio * 100)}%
                           </Text>
                         ) : null}
                       </View>
-                      {budgetStates[parent.id] ? (
+                      {parentBudgetState ? (
                         <View style={styles.progressWrap}>
                           <View style={styles.progressRow}>
                             <Text style={styles.progressText}>
-                              {formatMinor(budgetStates[parent.id].spentMinor)} of {formatMinor(budgetStates[parent.id].amountMinor)}
+                              {formatMinor(parentBudgetState.spentMinor)} of {formatMinor(parentBudgetState.amountMinor)}
                             </Text>
-                            <Text style={[styles.budgetTag, { color: toneForBudget(budgetStates[parent.id]?.tone ?? null) }]}>
-                              Budget {Math.round((budgetStates[parent.id]?.ratio ?? 0) * 100)}%
+                            <Text style={[styles.budgetTag, { color: toneForBudget(parentBudgetState.tone) }]}>
+                              Budget {Math.round(parentBudgetState.ratio * 100)}%
                             </Text>
                           </View>
                           <ProgressBar
-                            value={budgetStates[parent.id].ratio}
-                            color={toneForBudget(budgetStates[parent.id]?.tone ?? null)}
+                            value={parentBudgetState.ratio}
+                            color={toneForBudget(parentBudgetState.tone)}
                           />
                         </View>
                       ) : null}
                     </View>
                   </View>
+                    );
+                  })()}
 
                   <View style={styles.parentActions}>
                     <Pressable
@@ -684,6 +696,7 @@ export default function CategoryManagementScreen() {
 
                   <View style={styles.childList}>
                     {children.map((child) => {
+                      const childBudgetState = budgetStates[child.id] ?? null;
                       const displayName = getDisplayCategoryName(parent.name, child.name);
                       const usageBadges = buildUsageBadges({
                         parentName: parent.name,
@@ -740,24 +753,24 @@ export default function CategoryManagementScreen() {
                               </View>
                             </View>
                           </Pressable>
-                          {budgetStates[child.id] ? (
+                          {childBudgetState ? (
                             <View style={styles.childBudgetWrap}>
                               <View style={styles.progressRow}>
                                 <Text style={styles.progressText}>
-                                  {formatMinor(budgetStates[child.id].spentMinor)} of {formatMinor(budgetStates[child.id].amountMinor)}
+                                  {formatMinor(childBudgetState.spentMinor)} of {formatMinor(childBudgetState.amountMinor)}
                                 </Text>
                                 <Text
                                   style={[
                                     styles.budgetTag,
-                                    { color: toneForBudget(budgetStates[child.id]?.tone ?? null) },
+                                    { color: toneForBudget(childBudgetState.tone) },
                                   ]}
                                 >
-                                  {Math.round((budgetStates[child.id]?.ratio ?? 0) * 100)}%
+                                  {Math.round(childBudgetState.ratio * 100)}%
                                 </Text>
                               </View>
                               <ProgressBar
-                                value={budgetStates[child.id].ratio}
-                                color={toneForBudget(budgetStates[child.id]?.tone ?? null)}
+                                value={childBudgetState.ratio}
+                                color={toneForBudget(childBudgetState.tone)}
                               />
                             </View>
                           ) : null}
@@ -914,7 +927,7 @@ export default function CategoryManagementScreen() {
                 </View>
               )}
 
-              {activeTab === 'expense' ? (
+              {activeTab === 'expense' && draft?.level === 1 ? (
                 <>
                   <Text style={styles.label}>Budget</Text>
                   <View style={styles.budgetRow}>

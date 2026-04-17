@@ -30,7 +30,6 @@ import { CategoryIcon } from '@/ui/CategoryIcon';
 import { NumericKeypad } from '@/ui/NumericKeypad';
 import { SkeletonBlock, SkeletonCard } from '@/ui/Skeleton';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
-import type { BudgetState } from '@/features/budgets/helpers';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -174,10 +173,21 @@ export default function BudgetScreen() {
   );
   const amountDisplayState = useMemo(() => highlightedAmount(draft?.amount ?? ''), [draft?.amount]);
   const incomeParentIds = useMemo(() => findIncomeParentIds(data.categories), [data.categories]);
+  const expenseParentIds = useMemo(
+    () => new Set(data.categories.filter((category) => category.level === 1 && !isIncomeCategoryRow(category, incomeParentIds)).map((category) => category.id)),
+    [data.categories, incomeParentIds],
+  );
+  const parentByCategoryId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const category of data.categories) {
+      if (category.level === 2 && category.parent_id) map.set(category.id, category.parent_id);
+    }
+    return map;
+  }, [data.categories]);
 
   const selectedCycleBudgets = useMemo(
-    () => data.budgets.filter((budget) => budget.salary_cycle_id === selectedCycle?.id),
-    [data.budgets, selectedCycle?.id],
+    () => data.budgets.filter((budget) => budget.salary_cycle_id === selectedCycle?.id && expenseParentIds.has(budget.category_id)),
+    [data.budgets, expenseParentIds, selectedCycle?.id],
   );
 
   const budgetByCategoryId = useMemo(
@@ -199,22 +209,9 @@ export default function BudgetScreen() {
           category: child,
           label: categoryMeta[child.id]?.label ?? child.name,
           icon: child.icon,
-          budget: budgetByCategoryId.get(child.id) ?? null,
-          state: budgetStates[child.id] ?? null,
         }));
-        const hasBudget = childRows.some((child) => child.state !== null);
-        const parentAmountMinor = childRows.reduce((sum, child) => sum + (child.state?.amountMinor ?? 0), 0);
-        const parentSpentMinor = childRows.reduce((sum, child) => sum + (child.state?.spentMinor ?? 0), 0);
-        const parentRatio = parentAmountMinor === 0 ? 0 : parentSpentMinor / parentAmountMinor;
-        const parentState: BudgetState | null = hasBudget
-          ? {
-            categoryId: parent.id,
-            amountMinor: parentAmountMinor,
-            spentMinor: parentSpentMinor,
-            ratio: parentRatio,
-            tone: parentRatio >= 1 ? 'critical' : parentRatio >= 0.8 ? 'warning' : 'neutral',
-          }
-          : null;
+        const parentState = budgetStates[parent.id] ?? null;
+        const hasBudget = parentState !== null;
         return {
           parent,
           label: categoryMeta[parent.id]?.label ?? parent.name,
@@ -228,7 +225,51 @@ export default function BudgetScreen() {
         if (a.hasBudget !== b.hasBudget) return Number(b.hasBudget) - Number(a.hasBudget);
         return a.label.localeCompare(b.label);
       });
-  }, [budgetByCategoryId, budgetStates, categoryMeta, data.categories, incomeParentIds]);
+  }, [budgetStates, categoryMeta, data.categories, incomeParentIds]);
+
+  const cycleSalaryMinor = useMemo(() => {
+    if (!selectedCycle) return 0;
+    return data.transactions
+      .filter(
+        (row) =>
+          row.kind === 'income' &&
+          row.is_salary &&
+          row.occurred_on >= selectedCycle.startOn &&
+          (selectedCycle.endOnExclusive === null || row.occurred_on < selectedCycle.endOnExclusive),
+      )
+      .reduce((sum, row) => sum + row.amount_minor, 0);
+  }, [data.transactions, selectedCycle]);
+
+  const totalDefinedBudgetsMinor = useMemo(
+    () => selectedCycleBudgets.reduce((sum, budget) => sum + budget.amount_minor, 0),
+    [selectedCycleBudgets],
+  );
+
+  const remainingAfterBudgetsMinor = cycleSalaryMinor - totalDefinedBudgetsMinor;
+
+  const unbudgetedParentUsage = useMemo(() => {
+    if (!selectedCycle) return [] as { id: string; label: string; color: string }[];
+    const usedParentIds = new Set<string>();
+    for (const row of data.transactions) {
+      if (row.kind !== 'expense' || row.shared || row.is_shared_topup || !row.category_id) continue;
+      if (row.occurred_on < selectedCycle.startOn) continue;
+      if (selectedCycle.endOnExclusive !== null && row.occurred_on >= selectedCycle.endOnExclusive) continue;
+      const parentId = parentByCategoryId.get(row.category_id) ?? row.category_id;
+      if (expenseParentIds.has(parentId)) usedParentIds.add(parentId);
+    }
+
+    return [...usedParentIds]
+      .filter((parentId) => !budgetByCategoryId.has(parentId))
+      .map((parentId) => {
+        const meta = categoryMeta[parentId];
+        return {
+          id: parentId,
+          label: meta?.label ?? 'Category',
+          color: meta?.color ?? colors.textMuted,
+        };
+      })
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [budgetByCategoryId, categoryMeta, data.transactions, expenseParentIds, parentByCategoryId, selectedCycle]);
 
   const filteredRows = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -274,6 +315,7 @@ export default function BudgetScreen() {
 
   const saveBudget = async (): Promise<void> => {
     if (!draft || !data.userId || !selectedCycle) return;
+    if (!expenseParentIds.has(draft.categoryId)) return;
     const amountMinor = parseMinor(draft.amount);
     if (amountMinor === null) return;
 
@@ -301,6 +343,17 @@ export default function BudgetScreen() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const setNoBudget = async (): Promise<void> => {
+    if (!draft) return;
+    if (!expenseParentIds.has(draft.categoryId)) return;
+    if (!draft.budgetId && !budgetByCategoryId.get(draft.categoryId)?.id) {
+      setDraft(null);
+      setKeypadOpen(true);
+      return;
+    }
+    await removeBudget();
   };
 
   const removeBudget = async (): Promise<void> => {
@@ -433,6 +486,18 @@ export default function BudgetScreen() {
                         onPress={() => {
                           openBudgetTransactions({ parentLabel: label, categoryIds: children.map((child) => child.category.id) });
                         }}
+                        onLongPress={() => {
+                          Keyboard.dismiss();
+                          setKeypadOpen(true);
+                          const parentBudget = budgetByCategoryId.get(parent.id) ?? null;
+                          setDraft({
+                            categoryId: parent.id,
+                            label,
+                            icon,
+                            amount: parentBudget ? String((parentBudget.amount_minor / 100).toFixed(2)) : '',
+                            budgetId: parentBudget?.id,
+                          });
+                        }}
                       >
                         <View style={[styles.iconWrap, { backgroundColor: `${tone}22` }]}>
                           <CategoryIcon name={icon} size={20} color={tone} />
@@ -449,7 +514,7 @@ export default function BudgetScreen() {
                           <Text style={styles.rowMeta}>
                             {state
                               ? `${formatMinor(state.spentMinor)} of ${formatMinor(state.amountMinor)}`
-                              : 'Tap to set a target for this cycle'}
+                              : 'Long press to set cycle target'}
                           </Text>
                           <ProgressBar value={state?.ratio ?? 0} color={tone} />
                         </View>
@@ -471,13 +536,8 @@ export default function BudgetScreen() {
                           {children.length === 0 ? (
                             <Text style={styles.childEmpty}>No subcategories</Text>
                           ) : (
-                            children.map(({ category, label: childLabel, icon: childIcon, budget: childBudget, state: childState }) => {
-                              const childTone =
-                                childState?.tone === 'critical'
-                                  ? colors.danger
-                                  : childState?.tone === 'warning'
-                                    ? '#F5B942'
-                                    : `${category.color}CC`;
+                            children.map(({ category, label: childLabel, icon: childIcon }) => {
+                              const childTone = `${category.color}CC`;
                               return (
                                 <Pressable
                                   key={category.id}
@@ -485,36 +545,13 @@ export default function BudgetScreen() {
                                   onPress={() => {
                                     openBudgetTransactions({ categoryId: category.id, parentLabel: label, categoryIds: [category.id] });
                                   }}
-                                  onLongPress={() => {
-                                    Keyboard.dismiss();
-                                    setKeypadOpen(true);
-                                    setDraft({
-                                      categoryId: category.id,
-                                      label: childLabel,
-                                      icon: childIcon,
-                                      amount: childBudget ? String((childBudget.amount_minor / 100).toFixed(2)) : '',
-                                      budgetId: childBudget?.id,
-                                    });
-                                  }}
                                 >
                                   <View style={[styles.childIconWrap, { backgroundColor: `${childTone}22` }]}>
                                     <CategoryIcon name={childIcon} size={18} color={childTone} />
                                   </View>
                                   <View style={styles.rowBody}>
-                                    <View style={styles.rowHead}>
-                                      <View style={styles.rowIdentity}>
-                                        <Text style={styles.rowLabel}>{childLabel}</Text>
-                                      </View>
-                                      <Text style={[styles.rowRatio, childState ? { color: childTone } : styles.rowRatioMuted]}>
-                                        {childState ? formatPercent(childState.ratio) : '--'}
-                                      </Text>
-                                    </View>
-                                    <Text style={styles.rowMeta}>
-                                      {childState
-                                        ? `${formatMinor(childState.spentMinor)} of ${formatMinor(childState.amountMinor)}`
-                                        : 'Tap to set a target for this cycle'}
-                                    </Text>
-                                    <ProgressBar value={childState?.ratio ?? 0} color={childTone} />
+                                    <Text style={styles.rowLabel}>{childLabel}</Text>
+                                    <Text style={styles.rowMeta}>Tracked under parent budget.</Text>
                                   </View>
                                 </Pressable>
                               );
@@ -525,6 +562,36 @@ export default function BudgetScreen() {
                     </View>
                   );
                 })}
+
+                <View style={styles.summaryCard}>
+                  <Text style={styles.summaryTitle}>Cycle budget check</Text>
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>Current salary</Text>
+                    <Text style={styles.summaryValue}>{formatMinor(cycleSalaryMinor)}</Text>
+                  </View>
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>If all budgets are fully spent</Text>
+                    <Text
+                      style={[
+                        styles.summaryValue,
+                        remainingAfterBudgetsMinor < 0 ? styles.summaryValueNegative : styles.summaryValuePositive,
+                      ]}
+                    >
+                      {formatMinor(remainingAfterBudgetsMinor)}
+                    </Text>
+                  </View>
+
+                  <Text style={styles.summarySubTitle}>Used categories with no budget</Text>
+                  {unbudgetedParentUsage.length === 0 ? (
+                    <Text style={styles.summaryMuted}>All used categories have a budget.</Text>
+                  ) : (
+                    <View style={styles.unbudgetedList}>
+                      {unbudgetedParentUsage.map((item) => (
+                        <Text key={item.id} style={[styles.unbudgetedItem, { color: item.color }]}>{item.label}</Text>
+                      ))}
+                    </View>
+                  )}
+                </View>
               </View>
             )}
           </>
@@ -584,14 +651,12 @@ export default function BudgetScreen() {
                 <Text style={styles.primaryButtonText}>{saving ? 'Saving...' : 'Save budget'}</Text>
               </Pressable>
 
-              {draft?.budgetId ? (
-                <Pressable
-                  style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}
-                  onPress={() => runDetached(removeBudget(), 'budgets.removeBudget')}
-                >
-                  <Text style={styles.secondaryButtonText}>Remove budget</Text>
-                </Pressable>
-              ) : null}
+              <Pressable
+                style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}
+                onPress={() => runDetached(setNoBudget(), 'budgets.setNoBudget')}
+              >
+                <Text style={styles.secondaryButtonText}>No budget</Text>
+              </Pressable>
             </View>
 
             {keypadOpen ? (
@@ -717,6 +782,29 @@ const styles = StyleSheet.create({
   rowRatioMuted: { color: colors.textMuted },
   rowMeta: { ...typography.label, color: colors.textMuted },
   groupCard: { gap: spacing.sm },
+  summaryCard: {
+    marginTop: spacing.md,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    gap: spacing.sm,
+  },
+  summaryTitle: { ...typography.body, color: colors.text, fontWeight: '700' },
+  summarySubTitle: {
+    ...typography.label,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: spacing.xs,
+  },
+  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.md },
+  summaryLabel: { ...typography.body, color: colors.textMuted, flex: 1 },
+  summaryValue: { ...typography.body, color: colors.text, fontWeight: '700' },
+  summaryValuePositive: { color: colors.success },
+  summaryValueNegative: { color: colors.danger },
+  summaryMuted: { ...typography.label, color: colors.textMuted },
+  unbudgetedList: { gap: spacing.xs },
+  unbudgetedItem: { ...typography.body, fontWeight: '600' },
   chevronHitbox: {
     width: 40,
     height: 40,
