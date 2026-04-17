@@ -76,8 +76,18 @@ type YmdParts = { y: number; m: number; d: number };
 
 const pad2 = (value: number): string => String(value).padStart(2, '0');
 
-const toIsoDate = (date: Date): string =>
+export const toLocalIsoDay = (date: Date): string =>
   `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+
+export const cycleMatch = (
+  row: { occurred_on: string },
+  cycle: SalaryCycle | null,
+): boolean => {
+  if (!cycle) return false;
+  const afterStart = row.occurred_on >= cycle.startOn;
+  const beforeEnd = cycle.endOnExclusive === null || row.occurred_on < cycle.endOnExclusive;
+  return afterStart && beforeEnd;
+};
 
 const addDays = (date: Date, amount: number): Date =>
   new Date(date.getFullYear(), date.getMonth(), date.getDate() + amount);
@@ -90,6 +100,8 @@ const addMonths = ({ y, m, d }: YmdParts, delta: number): YmdParts => {
 };
 
 const monthStartYmd = (y: number, m: number): string => `${y}-${pad2(m)}-01`;
+
+export const formatHeroCycleRange = (cycle: SalaryCycle, today: Date): string => formatCycleDisplayRange(cycle, today);
 
 export const formatCycleDisplayRange = (cycle: SalaryCycle, today: Date): string => {
   const start = parseYmd(cycle.startOn);

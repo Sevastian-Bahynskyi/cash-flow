@@ -17,6 +17,14 @@ export const formatMinor = (minor: number, currencyCode = 'DKK'): string => {
 export const formatPercent = (value: number): string =>
   `${Math.round(value * 100)}%`;
 
+export const parseMinor = (raw: string): number | null => {
+  const normalized = raw.trim().replace(',', '.');
+  if (!normalized) return null;
+  const value = Number(normalized);
+  if (!Number.isFinite(value) || value < 0) return null;
+  return Math.round(value * 100);
+};
+
 const pad2 = (value: number): string => String(value).padStart(2, '0');
 
 const parseIsoDate = (iso: string): Date => {
