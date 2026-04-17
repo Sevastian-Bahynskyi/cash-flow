@@ -144,28 +144,23 @@ const incomeInterestPaths: readonly CategoryPath[] = [{ parent: 'Income', name: 
 const incomeBenefitsPaths: readonly CategoryPath[] = [{ parent: 'Income', name: 'Benefits' }];
 const transferPaths: readonly CategoryPath[] = [{ parent: 'Transfers', name: 'Transfer' }];
 const mobilePayPaths: readonly CategoryPath[] = [{ parent: 'Transfers', name: 'MobilePay' }];
-const parkingPaths: readonly CategoryPath[] = [{ parent: 'Transport', name: 'Parking' }];
-const phonePaths: readonly CategoryPath[] = [{ parent: 'Household', name: 'Phone' }];
-const insurancePaths: readonly CategoryPath[] = [
-  { parent: 'Household', name: 'Insurance' },
-  { parent: 'Household', name: 'Car insurance' },
-];
-const fuelPaths: readonly CategoryPath[] = [{ parent: 'Transport', name: 'Fuel' }];
-const publicTransitPaths: readonly CategoryPath[] = [{ parent: 'Transport', name: 'Public transit' }];
+const parkingPaths: readonly CategoryPath[] = [{ parent: 'Transport', name: 'Transport' }];
+const phonePaths: readonly CategoryPath[] = [{ parent: 'Bills', name: 'Bills' }];
+const insurancePaths: readonly CategoryPath[] = [{ parent: 'Bills', name: 'Bills' }];
+const fuelPaths: readonly CategoryPath[] = [{ parent: 'Transport', name: 'Transport' }];
+const publicTransitPaths: readonly CategoryPath[] = [{ parent: 'Transport', name: 'Transport' }];
 const restaurantsPaths: readonly CategoryPath[] = [{ parent: 'Food', name: 'Restaurants' }];
 const groceriesPaths: readonly CategoryPath[] = [{ parent: 'Food', name: 'Groceries' }];
-const subscriptionsPaths: readonly CategoryPath[] = [{ parent: 'Entertainment', name: 'Subscriptions' }];
-const hobbyCreativePaths: readonly CategoryPath[] = [{ parent: 'Entertainment', name: 'Hobby/Creative' }];
-const fitnessPaths: readonly CategoryPath[] = [{ parent: 'Health', name: 'Fitness' }];
-const personalCarePaths: readonly CategoryPath[] = [{ parent: 'Shopping', name: 'Personal care' }];
-const travelPaths: readonly CategoryPath[] = [
-  { parent: 'Entertainment', name: 'Travel' },
-  { parent: 'Other', name: 'Misc' },
-];
-const rentPaths: readonly CategoryPath[] = [{ parent: 'Household', name: 'Rent' }];
-const internetPaths: readonly CategoryPath[] = [{ parent: 'Household', name: 'Internet' }];
-const shoppingElectronicsPaths: readonly CategoryPath[] = [{ parent: 'Shopping', name: 'Electronics' }];
-const shoppingClothesPaths: readonly CategoryPath[] = [{ parent: 'Shopping', name: 'Clothes' }];
+const subscriptionsPaths: readonly CategoryPath[] = [{ parent: 'Entertainment', name: 'Entertainment' }];
+const hobbyCreativePaths: readonly CategoryPath[] = [{ parent: 'Entertainment', name: 'Entertainment' }];
+const fitnessPaths: readonly CategoryPath[] = [{ parent: 'Sport', name: 'Sport' }];
+const personalCarePaths: readonly CategoryPath[] = [{ parent: 'Shopping', name: 'Shopping' }];
+const travelPaths: readonly CategoryPath[] = [{ parent: 'Travel', name: 'Travel' }];
+const rentPaths: readonly CategoryPath[] = [{ parent: 'Rent', name: 'Rent' }];
+const internetPaths: readonly CategoryPath[] = [{ parent: 'Bills', name: 'Bills' }];
+const shoppingElectronicsPaths: readonly CategoryPath[] = [{ parent: 'Shopping', name: 'Shopping' }];
+const shoppingClothesPaths: readonly CategoryPath[] = [{ parent: 'Shopping', name: 'Shopping' }];
+const doctorPaths: readonly CategoryPath[] = [{ parent: 'Doctor', name: 'Doctor' }];
 
 const merchantAliases: readonly MerchantAliasDefinition[] = [
   { canonical: 'apple', patterns: [/\bapple\b/, /\bapple com bill\b/, /\bitunes\b/] },
@@ -279,7 +274,7 @@ const curatedCategories: readonly CuratedCategoryDefinition[] = [
   { canonical: 'revolut', expense: transferPaths, confidence: 0.99, isSharedTopup: true },
   { canonical: 'shein', expense: shoppingClothesPaths, confidence: 0.92 },
   { canonical: 'spotify', expense: subscriptionsPaths, confidence: 0.99 },
-  { canonical: 'steam', expense: [{ parent: 'Entertainment', name: 'Games' }], confidence: 0.95 },
+  { canonical: 'steam', expense: subscriptionsPaths, confidence: 0.95 },
   { canonical: 'su', income: incomeBenefitsPaths, confidence: 0.99 },
   { canonical: 'sunset boulevard', expense: restaurantsPaths, confidence: 0.93 },
   { canonical: 'temu', expense: shoppingClothesPaths, confidence: 0.9 },
@@ -288,6 +283,7 @@ const curatedCategories: readonly CuratedCategoryDefinition[] = [
   { canonical: 'tryg', expense: insurancePaths, confidence: 0.99 },
   { canonical: 'wolt', expense: restaurantsPaths, confidence: 0.95 },
   { canonical: 'zalando', expense: shoppingClothesPaths, confidence: 0.95 },
+  { canonical: 'apotek', expense: doctorPaths, confidence: 0.88 },
 ];
 
 const normalizeCategoryName = (value: string): string =>
