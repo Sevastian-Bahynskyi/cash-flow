@@ -343,18 +343,14 @@ export default function BudgetScreen() {
 
   const realAvailableMoneyMinor = useMemo(() => {
     if (!selectedCycle) return 0;
-    const allTransactionsMinor = data.transactions
+    const totalCycleTransactionsMinor = data.transactions
       .filter(
         (row) =>
           row.occurred_on >= selectedCycle.startOn &&
           (selectedCycle.endOnExclusive === null || row.occurred_on < selectedCycle.endOnExclusive),
       )
-      .reduce((sum, row) => {
-        if (row.kind === 'income') return sum + row.amount_minor;
-        if (row.kind === 'expense') return sum - row.amount_minor;
-        return sum;
-      }, 0);
-    return cycleSalaryMinor - allTransactionsMinor;
+      .reduce((sum, row) => sum + row.amount_minor, 0);
+    return cycleSalaryMinor - totalCycleTransactionsMinor;
   }, [cycleSalaryMinor, data.transactions, selectedCycle]);
 
   const unbudgetedParentUsage = useMemo(() => {
