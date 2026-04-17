@@ -100,7 +100,7 @@ export function ImportReviewTransactionCard({
       <TransactionPickerField
         text={formatDateLabel(row.occurredOn)}
         variant="card"
-        leadingMaterialIcon="calendar-month-outline"
+        leadingMaterialIcon="calendar"
         trailing={<FontAwesome6 name="calendar" size={18} color={colors.textMuted} />}
         onPress={onOpenDatePicker}
       />
@@ -118,7 +118,7 @@ export function ImportReviewTransactionCard({
           text={categoryLabel}
           placeholder="Pick a category"
           variant="card"
-          leadingCategoryIcon={category?.icon ?? 'shape-outline'}
+          leadingCategoryIcon={category?.icon ?? 'shapes'}
           leadingIconColor={categoryAccentColor}
           leadingIconBackgroundColor={category ? `${categoryAccentColor}22` : colors.surfaceAlt}
           onPress={onOpenCategoryPicker}
@@ -137,7 +137,7 @@ export function ImportReviewTransactionCard({
       <TransactionPickerField
         text={formatAmountDisplay(row.amount)}
         variant="card"
-        leadingMaterialIcon="cash"
+        leadingMaterialIcon="money-bill"
         trailing={<FontAwesome6 name="keyboard" size={18} color={colors.textMuted} />}
         onPress={onToggleAmountPicker}
       />

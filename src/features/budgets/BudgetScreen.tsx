@@ -10,7 +10,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
   UIManager,
 } from 'react-native';
@@ -23,12 +22,13 @@ import { buildBudgetStateByCategory } from '@/features/budgets/helpers';
 import { findIncomeParentIds, isIncomeCategoryRow } from '@/features/categories/rules';
 import { runDetached } from '@/lib/async';
 import { supabase } from '@/lib/supabase';
-import { formatMinor, formatPercent } from '@/lib/format';
-import { buildNavigableCycles, findCycleFor, type SalaryCycle } from '@/lib/cycles';
+import { formatMinor, formatPercent, parseMinor } from '@/lib/format';
+import { buildNavigableCycles, findCycleFor, toLocalIsoDay, type SalaryCycle } from '@/lib/cycles';
 import type { BudgetRow } from '@/features/overview/useOverview';
 import { ProgressBar } from '@/ui/ProgressBar';
 import { ScreenHeader } from '@/ui/ScreenHeader';
 import { CategoryIcon } from '@/ui/CategoryIcon';
+import { SearchField } from '@/ui/SearchField';
 import { NumericKeypad } from '@/ui/NumericKeypad';
 import { SkeletonBlock, SkeletonCard } from '@/ui/Skeleton';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
@@ -45,21 +45,6 @@ type BudgetDraft = {
   amount: string;
   notes: string;
   budgetId?: string;
-};
-
-const toLocalIsoDay = (date: Date): string => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-const parseMinor = (raw: string): number | null => {
-  const normalized = raw.trim().replace(',', '.');
-  if (!normalized) return null;
-  const value = Number(normalized);
-  if (!Number.isFinite(value) || value < 0) return null;
-  return Math.round(value * 100);
 };
 
 const formatAmountDisplay = (raw: string): string => {
@@ -461,23 +446,7 @@ export default function BudgetScreen() {
         {!data.isInitialLoading ? (
           <>
 
-            <View style={styles.searchWrap}>
-              <FontAwesome6 name="magnifying-glass" size={18} color={colors.textMuted} />
-              <TextInput
-                value={query}
-                onChangeText={setQuery}
-                placeholder="Search categories"
-                placeholderTextColor={colors.textMuted}
-                autoCorrect={false}
-                autoCapitalize="none"
-                style={styles.searchInput}
-              />
-              {query.trim().length > 0 ? (
-                <Pressable onPress={() => setQuery('')} hitSlop={12}>
-                  <FontAwesome6 name="circle-xmark" size={18} color={colors.textMuted} />
-                </Pressable>
-              ) : null}
-            </View>
+            <SearchField value={query} onChangeText={setQuery} placeholder="Search categories" />
 
             {!selectedCycle ? (
               <View style={styles.emptyCard}>
@@ -780,22 +749,6 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { ...typography.h2, color: colors.text },
   emptyBody: { ...typography.body, color: colors.textMuted },
-  searchWrap: {
-    marginHorizontal: spacing.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-  },
-  searchInput: {
-    flex: 1,
-    color: colors.text,
-    ...typography.body,
-    paddingVertical: 0,
-  },
   section: { paddingHorizontal: spacing.lg, gap: spacing.sm },
   emptySearchCard: {
     padding: spacing.lg,

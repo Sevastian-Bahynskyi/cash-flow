@@ -7,11 +7,9 @@ import {
   RefreshControl,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
-import { FontAwesome6 } from '@expo/vector-icons';
-import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import {
   applyCategoryOverrides,
@@ -27,6 +25,11 @@ import { formatDateLabel, formatMinor } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
 import { MotionScope } from '@/ui/MotionScope';
 import { CategoryIcon } from '@/ui/CategoryIcon';
+import { ErrorCard } from '@/ui/ErrorCard';
+import { SelectionIndicator } from '@/ui/SelectionIndicator';
+import { SearchField } from '@/ui/SearchField';
+import { useMotionRefresh } from '@/ui/useMotionRefresh';
+import { SharedParticipantChip } from '@/features/shared/SharedParticipantChip';
 import { ScreenHeader } from '@/ui/ScreenHeader';
 import { SkeletonBlock, SkeletonCard } from '@/ui/Skeleton';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
@@ -401,20 +404,14 @@ const PersonalHistoryRow = memo(function PersonalHistoryRow({
               <Text style={styles.chipText}>
                 Shared top-up
                 {row.shared_participant ? (
-                  <Text style={row.shared_participant === 'gf' ? styles.chipTextGf : styles.chipTextMe}>
-                    {` · ${row.shared_participant === 'gf' ? 'GF' : 'Me'}`}
-                  </Text>
+                  <SharedParticipantChip participant={row.shared_participant} />
                 ) : null}
               </Text>
             </View>
           ) : null}
         </View>
       </View>
-      {selectionMode ? (
-        <View style={[styles.selectionIndicator, selected && styles.selectionIndicatorActive]}>
-          {selected ? <FontAwesome6 name="check" size={14} color={colors.text} /> : null}
-        </View>
-      ) : null}
+      {selectionMode ? <SelectionIndicator active={selected} /> : null}
     </Pressable>
   );
 });
@@ -441,7 +438,7 @@ export default function PersonalHistoryScreen() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [hasMore, setHasMore] = useState(true);
-  const [motionRun, setMotionRun] = useState(0);
+  const motionRun = useMotionRefresh();
   const requestVersionRef = useRef(0);
   const hasLoadedOnceRef = useRef(false);
   const skipNextComposerRefreshRef = useRef(false);
@@ -703,11 +700,6 @@ export default function PersonalHistoryScreen() {
     setIsSelectingAll(false);
   }, [debouncedQuery]);
 
-  useFocusEffect(
-    useCallback(() => {
-      setMotionRun((current) => current + 1);
-    }, []),
-  );
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const hasQuery = debouncedQuery.length > 0;
   const isSearchPending = query.trim() !== debouncedQuery;
@@ -874,7 +866,7 @@ export default function PersonalHistoryScreen() {
             transactions.length > 0 || selectionMode
               ? [
                 {
-                  icon: selectionMode ? 'close' : 'checkbox-multiple-blank-outline',
+                  icon: selectionMode ? 'close' : 'square-check',
                   onPress: () => {
                     runDetached(Haptics.selectionAsync(), 'personal-history.toggle-selection-mode.haptics');
                     setSelectionMode((current) => {
@@ -890,24 +882,13 @@ export default function PersonalHistoryScreen() {
           }
         />
 
-        <View style={styles.searchWrap}>
-          <FontAwesome6 name="magnifying-glass" size={18} color={colors.textMuted} />
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search by date, name or notes"
-            placeholderTextColor={colors.textMuted}
-            autoCorrect={false}
-            autoCapitalize="none"
-            style={styles.searchInput}
-          />
-          {isSearchPending ? <ActivityIndicator size="small" color={colors.textMuted} /> : null}
-          {!isSearchPending && query.trim().length > 0 ? (
-            <Pressable onPress={() => setQuery('')} hitSlop={12}>
-              <FontAwesome6 name="circle-xmark" size={18} color={colors.textMuted} />
-            </Pressable>
-          ) : null}
-        </View>
+        <SearchField
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search by date, name or notes"
+          isLoading={isSearchPending}
+          style={{ marginBottom: spacing.md }}
+        />
 
         {selectionMode ? (
           <View style={styles.selectionBar}>
@@ -946,10 +927,12 @@ export default function PersonalHistoryScreen() {
         ) : null}
 
         {error ? (
-          <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Could not refresh personal history</Text>
+          <ErrorCard
+            title="Could not refresh personal history"
+            style={{ marginHorizontal: spacing.lg, marginBottom: spacing.md }}
+          >
             <Text style={styles.errorText}>{error}</Text>
-          </View>
+          </ErrorCard>
         ) : null}
 
         {shouldShowSkeleton ? (
@@ -1020,23 +1003,6 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   listContent: { paddingBottom: spacing.xxl * 4 },
   emptyContainer: { flexGrow: 1, paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl * 4 },
-  searchWrap: {
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-  },
-  searchInput: {
-    flex: 1,
-    color: colors.text,
-    ...typography.body,
-    paddingVertical: 0,
-  },
   selectionBar: {
     marginHorizontal: spacing.lg,
     marginBottom: spacing.md,
@@ -1065,16 +1031,6 @@ const styles = StyleSheet.create({
   selectionButtonDisabled: { opacity: 0.45 },
   selectionButtonText: { ...typography.label, color: colors.text, fontWeight: '600' },
   selectionButtonTextDanger: { color: colors.danger },
-  errorCard: {
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
-    backgroundColor: 'rgba(255,92,122,0.12)',
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: 'rgba(255,92,122,0.32)',
-  },
-  errorTitle: { ...typography.body, color: colors.text, fontWeight: '700', marginBottom: spacing.xs },
   errorText: { ...typography.body, color: colors.textMuted },
   skeletonWrap: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl * 4, gap: spacing.lg },
   skeletonSection: { gap: spacing.sm },
@@ -1130,20 +1086,6 @@ const styles = StyleSheet.create({
   meta: { ...typography.label, color: colors.textMuted },
   comment: { ...typography.body, color: colors.textMuted },
   chips: { flexDirection: 'row', gap: spacing.xs, flexWrap: 'wrap' },
-  selectionIndicator: {
-    width: 22,
-    height: 22,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  selectionIndicatorActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.accent,
-  },
   chip: {
     paddingHorizontal: spacing.sm,
     paddingVertical: 4,
@@ -1151,8 +1093,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
   },
   chipText: { ...typography.label, color: colors.textMuted },
-  chipTextMe: { color: '#60A5FA', fontWeight: '600' },
-  chipTextGf: { color: '#F472B6', fontWeight: '600' },
   emptyCard: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,

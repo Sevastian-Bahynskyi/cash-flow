@@ -6,9 +6,8 @@ import {
   getCategoryMetaDisplayColor,
 } from '@/features/categories/helpers';
 import { useOverview } from '@/features/overview/useOverview';
-import { buildNavigableCycles, formatCycleDisplayRange, type SalaryCycle } from '@/lib/cycles';
+import { buildNavigableCycles, cycleMatch, formatCycleDisplayRange, type SalaryCycle } from '@/lib/cycles';
 import { colors } from '@/ui/tokens';
-import type { TransactionRow } from '@/features/transactions/types';
 
 export type DashboardRange = 'weekly' | 'monthly' | 'yearly';
 
@@ -210,12 +209,6 @@ const buildMonthlyWindows = (
   const cycles = buildNavigableCycles(transactions);
   if (cycles.length === 0) return [buildFallbackMonthlyWindow(today)];
 
-  const cycleMatch = (row: TransactionRow, cycle: SalaryCycle): boolean => {
-    const afterStart = row.occurred_on >= cycle.startOn;
-    const beforeEnd = cycle.endOnExclusive === null || row.occurred_on < cycle.endOnExclusive;
-    return afterStart && beforeEnd;
-  };
-
   const filtered = cycles
     .filter((cycle) => transactions.some((row) => cycleMatch(row, cycle)))
     .map((cycle) => buildMonthlyCycleBuckets(cycle, today))
@@ -388,7 +381,7 @@ export const useDashboard = (
             parentColor,
             color: parentColor,
           });
-          const icon = parentCategory?.icon ?? categoryMeta[aggregateCategoryId]?.icon ?? 'shape-outline';
+          const icon = parentCategory?.icon ?? categoryMeta[aggregateCategoryId]?.icon ?? 'shapes';
 
           categoryPresentation.set(aggregateCategoryId, {
             label: parentName,
@@ -411,7 +404,7 @@ export const useDashboard = (
             (categoryMeta[categoryId]
               ? getCategoryMetaDisplayColor(categoryMeta[categoryId], 'expense')
               : pieFallbackColors[index % pieFallbackColors.length] ?? colors.accent),
-          icon: meta?.icon ?? 'shape-outline',
+          icon: meta?.icon ?? 'shapes',
           amountMinor,
           share: expenseMinor === 0 ? 0 : amountMinor / expenseMinor,
         } satisfies DashboardCategoryBreakdown;

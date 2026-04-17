@@ -143,7 +143,7 @@ export function ImportReviewModal({
 
           {rows.length === 0 ? (
             <View style={styles.emptyState}>
-              <FontAwesome6 name="image-slash" size={28} color={colors.textMuted} />
+              <FontAwesome6 name="image" size={28} color={colors.textMuted} />
               <Text style={styles.emptyTitle}>No transactions left</Text>
               <Text style={styles.emptyText}>Close this review and pick another image when you want to try again.</Text>
             </View>

@@ -1,11 +1,12 @@
 import { memo } from 'react';
-import { FontAwesome6 } from '@expo/vector-icons';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 import { formatDateLabel, formatMinor } from '@/lib/format';
 import type { TransactionRow } from './types';
 import { MotionView } from '@/ui/MotionView';
 import { CategoryIcon } from '@/ui/CategoryIcon';
+import { SelectionIndicator } from '@/ui/SelectionIndicator';
+import { SharedParticipantChip } from '@/features/shared/SharedParticipantChip';
 
 type TransactionListItem = {
   row: TransactionRow;
@@ -131,9 +132,7 @@ function TransactionRowCard({
                   <Text style={styles.chipText}>
                     Shared top-up
                     {row.shared_participant ? (
-                      <Text style={row.shared_participant === 'gf' ? styles.chipTextGf : styles.chipTextMe}>
-                        {` · ${row.shared_participant === 'gf' ? 'GF' : 'Me'}`}
-                      </Text>
+                      <SharedParticipantChip participant={row.shared_participant} />
                     ) : null}
                   </Text>
                 </View>
@@ -141,11 +140,7 @@ function TransactionRowCard({
             </View>
           </View>
         </View>
-        {selectionMode ? (
-          <View style={[styles.selectionIndicator, selected && styles.selectionIndicatorActive]}>
-            {selected ? <FontAwesome6 name="check" size={14} color={colors.text} /> : null}
-          </View>
-        ) : null}
+        {selectionMode ? <SelectionIndicator active={selected} /> : null}
       </Pressable>
     </MotionView>
   );
@@ -274,22 +269,6 @@ const styles = StyleSheet.create({
   rowMetaWrap: { gap: 6 },
   meta: { ...typography.label, color: colors.textMuted },
   chips: { flexDirection: 'row', gap: spacing.xs, flexWrap: 'wrap' },
-  chipTextMe: { color: '#60A5FA', fontWeight: '600' },
-  chipTextGf: { color: '#F472B6', fontWeight: '600' },
-  selectionIndicator: {
-    width: 22,
-    height: 22,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  selectionIndicatorActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.accent,
-  },
   chip: {
     paddingHorizontal: spacing.sm,
     paddingVertical: 4,

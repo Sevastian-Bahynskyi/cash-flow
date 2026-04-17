@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Alert,
   Modal,
@@ -10,7 +10,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { useMotionRefresh } from '@/ui/useMotionRefresh';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome6 } from '@expo/vector-icons';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -20,7 +20,7 @@ import type { LoanEventKind } from '@/features/loans/types';
 import type { ReceivableEventKind } from '@/features/receivables/types';
 import type { SavingsAction } from '@/features/savings/types';
 import { runDetached } from '@/lib/async';
-import { formatDateLabel, formatMinor } from '@/lib/format';
+import { formatDateLabel, formatMinor, parseMinor } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
 import { CategoryIcon } from '@/ui/CategoryIcon';
 import { MotionScope } from '@/ui/MotionScope';
@@ -75,14 +75,6 @@ type ReceivableEventDraft = {
 };
 
 const todayIso = (): string => new Date().toISOString().slice(0, 10);
-
-const parseMinor = (raw: string): number | null => {
-  const normalized = raw.trim().replace(',', '.');
-  if (!normalized) return null;
-  const value = Number(normalized);
-  if (!Number.isFinite(value) || value < 0) return null;
-  return Math.round(value * 100);
-};
 
 function BankSkeleton() {
   return (
@@ -149,13 +141,7 @@ export default function BankScreen() {
   const [receivableDraft, setReceivableDraft] = useState<ReceivableDraft | null>(null);
   const [receivableEventDraft, setReceivableEventDraft] = useState<ReceivableEventDraft | null>(null);
   const [saving, setSaving] = useState(false);
-  const [motionRun, setMotionRun] = useState(0);
-
-  useFocusEffect(
-    useCallback(() => {
-      setMotionRun((current) => current + 1);
-    }, []),
-  );
+  const motionRun = useMotionRefresh();
 
   const savingsWithHistory = useMemo(
     () =>
@@ -564,7 +550,7 @@ export default function BankScreen() {
                           name: '',
                           goal: '',
                           color: '#3DD68C',
-                          icon: 'piggy-bank-outline',
+                          icon: 'piggy-bank',
                         })
                       }
                     >

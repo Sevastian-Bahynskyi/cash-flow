@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { FontAwesome6 } from '@expo/vector-icons';
 import Animated, {
@@ -29,51 +29,19 @@ import { ScreenHeader } from '@/ui/ScreenHeader';
 import { SkeletonBlock, SkeletonCard } from '@/ui/Skeleton';
 import { TopCategoriesSection, type TopCategoryItem } from '@/ui/TopCategoriesSection';
 import { HeroCard } from '@/ui/HeroCard';
+import { ErrorCard } from '@/ui/ErrorCard';
+import { HeroPagerArrows } from '@/ui/HeroPagerArrows';
+import { useMotionRefresh } from '@/ui/useMotionRefresh';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 import { transactionBalance } from '@/lib/balance';
 import { formatMinor } from '@/lib/format';
-import { buildNavigableCycles, findCycleFor, type SalaryCycle } from '@/lib/cycles';
+import { buildNavigableCycles, cycleMatch, findCycleFor, formatHeroCycleRange, toLocalIsoDay } from '@/lib/cycles';
 import type { TransactionRow } from '@/features/transactions/types';
 import { supabase } from '@/lib/supabase';
 
 type RangeFilter = 'month' | 'year' | 'all';
 const TOP_CATEGORIES_COLLAPSED_COUNT = 5;
 
-const toLocalIsoDay = (date: Date): string => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-const heroRangeDate = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' });
-
-const formatHeroCycleRange = (cycle: SalaryCycle, today: Date): string => {
-  const startParts = cycle.startOn.split('-').map(Number);
-  const endExclusiveParts = cycle.endOnExclusive
-    ? cycle.endOnExclusive.split('-').map(Number)
-    : [today.getFullYear(), today.getMonth() + 1, today.getDate()];
-
-  const startYear = startParts[0] ?? 1970;
-  const startMonth = startParts[1] ?? 1;
-  const startDay = startParts[2] ?? 1;
-  const endYear = endExclusiveParts[0] ?? today.getFullYear();
-  const endMonth = endExclusiveParts[1] ?? today.getMonth() + 1;
-  const endDay = endExclusiveParts[2] ?? today.getDate();
-  const endBase = new Date(endYear, endMonth - 1, endDay);
-  const endDate = cycle.endOnExclusive && endDay === 1
-    ? new Date(endBase.getFullYear(), endBase.getMonth(), endBase.getDate() - 1)
-    : endBase;
-
-  return `${heroRangeDate.format(new Date(startYear, startMonth - 1, startDay))} – ${heroRangeDate.format(endDate)}`;
-};
-
-const cycleMatch = (row: TransactionRow, cycle: SalaryCycle | null): boolean => {
-  if (!cycle) return false;
-  const afterStart = row.occurred_on >= cycle.startOn;
-  const beforeEnd = cycle.endOnExclusive === null || row.occurred_on < cycle.endOnExclusive;
-  return afterStart && beforeEnd;
-};
 
 function HomeSkeleton() {
   return (
@@ -156,7 +124,7 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [recentSelectionMode, setRecentSelectionMode] = useState(false);
   const [selectedRecentIds, setSelectedRecentIds] = useState<string[]>([]);
-  const [motionRun, setMotionRun] = useState(0);
+  const motionRun = useMotionRefresh();
   const currentYear = new Date().getFullYear();
   const scrollY = useSharedValue(0);
   const heroPulse = useSharedValue(0);
@@ -168,12 +136,6 @@ export default function HomeScreen() {
     // reload is stable via useCallback
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [composer.refreshKey]);
-
-  useFocusEffect(
-    useCallback(() => {
-      setMotionRun((current) => current + 1);
-    }, []),
-  );
 
   useEffect(() => {
     cancelAnimation(heroPulse);
@@ -578,36 +540,24 @@ export default function HomeScreen() {
                   const hasPrev = cycleIdx > 0;
                   const hasNext = cycleIdx < cyclesWithTransactions.length - 1;
                   return (
-                    <View pointerEvents="box-none" style={styles.heroArrows}>
-                      {hasPrev ? (
-                        <Pressable
-                          style={({ pressed }) => [styles.heroArrow, pressed && styles.heroArrowPressed]}
-                          onPress={() => {
-                            const next = cyclesWithTransactions[cycleIdx - 1];
-                            if (!next) return;
-                            setSelectedCycleId(next.id);
-                            heroPagerRef.current?.scrollTo({ x: (cycleIdx - 1) * heroPagerWidth, animated: true });
-                            Haptics.selectionAsync().catch(() => undefined);
-                          }}
-                        >
-                          <FontAwesome6 name="chevron-left" size={24} color={colors.text} />
-                        </Pressable>
-                      ) : <View style={styles.heroArrowSpacer} />}
-                      {hasNext ? (
-                        <Pressable
-                          style={({ pressed }) => [styles.heroArrow, pressed && styles.heroArrowPressed]}
-                          onPress={() => {
-                            const next = cyclesWithTransactions[cycleIdx + 1];
-                            if (!next) return;
-                            setSelectedCycleId(next.id);
-                            heroPagerRef.current?.scrollTo({ x: (cycleIdx + 1) * heroPagerWidth, animated: true });
-                            Haptics.selectionAsync().catch(() => undefined);
-                          }}
-                        >
-                          <FontAwesome6 name="chevron-right" size={24} color={colors.text} />
-                        </Pressable>
-                      ) : <View style={styles.heroArrowSpacer} />}
-                    </View>
+                    <HeroPagerArrows
+                      prevDisabled={!hasPrev}
+                      nextDisabled={!hasNext}
+                      onPrev={() => {
+                        const next = cyclesWithTransactions[cycleIdx - 1];
+                        if (!next) return;
+                        setSelectedCycleId(next.id);
+                        heroPagerRef.current?.scrollTo({ x: (cycleIdx - 1) * heroPagerWidth, animated: true });
+                        Haptics.selectionAsync().catch(() => undefined);
+                      }}
+                      onNext={() => {
+                        const next = cyclesWithTransactions[cycleIdx + 1];
+                        if (!next) return;
+                        setSelectedCycleId(next.id);
+                        heroPagerRef.current?.scrollTo({ x: (cycleIdx + 1) * heroPagerWidth, animated: true });
+                        Haptics.selectionAsync().catch(() => undefined);
+                      }}
+                    />
                   );
                 })() : null}
               </View>
@@ -642,10 +592,9 @@ export default function HomeScreen() {
 
             {data.error ? (
               <View style={styles.section}>
-                <View style={styles.errorCard}>
-                  <Text style={styles.errorTitle}>Something needs a refresh</Text>
+                <ErrorCard title="Something needs a refresh">
                   <Text style={styles.emptyText}>{data.error}</Text>
-                </View>
+                </ErrorCard>
               </View>
             ) : null}
 
@@ -753,28 +702,6 @@ const styles = StyleSheet.create({
   heroWrap: { paddingHorizontal: spacing.lg },
   heroPressable: { borderRadius: radius.lg },
   heroPressed: { opacity: 0.92 },
-  heroArrows: {
-    position: 'absolute',
-    left: spacing.sm,
-    right: spacing.sm,
-    top: 0,
-    bottom: 0,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  heroArrowSpacer: { width: 34 },
-  heroArrow: {
-    width: 34,
-    height: 34,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(11,11,15,0.46)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-  },
-  heroArrowPressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
   heroGlow: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: radius.lg,
@@ -838,13 +765,5 @@ const styles = StyleSheet.create({
   skeletonTransactionRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   skeletonTransactionCopy: { flex: 1, gap: spacing.xs },
   emptyCard: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.lg },
-  errorCard: {
-    backgroundColor: 'rgba(255,92,122,0.12)',
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: 'rgba(255,92,122,0.32)',
-  },
-  errorTitle: { ...typography.body, color: colors.text, fontWeight: '700', marginBottom: spacing.xs },
   emptyText: { ...typography.body, color: colors.textMuted },
 });

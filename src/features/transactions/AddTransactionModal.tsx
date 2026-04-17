@@ -1318,7 +1318,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
               setUserTouchedCategory(true);
               setPickerOpen(true);
             }}
-            leadingCategoryIcon={category?.icon ?? 'shape-outline'}
+            leadingCategoryIcon={category?.icon ?? 'shapes'}
             leadingIconColor={categoryAccentColor}
             leadingIconBackgroundColor={category ? `${categoryAccentColor}22` : colors.surfaceAlt}
             trailing={
@@ -1395,7 +1395,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
               <TransactionPickerField
                 text={formatDateLabel(date)}
                 onPress={openDatePicker}
-                leadingMaterialIcon="calendar-month-outline"
+                leadingMaterialIcon="calendar"
                 trailing={<FontAwesome6 name="chevron-down" size={18} color={colors.textMuted} />}
               />
             </View>
@@ -1508,7 +1508,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
                 {imageImportBusy ? (
                   <ActivityIndicator size="small" color={colors.text} />
                 ) : (
-                  <FontAwesome6 name="image-plus" size={22} color={colors.text} />
+                  <FontAwesome6 name="image" size={22} color={colors.text} />
                 )}
               </Pressable>
 

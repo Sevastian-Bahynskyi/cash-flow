@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import { useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { FontAwesome6 } from '@expo/vector-icons';
 import { BarChart, LineChart } from 'react-native-gifted-charts';
@@ -8,6 +7,9 @@ import { runDetached } from '@/lib/async';
 import { MotionScope } from '@/ui/MotionScope';
 import { MotionView } from '@/ui/MotionView';
 import { HeroCard } from '@/ui/HeroCard';
+import { ErrorCard } from '@/ui/ErrorCard';
+import { HeroPagerArrows } from '@/ui/HeroPagerArrows';
+import { useMotionRefresh } from '@/ui/useMotionRefresh';
 import { FilterChips } from '@/ui/FilterChips';
 import { ScreenHeader } from '@/ui/ScreenHeader';
 import { CategoryIcon } from '@/ui/CategoryIcon';
@@ -117,16 +119,10 @@ export default function DashboardScreen() {
   const [range, setRange] = useState<DashboardRange>('monthly');
   const [selectedWindowId, setSelectedWindowId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [motionRun, setMotionRun] = useState(0);
+  const motionRun = useMotionRefresh();
   const [selectedExpenseIndex, setSelectedExpenseIndex] = useState(0);
   const analytics = useDashboard(range, selectedWindowId);
   const { width } = useWindowDimensions();
-
-  useFocusEffect(
-    useCallback(() => {
-      setMotionRun((current) => current + 1);
-    }, []),
-  );
 
   const contentWidth = Math.max(width - spacing.lg * 2 - spacing.md * 2, 280);
   const chartWidth = Math.max(contentWidth, analytics.chartWidth);
@@ -192,48 +188,30 @@ export default function DashboardScreen() {
               />
 
               {analytics.windows.length > 1 ? (
-                <View pointerEvents="box-none" style={styles.heroArrows}>
-                  {selectedWindowIndex > 0 ? (
-                    <Pressable
-                      style={({ pressed }) => [styles.heroArrow, pressed ? styles.heroArrowPressed : null]}
-                      onPress={() => {
-                        const previous = analytics.windows[selectedWindowIndex - 1];
-                        if (!previous) return;
-                        setSelectedWindowId(previous.id);
-                        Haptics.selectionAsync().catch(() => undefined);
-                      }}
-                    >
-                      <FontAwesome6 name="chevron-left" size={24} color={colors.text} />
-                    </Pressable>
-                  ) : (
-                    <View style={styles.heroArrowSpacer} />
-                  )}
-
-                  {selectedWindowIndex < analytics.windows.length - 1 ? (
-                    <Pressable
-                      style={({ pressed }) => [styles.heroArrow, pressed ? styles.heroArrowPressed : null]}
-                      onPress={() => {
-                        const next = analytics.windows[selectedWindowIndex + 1];
-                        if (!next) return;
-                        setSelectedWindowId(next.id);
-                        Haptics.selectionAsync().catch(() => undefined);
-                      }}
-                    >
-                      <FontAwesome6 name="chevron-right" size={24} color={colors.text} />
-                    </Pressable>
-                  ) : (
-                    <View style={styles.heroArrowSpacer} />
-                  )}
-                </View>
+                <HeroPagerArrows
+                  prevDisabled={selectedWindowIndex <= 0}
+                  nextDisabled={selectedWindowIndex >= analytics.windows.length - 1}
+                  onPrev={() => {
+                    const previous = analytics.windows[selectedWindowIndex - 1];
+                    if (!previous) return;
+                    setSelectedWindowId(previous.id);
+                    Haptics.selectionAsync().catch(() => undefined);
+                  }}
+                  onNext={() => {
+                    const next = analytics.windows[selectedWindowIndex + 1];
+                    if (!next) return;
+                    setSelectedWindowId(next.id);
+                    Haptics.selectionAsync().catch(() => undefined);
+                  }}
+                />
               ) : null}
             </View>
 
             {analytics.error ? (
               <View style={styles.section}>
-                <View style={styles.errorCard}>
-                  <Text style={styles.errorTitle}>Dashboard needs a refresh</Text>
+                <ErrorCard title="Dashboard needs a refresh">
                   <Text style={styles.emptyText}>{analytics.error}</Text>
-                </View>
+                </ErrorCard>
               </View>
             ) : null}
 
@@ -497,28 +475,6 @@ const styles = StyleSheet.create({
   content: { paddingBottom: spacing.xxl * 4, gap: spacing.lg },
   contentDesktop: { width: '100%', maxWidth: 1360, alignSelf: 'center', paddingHorizontal: spacing.xl },
   heroWrap: { marginHorizontal: spacing.lg },
-  heroArrows: {
-    position: 'absolute',
-    left: spacing.sm,
-    right: spacing.sm,
-    top: 0,
-    bottom: 0,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  heroArrowSpacer: { width: 34 },
-  heroArrow: {
-    width: 34,
-    height: 34,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(11,11,15,0.46)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-  },
-  heroArrowPressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
   heroSkeletonCard: { marginHorizontal: spacing.lg, gap: spacing.sm },
   skeletonChipRow: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, flexWrap: 'wrap' },
   section: { paddingHorizontal: spacing.lg, gap: spacing.sm },
@@ -617,12 +573,4 @@ const styles = StyleSheet.create({
   emptyInset: { paddingVertical: spacing.lg },
   emptyTitle: { ...typography.body, color: colors.text, fontWeight: '700', marginBottom: spacing.xs },
   emptyText: { ...typography.body, color: colors.textMuted },
-  errorCard: {
-    backgroundColor: 'rgba(255,92,122,0.12)',
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: 'rgba(255,92,122,0.32)',
-  },
-  errorTitle: { ...typography.body, color: colors.text, fontWeight: '700', marginBottom: spacing.xs },
 });

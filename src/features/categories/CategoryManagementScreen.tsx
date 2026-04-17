@@ -271,7 +271,7 @@ export default function CategoryManagementScreen() {
       mode: 'create-parent',
       parentId: null,
       name: '',
-      icon: 'shape-outline',
+      icon: 'shapes',
       color: '#7C5CFF',
       level: 1,
       readOnly: false,

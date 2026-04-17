@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { FontAwesome6 } from '@expo/vector-icons';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { runDetached } from '@/lib/async';
@@ -17,9 +16,12 @@ import { ScreenHeader } from '@/ui/ScreenHeader';
 import { SkeletonBlock, SkeletonCard } from '@/ui/Skeleton';
 import { TopCategoriesSection } from '@/ui/TopCategoriesSection';
 import { HeroCard } from '@/ui/HeroCard';
+import { ErrorCard } from '@/ui/ErrorCard';
+import { HeroPagerArrows } from '@/ui/HeroPagerArrows';
+import { useMotionRefresh } from '@/ui/useMotionRefresh';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 import { formatMinor, formatPercent } from '@/lib/format';
-import { buildNavigableCycles, findCycleFor, type SalaryCycle } from '@/lib/cycles';
+import { buildNavigableCycles, cycleMatch, findCycleFor, formatHeroCycleRange, toLocalIsoDay } from '@/lib/cycles';
 import { computeSharedCycle } from '@/lib/shared';
 import type { TransactionRow } from '@/features/transactions/types';
 import { supabase } from '@/lib/supabase';
@@ -29,34 +31,6 @@ type RangeFilter = 'month' | 'year' | 'all';
 const ratioMeColor = '#60A5FA';
 const ratioGfColor = '#F472B6';
 
-const toLocalIsoDay = (date: Date): string => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-const heroRangeDate = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' });
-
-const formatHeroCycleRange = (cycle: SalaryCycle, today: Date): string => {
-  const startParts = cycle.startOn.split('-').map(Number);
-  const endExclusiveParts = cycle.endOnExclusive
-    ? cycle.endOnExclusive.split('-').map(Number)
-    : [today.getFullYear(), today.getMonth() + 1, today.getDate()];
-
-  const startYear = startParts[0] ?? 1970;
-  const startMonth = startParts[1] ?? 1;
-  const startDay = startParts[2] ?? 1;
-  const endYear = endExclusiveParts[0] ?? today.getFullYear();
-  const endMonth = endExclusiveParts[1] ?? today.getMonth() + 1;
-  const endDay = endExclusiveParts[2] ?? today.getDate();
-  const endBase = new Date(endYear, endMonth - 1, endDay);
-  const endDate = cycle.endOnExclusive && endDay === 1
-    ? new Date(endBase.getFullYear(), endBase.getMonth(), endBase.getDate() - 1)
-    : endBase;
-
-  return `${heroRangeDate.format(new Date(startYear, startMonth - 1, startDay))} – ${heroRangeDate.format(endDate)}`;
-};
 
 function SharedRatioBar({ ratio }: { ratio: number }): ReactElement {
   const meShare = Math.max(0, Math.min(1, ratio));
@@ -69,13 +43,6 @@ function SharedRatioBar({ ratio }: { ratio: number }): ReactElement {
     </View>
   );
 }
-
-const cycleMatch = (row: TransactionRow, cycle: SalaryCycle | null): boolean => {
-  if (!cycle) return false;
-  const afterStart = row.occurred_on >= cycle.startOn;
-  const beforeEnd = cycle.endOnExclusive === null || row.occurred_on < cycle.endOnExclusive;
-  return afterStart && beforeEnd;
-};
 
 function SharedSkeleton() {
   return (
@@ -141,7 +108,7 @@ export default function SharedScreen() {
   const [filter, setFilter] = useState<RangeFilter>('month');
   const [selectedCycleId, setSelectedCycleId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [motionRun, setMotionRun] = useState(0);
+  const motionRun = useMotionRefresh();
   const heroPagerRef = useRef<ScrollView | null>(null);
   const [heroPagerWidth, setHeroPagerWidth] = useState(0);
   const currentYear = new Date().getFullYear();
@@ -152,12 +119,6 @@ export default function SharedScreen() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [composer.refreshKey]);
-
-  useFocusEffect(
-    useCallback(() => {
-      setMotionRun((current) => current + 1);
-    }, []),
-  );
 
   const cycles = useMemo(
     () => buildNavigableCycles(data.transactions),
@@ -479,37 +440,24 @@ export default function SharedScreen() {
                     const hasNext = cycleIdx < cyclesWithTransactions.length - 1;
 
                     return (
-                      <View pointerEvents="box-none" style={styles.heroArrows}>
-                        {hasPrev ? (
-                          <Pressable
-                            style={({ pressed }) => [styles.heroArrow, pressed && styles.heroArrowPressed]}
-                            onPress={() => {
-                              const next = cyclesWithTransactions[cycleIdx - 1];
-                              if (!next) return;
-                              setSelectedCycleId(next.id);
-                              heroPagerRef.current?.scrollTo({ x: (cycleIdx - 1) * heroPagerWidth, animated: true });
-                              runDetached(Haptics.selectionAsync(), 'shared.carousel.prev.haptics');
-                            }}
-                          >
-                            <FontAwesome6 name="chevron-left" size={24} color={colors.text} />
-                          </Pressable>
-                        ) : <View style={styles.heroArrowSpacer} />}
-
-                        {hasNext ? (
-                          <Pressable
-                            style={({ pressed }) => [styles.heroArrow, pressed && styles.heroArrowPressed]}
-                            onPress={() => {
-                              const next = cyclesWithTransactions[cycleIdx + 1];
-                              if (!next) return;
-                              setSelectedCycleId(next.id);
-                              heroPagerRef.current?.scrollTo({ x: (cycleIdx + 1) * heroPagerWidth, animated: true });
-                              runDetached(Haptics.selectionAsync(), 'shared.carousel.next.haptics');
-                            }}
-                          >
-                            <FontAwesome6 name="chevron-right" size={24} color={colors.text} />
-                          </Pressable>
-                        ) : <View style={styles.heroArrowSpacer} />}
-                      </View>
+                      <HeroPagerArrows
+                        prevDisabled={!hasPrev}
+                        nextDisabled={!hasNext}
+                        onPrev={() => {
+                          const next = cyclesWithTransactions[cycleIdx - 1];
+                          if (!next) return;
+                          setSelectedCycleId(next.id);
+                          heroPagerRef.current?.scrollTo({ x: (cycleIdx - 1) * heroPagerWidth, animated: true });
+                          runDetached(Haptics.selectionAsync(), 'shared.carousel.prev.haptics');
+                        }}
+                        onNext={() => {
+                          const next = cyclesWithTransactions[cycleIdx + 1];
+                          if (!next) return;
+                          setSelectedCycleId(next.id);
+                          heroPagerRef.current?.scrollTo({ x: (cycleIdx + 1) * heroPagerWidth, animated: true });
+                          runDetached(Haptics.selectionAsync(), 'shared.carousel.next.haptics');
+                        }}
+                      />
                     );
                   })() : null}
                 </View>
@@ -525,10 +473,13 @@ export default function SharedScreen() {
               ) : null}
 
               {data.error ? (
-                <View style={styles.errorCard}>
-                  <Text style={styles.errorTitle}>Could not refresh shared data</Text>
+                <ErrorCard
+                  title="Could not refresh shared data"
+                  gap={spacing.sm}
+                  style={{ marginHorizontal: spacing.lg }}
+                >
                   <Text style={styles.metricMeta}>{data.error}</Text>
-                </View>
+                </ErrorCard>
               ) : null}
 
               <View style={styles.metricsRow}>
@@ -697,28 +648,6 @@ const styles = StyleSheet.create({
   filterChipPressed: { opacity: 0.86 },
   filterChipText: { ...typography.label, color: colors.textMuted, fontWeight: '600' },
   filterChipTextActive: { color: colors.text },
-  heroArrows: {
-    position: 'absolute',
-    left: spacing.sm,
-    right: spacing.sm,
-    top: 0,
-    bottom: 0,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  heroArrowSpacer: { width: 34 },
-  heroArrow: {
-    width: 34,
-    height: 34,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(11,11,15,0.46)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-  },
-  heroArrowPressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
   metricsRow: { flexDirection: 'row', gap: spacing.md, paddingHorizontal: spacing.lg },
   metricMotion: { flex: 1 },
   metricCard: { flex: 1, backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.lg, gap: spacing.xs },
@@ -726,16 +655,6 @@ const styles = StyleSheet.create({
   metricAmount: { ...typography.h2, color: colors.text },
   metricMeta: { ...typography.label, color: colors.textMuted },
   card: { marginHorizontal: spacing.lg, backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.lg, gap: spacing.sm },
-  errorCard: {
-    marginHorizontal: spacing.lg,
-    backgroundColor: 'rgba(255,92,122,0.12)',
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    gap: spacing.sm,
-    borderWidth: 1,
-    borderColor: 'rgba(255,92,122,0.32)',
-  },
-  errorTitle: { ...typography.body, color: colors.text, fontWeight: '700' },
   sectionTitle: { ...typography.label, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
   explainer: { ...typography.body, color: colors.text },
   ratioLegend: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
