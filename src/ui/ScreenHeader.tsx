@@ -10,6 +10,7 @@ type Action = {
   onPress: () => void;
   disabled?: boolean;
   tone?: 'default' | 'accent';
+  badgeCount?: number;
 };
 
 export function ScreenHeader({
@@ -75,6 +76,11 @@ export function ScreenHeader({
                 size={20}
                 color={action.tone === 'accent' && !action.disabled ? colors.accent : colors.text}
               />
+              {typeof action.badgeCount === 'number' && action.badgeCount > 0 ? (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{action.badgeCount > 99 ? '99+' : String(action.badgeCount)}</Text>
+                </View>
+              ) : null}
             </Pressable>
           </MotionView>
         ))}
@@ -98,6 +104,25 @@ const styles = StyleSheet.create({
   subtitle: { ...typography.label, color: colors.textMuted, marginTop: 2 },
   actions: { flexDirection: 'row', gap: spacing.sm, paddingTop: 2 },
   iconMotion: { alignSelf: 'flex-start' },
-  iconButton: { padding: 4 },
+  iconButton: { padding: 4, position: 'relative' },
   iconButtonDisabled: { opacity: 0.4 },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -8,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.danger,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    ...typography.caption,
+    color: colors.bg,
+    fontSize: 10,
+    lineHeight: 12,
+    fontWeight: '700',
+  },
 });

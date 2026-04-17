@@ -191,6 +191,15 @@ export default function BudgetScreen() {
     }
     return map;
   }, [data.categories]);
+  const isParentRollupCategory = useMemo(() => {
+    return (categoryId: string): boolean => {
+      const category = categoryById.get(categoryId);
+      if (!category || category.level !== 1) return false;
+      const childIds = childIdsByParentId.get(categoryId) ?? [];
+      if (childIds.length === 0) return false;
+      return category.name !== 'Other';
+    };
+  }, [categoryById, childIdsByParentId]);
   const expenseParentIds = useMemo(
     () => new Set(data.categories.filter((category) => category.level === 1 && !isIncomeCategoryRow(category, incomeParentIds)).map((category) => category.id)),
     [data.categories, incomeParentIds],
@@ -223,12 +232,13 @@ export default function BudgetScreen() {
     const parents = data.categories.filter((category) => category.level === 1 && !isIncomeCategoryRow(category, incomeParentIds));
 
     for (const parent of parents) {
-      const childIds = childIdsByParentId.get(parent.id) ?? [];
-      if (childIds.length === 0) {
+      if (!isParentRollupCategory(parent.id)) {
         const direct = budgetStates[parent.id] ?? null;
         if (direct) out.set(parent.id, direct);
         continue;
       }
+
+      const childIds = childIdsByParentId.get(parent.id) ?? [];
 
       const childBudgets = childIds
         .map((childId) => budgetStates[childId])
@@ -247,7 +257,7 @@ export default function BudgetScreen() {
     }
 
     return out;
-  }, [budgetStates, childIdsByParentId, data.categories, incomeParentIds]);
+  }, [budgetStates, childIdsByParentId, data.categories, incomeParentIds, isParentRollupCategory]);
 
   const spentByCategoryId = useMemo(() => {
     if (!selectedCycle) return new Map<string, number>();
@@ -264,13 +274,9 @@ export default function BudgetScreen() {
     return (categoryId: string): boolean => {
       const category = categoryById.get(categoryId);
       if (!category || isIncomeCategoryRow(category, incomeParentIds)) return false;
-      const childIds = childIdsByParentId.get(categoryId) ?? [];
-      if (childIds.length === 0) return true;
-      const parent = data.categories.find((c) => c.id === categoryId);
-      if (parent?.name === 'Other') return true;
-      return false;
+      return !isParentRollupCategory(categoryId);
     };
-  }, [categoryById, childIdsByParentId, data.categories, incomeParentIds]);
+  }, [categoryById, incomeParentIds, isParentRollupCategory]);
 
   const groupedRows = useMemo(() => {
     const parents = data.categories
@@ -327,10 +333,10 @@ export default function BudgetScreen() {
       selectedCycleBudgets.reduce((sum, budget) => {
         const category = categoryById.get(budget.category_id);
         if (!category) return sum;
-        if (category.level === 1 && (childIdsByParentId.get(category.id) ?? []).length > 0) return sum;
+        if (isParentRollupCategory(category.id)) return sum;
         return sum + budget.amount_minor;
       }, 0),
-    [categoryById, childIdsByParentId, selectedCycleBudgets],
+    [categoryById, isParentRollupCategory, selectedCycleBudgets],
   );
 
   const remainingAfterBudgetsMinor = cycleSalaryMinor - totalDefinedBudgetsMinor;
@@ -348,8 +354,8 @@ export default function BudgetScreen() {
 
     return [...usedParentIds]
       .filter((parentId) => {
-        const childIds = childIdsByParentId.get(parentId) ?? [];
-        if (childIds.length > 0) {
+        if (isParentRollupCategory(parentId)) {
+          const childIds = childIdsByParentId.get(parentId) ?? [];
           return childIds.every((childId) => !budgetByCategoryId.has(childId));
         }
         return !budgetByCategoryId.has(parentId);
@@ -363,7 +369,7 @@ export default function BudgetScreen() {
         };
       })
       .sort((a, b) => a.label.localeCompare(b.label));
-  }, [budgetByCategoryId, categoryMeta, childIdsByParentId, data.transactions, expenseParentIds, parentByCategoryId, selectedCycle]);
+  }, [budgetByCategoryId, categoryMeta, childIdsByParentId, data.transactions, expenseParentIds, isParentRollupCategory, parentByCategoryId, selectedCycle]);
 
   const filteredRows = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();

@@ -35,12 +35,51 @@ import { useMotionRefresh } from '@/ui/useMotionRefresh';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 import { transactionBalance } from '@/lib/balance';
 import { formatMinor } from '@/lib/format';
-import { buildNavigableCycles, cycleMatch, findCycleFor, formatHeroCycleRange, toLocalIsoDay } from '@/lib/cycles';
+import { buildNavigableCycles, type SalaryCycle } from '@/lib/cycles';
 import type { TransactionRow } from '@/features/transactions/types';
 import { supabase } from '@/lib/supabase';
 
 type RangeFilter = 'month' | 'year' | 'all';
 const TOP_CATEGORIES_COLLAPSED_COUNT = 5;
+
+const pad2 = (value: number): string => String(value).padStart(2, '0');
+
+const toLocalIsoDay = (date: Date): string =>
+  `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+
+const findCycleFor = (cycles: readonly SalaryCycle[], occurredOn: string): SalaryCycle | null => {
+  for (const cycle of cycles) {
+    const afterStart = occurredOn >= cycle.startOn;
+    const beforeEnd = cycle.endOnExclusive === null || occurredOn < cycle.endOnExclusive;
+    if (afterStart && beforeEnd) return cycle;
+  }
+  return null;
+};
+
+const cycleMatch = (row: { occurred_on: string }, cycle: SalaryCycle | null): boolean => {
+  if (!cycle) return false;
+  const afterStart = row.occurred_on >= cycle.startOn;
+  const beforeEnd = cycle.endOnExclusive === null || row.occurred_on < cycle.endOnExclusive;
+  return afterStart && beforeEnd;
+};
+
+const parseYmd = (ymd: string): { y: number; m: number; d: number } => {
+  const [year, month, day] = ymd.split('-').map(Number);
+  return { y: year ?? 0, m: month ?? 0, d: day ?? 0 };
+};
+
+const rangeDateFormatter = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' });
+
+const formatHeroCycleRange = (cycle: SalaryCycle, today: Date): string => {
+  const start = parseYmd(cycle.startOn);
+  const endExclusive = cycle.endOnExclusive
+    ? parseYmd(cycle.endOnExclusive)
+    : { y: today.getFullYear(), m: today.getMonth() + 1, d: today.getDate() };
+  const endDate = cycle.endOnExclusive && endExclusive.d === 1
+    ? new Date(endExclusive.y, endExclusive.m - 1, endExclusive.d - 1)
+    : new Date(endExclusive.y, endExclusive.m - 1, endExclusive.d);
+  return `${rangeDateFormatter.format(new Date(start.y, start.m - 1, start.d))} – ${rangeDateFormatter.format(endDate)}`;
+};
 
 
 function HomeSkeleton() {
@@ -118,6 +157,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const data = useOverview();
   const composer = useComposer();
+  const alertCount = data.budgetAlerts.length;
   const [filter, setFilter] = useState<RangeFilter>('month');
   const [selectedCycleId, setSelectedCycleId] = useState<string | null>(null);
   const [topCategoriesExpanded, setTopCategoriesExpanded] = useState(false);
@@ -447,7 +487,7 @@ export default function HomeScreen() {
           title="Home"
           subtitle="Personal flow"
           actions={[
-            { icon: 'bell', onPress: () => router.push('/alerts') },
+            { icon: 'bell', onPress: () => router.push('/alerts'), badgeCount: alertCount },
             { icon: 'brain', onPress: () => router.push('/ai-rules') }
           ]}
         />
