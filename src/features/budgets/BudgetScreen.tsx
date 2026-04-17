@@ -260,6 +260,18 @@ export default function BudgetScreen() {
     return out;
   }, [data.transactions, selectedCycle]);
 
+  const isEditableCategory = useMemo(() => {
+    return (categoryId: string): boolean => {
+      const category = categoryById.get(categoryId);
+      if (!category || isIncomeCategoryRow(category, incomeParentIds)) return false;
+      const childIds = childIdsByParentId.get(categoryId) ?? [];
+      if (childIds.length === 0) return true;
+      const parent = data.categories.find((c) => c.id === categoryId);
+      if (parent?.name === 'Other') return true;
+      return false;
+    };
+  }, [categoryById, childIdsByParentId, data.categories, incomeParentIds]);
+
   const groupedRows = useMemo(() => {
     const parents = data.categories
       .filter((category) => category.level === 1 && !isIncomeCategoryRow(category, incomeParentIds))
@@ -270,8 +282,8 @@ export default function BudgetScreen() {
         const children = parent.name === 'Other'
           ? []
           : data.categories
-              .filter((category) => category.parent_id === parent.id)
-              .sort((a, b) => a.name.localeCompare(b.name));
+            .filter((category) => category.parent_id === parent.id)
+            .sort((a, b) => a.name.localeCompare(b.name));
         const childIds = children.map((child) => child.id);
         const childRows = children.map((child) => ({
           category: child,
@@ -397,9 +409,7 @@ export default function BudgetScreen() {
 
   const saveBudget = async (): Promise<void> => {
     if (!draft || !data.userId || !selectedCycle) return;
-    const draftCategory = categoryById.get(draft.categoryId);
-    if (!draftCategory || isIncomeCategoryRow(draftCategory, incomeParentIds)) return;
-    if ((childIdsByParentId.get(draft.categoryId) ?? []).length > 0) return;
+    if (!isEditableCategory(draft.categoryId)) return;
     const amountMinor = parseMinor(draft.amount);
     if (amountMinor === null) return;
 
@@ -432,9 +442,7 @@ export default function BudgetScreen() {
 
   const setNoBudget = async (): Promise<void> => {
     if (!draft) return;
-    const draftCategory = categoryById.get(draft.categoryId);
-    if (!draftCategory || isIncomeCategoryRow(draftCategory, incomeParentIds)) return;
-    if ((childIdsByParentId.get(draft.categoryId) ?? []).length > 0) return;
+    if (!isEditableCategory(draft.categoryId)) return;
     if (!draft.budgetId && !budgetByCategoryId.get(draft.categoryId)?.id) {
       setDraft(null);
       setKeypadOpen(true);
@@ -444,7 +452,7 @@ export default function BudgetScreen() {
   };
 
   const removeBudget = async (): Promise<void> => {
-    if (draft && (childIdsByParentId.get(draft.categoryId) ?? []).length > 0) return;
+    if (draft && !isEditableCategory(draft.categoryId)) return;
     const budgetId = draft?.budgetId ?? budgetByCategoryId.get(draft?.categoryId ?? '')?.id;
     if (!budgetId) return;
     setSaving(true);
