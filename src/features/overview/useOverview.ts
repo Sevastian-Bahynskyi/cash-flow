@@ -25,6 +25,7 @@ export type BudgetRow = {
   category_id: string;
   salary_cycle_id: string;
   amount_minor: number;
+  notes: string | null;
   created_at: string;
 };
 
@@ -40,6 +41,23 @@ export type BudgetAlert = {
   spentMinor: number;
   amountMinor: number;
   level: 'warning' | 'critical';
+};
+
+export type MerchantRuleRow = {
+  id: string;
+  user_id: string;
+  match_target: 'normalized_merchant' | 'raw_text' | 'bank_category' | 'sender' | 'receiver';
+  match_type: 'exact' | 'prefix' | 'contains' | 'regex';
+  pattern: string;
+  kind: 'expense' | 'income';
+  canonical_merchant: string | null;
+  category_id: string | null;
+  is_shared_topup: boolean;
+  is_blocked: boolean;
+  priority: number;
+  source: 'manual' | 'bootstrap_curated' | 'bootstrap_history';
+  notes: string | null;
+  updated_at: string;
 };
 
 export type OverviewData = {
@@ -69,6 +87,7 @@ export type OverviewData = {
   topCategories: TopCategory[];
   budgetAlerts: BudgetAlert[];
   categoryLabels: Record<string, string>;
+  merchantRules: MerchantRuleRow[];
   reload: () => Promise<void>;
 };
 
@@ -110,6 +129,7 @@ export const useOverview = (): OverviewData => {
   const [topCategories, setTopCategories] = useState<TopCategory[]>([]);
   const [budgetAlerts, setBudgetAlerts] = useState<BudgetAlert[]>([]);
   const [categoryLabels, setCategoryLabels] = useState<Record<string, string>>({});
+  const [merchantRulesState, setMerchantRulesState] = useState<MerchantRuleRow[]>([]);
 
   const load = useCallback(async (): Promise<void> => {
     setLoading(true);
@@ -123,7 +143,7 @@ export const useOverview = (): OverviewData => {
       }
       setUserId(userData.user.id);
 
-      const [txnsRes, savingsAccountsRes, savingsRes, loansRes, loanEventsRes, receivablesRes, receivableEventsRes, budgetsRes, catsRes, categoryOverridesRes] = await Promise.all([
+      const [txnsRes, savingsAccountsRes, savingsRes, loansRes, loanEventsRes, receivablesRes, receivableEventsRes, budgetsRes, catsRes, categoryOverridesRes, merchantRulesRes] = await Promise.all([
         supabase
           .from('transactions')
           .select(
@@ -155,13 +175,18 @@ export const useOverview = (): OverviewData => {
           .select('id, receivable_id, user_id, kind, amount_minor, occurred_on, created_at'),
         supabase
           .from('budgets')
-          .select('id, user_id, category_id, salary_cycle_id, amount_minor, created_at'),
+          .select('id, user_id, category_id, salary_cycle_id, amount_minor, notes, created_at'),
         supabase
           .from('categories')
           .select('id, user_id, parent_id, name, level, is_system, icon, color'),
         supabase
           .from('category_overrides')
           .select('id, user_id, category_id, name, icon, updated_at'),
+        supabase
+          .from('merchant_category_rules')
+          .select('id, user_id, match_target, match_type, pattern, kind, canonical_merchant, category_id, is_shared_topup, is_blocked, priority, source, notes, updated_at')
+          .order('priority', { ascending: false })
+          .order('updated_at', { ascending: false }),
       ]);
 
       if (txnsRes.error) throw txnsRes.error;
@@ -174,6 +199,7 @@ export const useOverview = (): OverviewData => {
       if (budgetsRes.error) throw budgetsRes.error;
       if (catsRes.error) throw catsRes.error;
       if (categoryOverridesRes.error) throw categoryOverridesRes.error;
+      if (merchantRulesRes.error) throw merchantRulesRes.error;
 
       const txns = (txnsRes.data ?? []) as TxnRow[];
       const savingsAccountsRows = (savingsAccountsRes.data ?? []) as SavingsAccountRow[];
@@ -183,6 +209,7 @@ export const useOverview = (): OverviewData => {
       const receivables = (receivablesRes.data ?? []) as ReceivableRow[];
       const receivableEventsRows = (receivableEventsRes.data ?? []) as ReceivableEventRow[];
       const budgets = (budgetsRes.data ?? []) as BudgetRow[];
+      const merchantRules = (merchantRulesRes.data ?? []) as MerchantRuleRow[];
       const cats = applyCategoryOverrides(
         (catsRes.data ?? []) as CategoryRow[],
         (categoryOverridesRes.data ?? []) as CategoryOverrideRow[],
@@ -305,6 +332,7 @@ export const useOverview = (): OverviewData => {
       setTopCategories(topCats);
       setBudgetAlerts(alerts);
       setCategoryLabels(Object.fromEntries(catLabels.entries()));
+      setMerchantRulesState(merchantRules);
     } catch (e) {
       reportDevError('overview.load', e);
       setError(getErrorMessage(e, 'Failed to load overview'));
@@ -345,6 +373,7 @@ export const useOverview = (): OverviewData => {
     topCategories,
     budgetAlerts,
     categoryLabels,
+    merchantRules: merchantRulesState,
     reload: load,
   };
 };

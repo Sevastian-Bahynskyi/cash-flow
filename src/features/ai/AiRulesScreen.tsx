@@ -23,16 +23,18 @@ import { colors, radius, spacing, typography } from '@/ui/tokens';
 import {
   deleteMerchantRule,
   fetchMerchantRules,
+  upsertMerchantRule,
   type MerchantRuleRow,
 } from '@/features/transactions/suggestions';
 
 type RuleDraft = {
-  id: string;
+  id?: string;
   pattern: string;
   kind: 'expense' | 'income';
   category_id: string | null;
   is_blocked: boolean;
   is_shared_topup: boolean;
+  notes: string;
 };
 
 function MerchantRulesSkeleton() {
@@ -68,6 +70,7 @@ export default function AiRulesScreen() {
   const [draft, setDraft] = useState<RuleDraft | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [savingDraft, setSavingDraft] = useState(false);
 
   const categoryMeta = useMemo(() => buildCategoryMeta(overview.categories), [overview.categories]);
 
@@ -117,17 +120,45 @@ export default function AiRulesScreen() {
 
   const saveDraft = async (): Promise<void> => {
     if (!draft) return;
-    const { error } = await supabase
-      .from('merchant_category_rules')
-      .update({
-        category_id: draft.is_blocked ? null : draft.category_id,
-        is_blocked: draft.is_blocked,
-        is_shared_topup: draft.is_shared_topup,
-      })
-      .eq('id', draft.id);
-    if (!error) {
+    const normalizedPattern = draft.pattern.trim().toLowerCase();
+    if (normalizedPattern.length < 2) return;
+    if (!draft.is_blocked && !draft.category_id) return;
+
+    setSavingDraft(true);
+    try {
+      if (draft.id) {
+        const { error } = await supabase
+          .from('merchant_category_rules')
+          .update({
+            kind: draft.kind,
+            pattern: normalizedPattern,
+            canonical_merchant: normalizedPattern,
+            category_id: draft.is_blocked ? null : draft.category_id,
+            is_blocked: draft.is_blocked,
+            is_shared_topup: draft.kind === 'expense' ? draft.is_shared_topup : false,
+            notes: draft.notes.trim().length === 0 ? null : draft.notes.trim(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', draft.id);
+        if (error) return;
+      } else {
+        const ok = await upsertMerchantRule({
+          kind: draft.kind,
+          pattern: normalizedPattern,
+          categoryId: draft.is_blocked ? null : draft.category_id,
+          canonicalMerchant: normalizedPattern,
+          isBlocked: draft.is_blocked,
+          isSharedTopup: draft.kind === 'expense' ? draft.is_shared_topup : false,
+          notes: draft.notes.trim().length === 0 ? null : draft.notes.trim(),
+          priority: 300,
+        });
+        if (!ok) return;
+      }
+
       await loadRules();
       setDraft(null);
+    } finally {
+      setSavingDraft(false);
     }
   };
 
@@ -137,6 +168,17 @@ export default function AiRulesScreen() {
       await loadRules();
       setDraft(null);
     }
+  };
+
+  const openCreateRule = (): void => {
+    setDraft({
+      pattern: '',
+      kind: 'expense',
+      category_id: null,
+      is_blocked: false,
+      is_shared_topup: false,
+      notes: '',
+    });
   };
 
   return (
@@ -162,6 +204,13 @@ export default function AiRulesScreen() {
           <>
             <View style={styles.hero}>
               <Text style={styles.heroTitle}>Deterministic beats mysterious</Text>
+              <Pressable
+                style={({ pressed }) => [styles.newRuleButton, pressed && styles.rowPressed]}
+                onPress={openCreateRule}
+              >
+                <MaterialCommunityIcons name="plus" size={18} color={colors.bg} />
+                <Text style={styles.newRuleButtonText}>Add rule</Text>
+              </Pressable>
             </View>
 
             <View style={styles.searchWrap}>
@@ -208,6 +257,7 @@ export default function AiRulesScreen() {
                         category_id: rule.category_id,
                         is_blocked: rule.is_blocked,
                         is_shared_topup: rule.is_shared_topup,
+                        notes: rule.notes ?? '',
                       })
                     }
                   >
@@ -243,11 +293,53 @@ export default function AiRulesScreen() {
           <ScreenHeader
             back
             onBack={() => setDraft(null)}
-            title="Edit Merchant Rule"
-            subtitle={draft?.pattern}
+            title={draft?.id ? 'Edit Merchant Rule' : 'Create Merchant Rule'}
+            subtitle={draft?.pattern || 'Set up deterministic categorization'}
             actions={[{ icon: 'check', onPress: () => runDetached(saveDraft(), 'merchantRules.saveDraft') }]}
           />
           <View style={styles.modalBody}>
+            <View style={styles.fieldBlock}>
+              <Text style={styles.fieldLabel}>Pattern</Text>
+              <TextInput
+                value={draft?.pattern ?? ''}
+                onChangeText={(value) => setDraft((current) => (current ? { ...current, pattern: value } : current))}
+                placeholder="merchant name, e.g. spotify"
+                placeholderTextColor={colors.textMuted}
+                autoCorrect={false}
+                autoCapitalize="none"
+                style={styles.fieldInput}
+              />
+              <Text style={styles.fieldHint}>Exact lowercase match used for deterministic categorization.</Text>
+            </View>
+
+            <View style={styles.kindRow}>
+              {(['expense', 'income'] as const).map((kind) => (
+                <Pressable
+                  key={kind}
+                  style={({ pressed }) => [
+                    styles.kindChip,
+                    draft?.kind === kind ? styles.kindChipActive : null,
+                    pressed && styles.rowPressed,
+                  ]}
+                  onPress={() =>
+                    setDraft((current) =>
+                      current
+                        ? {
+                            ...current,
+                            kind,
+                            is_shared_topup: kind === 'expense' ? current.is_shared_topup : false,
+                          }
+                        : current,
+                    )
+                  }
+                >
+                  <Text style={draft?.kind === kind ? styles.kindChipTextActive : styles.kindChipText}>
+                    {kind === 'expense' ? 'Expense' : 'Income'}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
             <Pressable
               style={({ pressed }) => [styles.actionRow, pressed && styles.rowPressed]}
               onPress={() => setDraft((current) => (current ? { ...current, is_blocked: !current.is_blocked } : current))}
@@ -302,15 +394,44 @@ export default function AiRulesScreen() {
               </Pressable>
             ) : null}
 
+            <View style={styles.fieldBlock}>
+              <Text style={styles.fieldLabel}>Notes</Text>
+              <TextInput
+                value={draft?.notes ?? ''}
+                onChangeText={(value) => setDraft((current) => (current ? { ...current, notes: value } : current))}
+                placeholder="Optional notes"
+                placeholderTextColor={colors.textMuted}
+                multiline
+                textAlignVertical="top"
+                style={styles.fieldInputMultiline}
+              />
+            </View>
+
             <Pressable
-              style={({ pressed }) => [styles.destructiveButton, pressed && styles.rowPressed]}
-              onPress={() => {
-                if (!draft) return;
-                runDetached(removeRule(draft.id), 'merchantRules.deleteRule');
-              }}
+              style={({ pressed }) => [
+                styles.primaryButton,
+                (pressed || savingDraft) && styles.rowPressed,
+                (savingDraft || (draft?.pattern.trim().length ?? 0) < 2 || (!draft?.is_blocked && !draft?.category_id))
+                  ? styles.primaryButtonDisabled
+                  : null,
+              ]}
+              onPress={() => runDetached(saveDraft(), 'merchantRules.saveButton')}
+              disabled={savingDraft || (draft?.pattern.trim().length ?? 0) < 2 || (!draft?.is_blocked && !draft?.category_id)}
             >
-              <Text style={styles.destructiveButtonText}>Delete rule</Text>
+              <Text style={styles.primaryButtonText}>{savingDraft ? 'Saving...' : draft?.id ? 'Save Changes' : 'Create Rule'}</Text>
             </Pressable>
+
+            {draft?.id ? (
+              <Pressable
+                style={({ pressed }) => [styles.destructiveButton, pressed && styles.rowPressed]}
+                onPress={() => {
+                  if (!draft.id) return;
+                  runDetached(removeRule(draft.id), 'merchantRules.deleteRule');
+                }}
+              >
+                <Text style={styles.destructiveButtonText}>Delete rule</Text>
+              </Pressable>
+            ) : null}
           </View>
 
           <CategorySheet
@@ -334,8 +455,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
     padding: spacing.lg,
+    gap: spacing.md,
   },
   heroTitle: { ...typography.h2, color: colors.text },
+  newRuleButton: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.accent,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  newRuleButtonText: { ...typography.label, color: colors.bg, fontWeight: '700' },
   searchWrap: {
     backgroundColor: colors.surface,
     borderRadius: radius.md,
@@ -376,6 +509,61 @@ const styles = StyleSheet.create({
   ruleHint: { ...typography.label, color: colors.accent },
   modalSafeArea: { flex: 1, backgroundColor: colors.bg },
   modalBody: { flex: 1, padding: spacing.lg, gap: spacing.sm },
+  fieldBlock: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  fieldLabel: { ...typography.label, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
+  fieldInput: {
+    ...typography.body,
+    color: colors.text,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+  },
+  fieldInputMultiline: {
+    ...typography.body,
+    color: colors.text,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    minHeight: 96,
+  },
+  fieldHint: { ...typography.label, color: colors.textMuted },
+  kindRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  kindChip: {
+    flex: 1,
+    alignItems: 'center',
+    borderRadius: radius.pill,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  kindChipActive: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  kindChipText: { ...typography.label, color: colors.text },
+  kindChipTextActive: { ...typography.label, color: colors.bg, fontWeight: '700' },
+  primaryButton: {
+    marginTop: spacing.sm,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    backgroundColor: colors.accent,
+  },
+  primaryButtonDisabled: {
+    opacity: 0.5,
+  },
+  primaryButtonText: { ...typography.body, color: colors.bg, fontWeight: '700' },
   actionRow: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,

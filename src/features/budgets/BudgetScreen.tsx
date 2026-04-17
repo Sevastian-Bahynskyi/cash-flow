@@ -24,12 +24,14 @@ import { runDetached } from '@/lib/async';
 import { supabase } from '@/lib/supabase';
 import { formatMinor, formatPercent } from '@/lib/format';
 import { buildNavigableCycles, findCycleFor, type SalaryCycle } from '@/lib/cycles';
+import type { BudgetRow } from '@/features/overview/useOverview';
 import { ProgressBar } from '@/ui/ProgressBar';
 import { ScreenHeader } from '@/ui/ScreenHeader';
 import { CategoryIcon } from '@/ui/CategoryIcon';
 import { NumericKeypad } from '@/ui/NumericKeypad';
 import { SkeletonBlock, SkeletonCard } from '@/ui/Skeleton';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
+import RichTextEditor, { RichTextDisplay } from '@/ui/RichTextEditor';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -40,6 +42,7 @@ type BudgetDraft = {
   label: string;
   icon: string;
   amount: string;
+  notes: string;
   budgetId?: string;
 };
 
@@ -331,6 +334,7 @@ export default function BudgetScreen() {
         category_id: draft.categoryId,
         salary_cycle_id: selectedCycle.id,
         amount_minor: amountMinor,
+        notes: draft.notes || null,
       };
       const { error } = await supabase
         .from('budgets')
@@ -479,6 +483,7 @@ export default function BudgetScreen() {
                       : state?.tone === 'warning'
                         ? '#F5B942'
                         : parent.color;
+                  const parentBudget: BudgetRow | null = budgetByCategoryId.get(parent.id) ?? null;
                   return (
                     <View key={parent.id} style={styles.groupCard}>
                       <Pressable
@@ -489,12 +494,12 @@ export default function BudgetScreen() {
                         onLongPress={() => {
                           Keyboard.dismiss();
                           setKeypadOpen(true);
-                          const parentBudget = budgetByCategoryId.get(parent.id) ?? null;
                           setDraft({
                             categoryId: parent.id,
                             label,
                             icon,
                             amount: parentBudget ? String((parentBudget.amount_minor / 100).toFixed(2)) : '',
+                            notes: String((parentBudget?.notes) || ''),
                             budgetId: parentBudget?.id,
                           });
                         }}
@@ -517,6 +522,11 @@ export default function BudgetScreen() {
                               : 'Long press to set cycle target'}
                           </Text>
                           <ProgressBar value={state?.ratio ?? 0} color={tone} />
+                          {parentBudget && parentBudget.notes ? (
+                            <View style={styles.rowNotes}>
+                              <RichTextDisplay text={String(parentBudget.notes || '')} />
+                            </View>
+                          ) : null}
                         </View>
                         <Pressable
                           hitSlop={14}
@@ -642,6 +652,15 @@ export default function BudgetScreen() {
               <Text style={styles.helper}>
                 Use the same keypad as transactions. Progress updates automatically from transactions in the selected salary cycle.
               </Text>
+
+              <Text style={styles.label}>Notes</Text>
+              {draft ? (
+                <RichTextEditor
+                  value={draft.notes}
+                  onChange={(value) => setDraft((current) => (current ? { ...current, notes: value } : current))}
+                  placeholder="Add notes with **bold** formatting..."
+                />
+              ) : null}
 
               <Pressable
                 style={({ pressed }) => [styles.primaryButton, (pressed || saving) && styles.buttonPressed]}
@@ -781,6 +800,7 @@ const styles = StyleSheet.create({
   rowRatio: { ...typography.body, fontWeight: '700' },
   rowRatioMuted: { color: colors.textMuted },
   rowMeta: { ...typography.label, color: colors.textMuted },
+  rowNotes: { marginTop: spacing.xs, paddingTop: spacing.xs, borderTopWidth: 1, borderTopColor: colors.border },
   groupCard: { gap: spacing.sm },
   summaryCard: {
     marginTop: spacing.md,
