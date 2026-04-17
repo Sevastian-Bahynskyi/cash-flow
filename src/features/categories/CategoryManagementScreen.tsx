@@ -617,63 +617,63 @@ export default function CategoryManagementScreen() {
                   {(() => {
                     const parentBudgetState = budgetStates[parent.id] ?? null;
                     return (
-                  <View style={styles.parentHead}>
-                    <View
-                      style={[
-                        styles.parentIconWrap,
-                        isTransfersCategoryName(parent.name)
-                          ? styles.dualToneIconWrap
-                          : { backgroundColor: `${parent.color}22` },
-                      ]}
-                    >
-                      {isTransfersCategoryName(parent.name) ? (
-                        <>
-                          <View style={[styles.dualToneHalf, styles.dualToneHalfLeft, { backgroundColor: TRANSFER_EXPENSE_COLOR }]} />
-                          <View style={[styles.dualToneHalf, styles.dualToneHalfRight, { backgroundColor: TRANSFER_INCOME_COLOR }]} />
-                          <View style={styles.dualToneDivider} />
-                        </>
-                      ) : null}
-                      <CategoryIcon
-                        name={parent.icon}
-                        size={22}
-                        color={isTransfersCategoryName(parent.name) ? colors.text : parent.color}
-                      />
-                    </View>
-                    <View style={styles.parentCopy}>
-                      <Text style={styles.parentName}>{parent.name}</Text>
-                      <View style={styles.parentMetaRow}>
-                        <Text style={styles.parentMeta}>
-                          {parent.is_system ? 'System category' : 'Custom category'}
-                        </Text>
-                        {parentBudgetState ? (
-                          <Text
-                            style={[
-                              styles.budgetTag,
-                              { color: toneForBudget(parentBudgetState.tone) },
-                            ]}
-                          >
-                            Budget {Math.round(parentBudgetState.ratio * 100)}%
-                          </Text>
-                        ) : null}
-                      </View>
-                      {parentBudgetState ? (
-                        <View style={styles.progressWrap}>
-                          <View style={styles.progressRow}>
-                            <Text style={styles.progressText}>
-                              {formatMinor(parentBudgetState.spentMinor)} of {formatMinor(parentBudgetState.amountMinor)}
-                            </Text>
-                            <Text style={[styles.budgetTag, { color: toneForBudget(parentBudgetState.tone) }]}>
-                              Budget {Math.round(parentBudgetState.ratio * 100)}%
-                            </Text>
-                          </View>
-                          <ProgressBar
-                            value={parentBudgetState.ratio}
-                            color={toneForBudget(parentBudgetState.tone)}
+                      <View style={styles.parentHead}>
+                        <View
+                          style={[
+                            styles.parentIconWrap,
+                            isTransfersCategoryName(parent.name)
+                              ? styles.dualToneIconWrap
+                              : { backgroundColor: `${parent.color}22` },
+                          ]}
+                        >
+                          {isTransfersCategoryName(parent.name) ? (
+                            <>
+                              <View style={[styles.dualToneHalf, styles.dualToneHalfLeft, { backgroundColor: TRANSFER_EXPENSE_COLOR }]} />
+                              <View style={[styles.dualToneHalf, styles.dualToneHalfRight, { backgroundColor: TRANSFER_INCOME_COLOR }]} />
+                              <View style={styles.dualToneDivider} />
+                            </>
+                          ) : null}
+                          <CategoryIcon
+                            name={parent.icon}
+                            size={22}
+                            color={isTransfersCategoryName(parent.name) ? colors.text : parent.color}
                           />
                         </View>
-                      ) : null}
-                    </View>
-                  </View>
+                        <View style={styles.parentCopy}>
+                          <Text style={styles.parentName}>{parent.name}</Text>
+                          <View style={styles.parentMetaRow}>
+                            <Text style={styles.parentMeta}>
+                              {parent.is_system ? 'System category' : 'Custom category'}
+                            </Text>
+                            {parentBudgetState ? (
+                              <Text
+                                style={[
+                                  styles.budgetTag,
+                                  { color: toneForBudget(parentBudgetState.tone) },
+                                ]}
+                              >
+                                Budget {Math.round(parentBudgetState.ratio * 100)}%
+                              </Text>
+                            ) : null}
+                          </View>
+                          {parentBudgetState ? (
+                            <View style={styles.progressWrap}>
+                              <View style={styles.progressRow}>
+                                <Text style={styles.progressText}>
+                                  {formatMinor(parentBudgetState.spentMinor)} of {formatMinor(parentBudgetState.amountMinor)}
+                                </Text>
+                                <Text style={[styles.budgetTag, { color: toneForBudget(parentBudgetState.tone) }]}>
+                                  Budget {Math.round(parentBudgetState.ratio * 100)}%
+                                </Text>
+                              </View>
+                              <ProgressBar
+                                value={parentBudgetState.ratio}
+                                color={toneForBudget(parentBudgetState.tone)}
+                              />
+                            </View>
+                          ) : null}
+                        </View>
+                      </View>
                     );
                   })()}
 
