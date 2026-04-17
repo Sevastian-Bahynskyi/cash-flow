@@ -19,11 +19,12 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useOverview } from '@/features/overview/useOverview';
 import { buildCategoryMeta } from '@/features/categories/helpers';
 import { buildBudgetStateByCategory } from '@/features/budgets/helpers';
+import type { BudgetState } from '@/features/budgets/helpers';
 import { findIncomeParentIds, isIncomeCategoryRow } from '@/features/categories/rules';
 import { runDetached } from '@/lib/async';
 import { supabase } from '@/lib/supabase';
-import { formatMinor, formatPercent, parseMinor } from '@/lib/format';
-import { buildNavigableCycles, findCycleFor, toLocalIsoDay, type SalaryCycle } from '@/lib/cycles';
+import { formatMinor, formatPercent } from '@/lib/format';
+import { buildNavigableCycles, findCycleFor, type SalaryCycle } from '@/lib/cycles';
 import type { BudgetRow } from '@/features/overview/useOverview';
 import { ProgressBar } from '@/ui/ProgressBar';
 import { ScreenHeader } from '@/ui/ScreenHeader';
@@ -72,6 +73,19 @@ const highlightedAmount = (raw: string): { display: string; activeIndex: number 
   if (rawIndex < 0) return { display, activeIndex: null };
 
   return { display, activeIndex: rawIndex };
+};
+
+const pad2 = (value: number): string => String(value).padStart(2, '0');
+
+const toLocalIsoDay = (date: Date): string =>
+  `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+
+const parseMinor = (raw: string): number | null => {
+  const normalized = raw.trim().replace(',', '.');
+  if (!normalized) return null;
+  const value = Number(normalized);
+  if (!Number.isFinite(value) || value < 0) return null;
+  return Math.round(value * 100);
 };
 
 function BudgetSkeleton() {
@@ -162,6 +176,21 @@ export default function BudgetScreen() {
   );
   const amountDisplayState = useMemo(() => highlightedAmount(draft?.amount ?? ''), [draft?.amount]);
   const incomeParentIds = useMemo(() => findIncomeParentIds(data.categories), [data.categories]);
+  const categoryById = useMemo(
+    () => new Map(data.categories.map((category) => [category.id, category])),
+    [data.categories],
+  );
+  const childIdsByParentId = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const category of data.categories) {
+      if (category.level === 2 && category.parent_id) {
+        const current = map.get(category.parent_id) ?? [];
+        current.push(category.id);
+        map.set(category.parent_id, current);
+      }
+    }
+    return map;
+  }, [data.categories]);
   const expenseParentIds = useMemo(
     () => new Set(data.categories.filter((category) => category.level === 1 && !isIncomeCategoryRow(category, incomeParentIds)).map((category) => category.id)),
     [data.categories, incomeParentIds],
@@ -175,14 +204,61 @@ export default function BudgetScreen() {
   }, [data.categories]);
 
   const selectedCycleBudgets = useMemo(
-    () => data.budgets.filter((budget) => budget.salary_cycle_id === selectedCycle?.id && expenseParentIds.has(budget.category_id)),
-    [data.budgets, expenseParentIds, selectedCycle?.id],
+    () =>
+      data.budgets.filter((budget) => {
+        if (budget.salary_cycle_id !== selectedCycle?.id) return false;
+        const category = categoryById.get(budget.category_id);
+        return Boolean(category && !isIncomeCategoryRow(category, incomeParentIds));
+      }),
+    [categoryById, data.budgets, incomeParentIds, selectedCycle?.id],
   );
 
   const budgetByCategoryId = useMemo(
     () => new Map(selectedCycleBudgets.map((budget) => [budget.category_id, budget])),
     [selectedCycleBudgets],
   );
+
+  const budgetStateByParentId = useMemo(() => {
+    const out = new Map<string, BudgetState>();
+    const parents = data.categories.filter((category) => category.level === 1 && !isIncomeCategoryRow(category, incomeParentIds));
+
+    for (const parent of parents) {
+      const childIds = childIdsByParentId.get(parent.id) ?? [];
+      if (childIds.length === 0) {
+        const direct = budgetStates[parent.id] ?? null;
+        if (direct) out.set(parent.id, direct);
+        continue;
+      }
+
+      const childBudgets = childIds
+        .map((childId) => budgetStates[childId])
+        .filter((value): value is NonNullable<typeof value> => Boolean(value));
+      const amountMinor = childBudgets.reduce((sum, budget) => sum + budget.amountMinor, 0);
+      const spentMinor = childBudgets.reduce((sum, budget) => sum + budget.spentMinor, 0);
+      const ratio = amountMinor === 0 ? 0 : spentMinor / amountMinor;
+
+      out.set(parent.id, {
+        categoryId: parent.id,
+        amountMinor,
+        spentMinor,
+        ratio,
+        tone: ratio >= 1 ? 'critical' : ratio >= 0.8 ? 'warning' : 'neutral',
+      });
+    }
+
+    return out;
+  }, [budgetStates, childIdsByParentId, data.categories, incomeParentIds]);
+
+  const spentByCategoryId = useMemo(() => {
+    if (!selectedCycle) return new Map<string, number>();
+    const out = new Map<string, number>();
+    for (const row of data.transactions) {
+      if (row.kind !== 'expense' || row.shared || row.is_shared_topup || !row.category_id) continue;
+      if (!(row.occurred_on >= selectedCycle.startOn && (selectedCycle.endOnExclusive === null || row.occurred_on < selectedCycle.endOnExclusive))) continue;
+      out.set(row.category_id, (out.get(row.category_id) ?? 0) + row.amount_minor);
+    }
+    return out;
+  }, [data.transactions, selectedCycle]);
 
   const groupedRows = useMemo(() => {
     const parents = data.categories
@@ -191,22 +267,27 @@ export default function BudgetScreen() {
 
     return parents
       .map((parent) => {
-        const children = data.categories
-          .filter((category) => category.parent_id === parent.id)
-          .sort((a, b) => a.name.localeCompare(b.name));
+        const children = parent.name === 'Other'
+          ? []
+          : data.categories
+              .filter((category) => category.parent_id === parent.id)
+              .sort((a, b) => a.name.localeCompare(b.name));
+        const childIds = children.map((child) => child.id);
         const childRows = children.map((child) => ({
           category: child,
           label: categoryMeta[child.id]?.label ?? child.name,
           icon: child.icon,
+          state: budgetStates[child.id] ?? null,
         }));
-        const parentState = budgetStates[parent.id] ?? null;
-        const hasBudget = parentState !== null;
+        const parentState = budgetStateByParentId.get(parent.id) ?? null;
+        const hasBudget = parentState !== null && parentState.amountMinor > 0;
         return {
           parent,
           label: categoryMeta[parent.id]?.label ?? parent.name,
           icon: parent.icon,
           state: parentState,
           hasBudget,
+          hasChildren: childIds.length > 0,
           children: childRows,
         };
       })
@@ -214,7 +295,7 @@ export default function BudgetScreen() {
         if (a.hasBudget !== b.hasBudget) return Number(b.hasBudget) - Number(a.hasBudget);
         return a.label.localeCompare(b.label);
       });
-  }, [budgetStates, categoryMeta, data.categories, incomeParentIds]);
+  }, [budgetStateByParentId, budgetStates, categoryMeta, data.categories, incomeParentIds]);
 
   const cycleSalaryMinor = useMemo(() => {
     if (!selectedCycle) return 0;
@@ -230,8 +311,14 @@ export default function BudgetScreen() {
   }, [data.transactions, selectedCycle]);
 
   const totalDefinedBudgetsMinor = useMemo(
-    () => selectedCycleBudgets.reduce((sum, budget) => sum + budget.amount_minor, 0),
-    [selectedCycleBudgets],
+    () =>
+      selectedCycleBudgets.reduce((sum, budget) => {
+        const category = categoryById.get(budget.category_id);
+        if (!category) return sum;
+        if (category.level === 1 && (childIdsByParentId.get(category.id) ?? []).length > 0) return sum;
+        return sum + budget.amount_minor;
+      }, 0),
+    [categoryById, childIdsByParentId, selectedCycleBudgets],
   );
 
   const remainingAfterBudgetsMinor = cycleSalaryMinor - totalDefinedBudgetsMinor;
@@ -248,7 +335,13 @@ export default function BudgetScreen() {
     }
 
     return [...usedParentIds]
-      .filter((parentId) => !budgetByCategoryId.has(parentId))
+      .filter((parentId) => {
+        const childIds = childIdsByParentId.get(parentId) ?? [];
+        if (childIds.length > 0) {
+          return childIds.every((childId) => !budgetByCategoryId.has(childId));
+        }
+        return !budgetByCategoryId.has(parentId);
+      })
       .map((parentId) => {
         const meta = categoryMeta[parentId];
         return {
@@ -258,7 +351,7 @@ export default function BudgetScreen() {
         };
       })
       .sort((a, b) => a.label.localeCompare(b.label));
-  }, [budgetByCategoryId, categoryMeta, data.transactions, expenseParentIds, parentByCategoryId, selectedCycle]);
+  }, [budgetByCategoryId, categoryMeta, childIdsByParentId, data.transactions, expenseParentIds, parentByCategoryId, selectedCycle]);
 
   const filteredRows = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -304,7 +397,9 @@ export default function BudgetScreen() {
 
   const saveBudget = async (): Promise<void> => {
     if (!draft || !data.userId || !selectedCycle) return;
-    if (!expenseParentIds.has(draft.categoryId)) return;
+    const draftCategory = categoryById.get(draft.categoryId);
+    if (!draftCategory || isIncomeCategoryRow(draftCategory, incomeParentIds)) return;
+    if ((childIdsByParentId.get(draft.categoryId) ?? []).length > 0) return;
     const amountMinor = parseMinor(draft.amount);
     if (amountMinor === null) return;
 
@@ -337,7 +432,9 @@ export default function BudgetScreen() {
 
   const setNoBudget = async (): Promise<void> => {
     if (!draft) return;
-    if (!expenseParentIds.has(draft.categoryId)) return;
+    const draftCategory = categoryById.get(draft.categoryId);
+    if (!draftCategory || isIncomeCategoryRow(draftCategory, incomeParentIds)) return;
+    if ((childIdsByParentId.get(draft.categoryId) ?? []).length > 0) return;
     if (!draft.budgetId && !budgetByCategoryId.get(draft.categoryId)?.id) {
       setDraft(null);
       setKeypadOpen(true);
@@ -347,6 +444,7 @@ export default function BudgetScreen() {
   };
 
   const removeBudget = async (): Promise<void> => {
+    if (draft && (childIdsByParentId.get(draft.categoryId) ?? []).length > 0) return;
     const budgetId = draft?.budgetId ?? budgetByCategoryId.get(draft?.categoryId ?? '')?.id;
     if (!budgetId) return;
     setSaving(true);
@@ -464,7 +562,7 @@ export default function BudgetScreen() {
                   </View>
                 ) : null}
 
-                {filteredRows.map(({ parent, label, icon, state, children }) => {
+                {filteredRows.map(({ parent, label, icon, state, hasChildren, children }) => {
                   const expanded = expandedParentIds.includes(parent.id);
                   const tone =
                     state?.tone === 'critical'
@@ -472,7 +570,7 @@ export default function BudgetScreen() {
                       : state?.tone === 'warning'
                         ? '#F5B942'
                         : parent.color;
-                  const parentBudget: BudgetRow | null = budgetByCategoryId.get(parent.id) ?? null;
+                  const parentBudget: BudgetRow | null = hasChildren ? null : budgetByCategoryId.get(parent.id) ?? null;
                   return (
                     <View key={parent.id} style={styles.groupCard}>
                       <Pressable
@@ -480,18 +578,22 @@ export default function BudgetScreen() {
                         onPress={() => {
                           openBudgetTransactions({ parentLabel: label, categoryIds: children.map((child) => child.category.id) });
                         }}
-                        onLongPress={() => {
-                          Keyboard.dismiss();
-                          setKeypadOpen(true);
-                          setDraft({
-                            categoryId: parent.id,
-                            label,
-                            icon,
-                            amount: parentBudget ? String((parentBudget.amount_minor / 100).toFixed(2)) : '',
-                            notes: String((parentBudget?.notes) || ''),
-                            budgetId: parentBudget?.id,
-                          });
-                        }}
+                        onLongPress={
+                          hasChildren
+                            ? undefined
+                            : () => {
+                              Keyboard.dismiss();
+                              setKeypadOpen(true);
+                              setDraft({
+                                categoryId: parent.id,
+                                label,
+                                icon,
+                                amount: parentBudget ? String((parentBudget.amount_minor / 100).toFixed(2)) : '',
+                                notes: String((parentBudget?.notes) || ''),
+                                budgetId: parentBudget?.id,
+                              });
+                            }
+                        }
                       >
                         <View style={[styles.iconWrap, { backgroundColor: `${tone}22` }]}>
                           <CategoryIcon name={icon} size={20} color={tone} />
@@ -517,17 +619,19 @@ export default function BudgetScreen() {
                             </View>
                           ) : null}
                         </View>
-                        <Pressable
-                          hitSlop={14}
-                          style={({ pressed }) => [styles.chevronHitbox, pressed && styles.buttonPressed]}
-                          onPress={() => toggleParent(parent.id)}
-                        >
-                          <FontAwesome6
-                            name={expanded ? 'chevron-up' : 'chevron-down'}
-                            size={20}
-                            color={colors.textMuted}
-                          />
-                        </Pressable>
+                        {hasChildren ? (
+                          <Pressable
+                            hitSlop={14}
+                            style={({ pressed }) => [styles.chevronHitbox, pressed && styles.buttonPressed]}
+                            onPress={() => toggleParent(parent.id)}
+                          >
+                            <FontAwesome6
+                              name={expanded ? 'chevron-up' : 'chevron-down'}
+                              size={16}
+                              color={colors.textMuted}
+                            />
+                          </Pressable>
+                        ) : null}
                       </Pressable>
 
                       {expanded ? (
@@ -535,7 +639,7 @@ export default function BudgetScreen() {
                           {children.length === 0 ? (
                             <Text style={styles.childEmpty}>No subcategories</Text>
                           ) : (
-                            children.map(({ category, label: childLabel, icon: childIcon }) => {
+                            children.map(({ category, label: childLabel, icon: childIcon, state: childState }) => {
                               const childTone = `${category.color}CC`;
                               return (
                                 <Pressable
@@ -544,13 +648,39 @@ export default function BudgetScreen() {
                                   onPress={() => {
                                     openBudgetTransactions({ categoryId: category.id, parentLabel: label, categoryIds: [category.id] });
                                   }}
+                                  onLongPress={() => {
+                                    Keyboard.dismiss();
+                                    setKeypadOpen(true);
+                                    setDraft({
+                                      categoryId: category.id,
+                                      label: childLabel,
+                                      icon: childIcon,
+                                      amount: childState ? String((childState.amountMinor / 100).toFixed(2)) : '',
+                                      notes: String(budgetByCategoryId.get(category.id)?.notes || ''),
+                                      budgetId: budgetByCategoryId.get(category.id)?.id,
+                                    });
+                                  }}
                                 >
                                   <View style={[styles.childIconWrap, { backgroundColor: `${childTone}22` }]}>
                                     <CategoryIcon name={childIcon} size={18} color={childTone} />
                                   </View>
                                   <View style={styles.rowBody}>
-                                    <Text style={styles.rowLabel}>{childLabel}</Text>
-                                    <Text style={styles.rowMeta}>Tracked under parent budget.</Text>
+                                    <View style={styles.rowHead}>
+                                      <View style={styles.rowIdentity}>
+                                        <Text style={styles.rowLabel}>{childLabel}</Text>
+                                      </View>
+                                      <Text style={[styles.rowRatio, childState ? { color: childTone } : styles.rowRatioMuted]}>
+                                        {childState ? formatPercent(childState.ratio) : '--'}
+                                      </Text>
+                                    </View>
+                                    <Text style={styles.rowMeta}>
+                                      {childState
+                                        ? `${formatMinor(childState.spentMinor)} of ${formatMinor(childState.amountMinor)}`
+                                        : spentByCategoryId.get(category.id)
+                                          ? `Total: ${formatMinor(spentByCategoryId.get(category.id) ?? 0)}`
+                                          : 'Long press to set budget'}
+                                    </Text>
+                                    <ProgressBar value={childState?.ratio ?? 0} color={childTone} />
                                   </View>
                                 </Pressable>
                               );
@@ -830,6 +960,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  childSpent: { ...typography.label, color: colors.text, fontWeight: '600' },
   modalSafeArea: { flex: 1, backgroundColor: colors.bg },
   modalContent: { flex: 1 },
   modalBody: { flex: 1 },
