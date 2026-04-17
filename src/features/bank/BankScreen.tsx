@@ -516,410 +516,410 @@ export default function BankScreen() {
 
           {!data.isInitialLoading ? (
             <>
-          <MotionView direction="left" distance={210} delayMs={90} rotateFrom={-8}>
-            <View style={styles.bankSummaryCard}>
-              <Text style={styles.heroLabel}>Bank balance</Text>
-              <Text style={styles.bankSummaryAmount}>{formatMinor(data.bankBalanceMinor)}</Text>
-              <Text style={styles.heroMeta}>
-                Savings {formatMinor(totalSavingsMinor)} · Loans {formatMinor(totalLoanRemainingMinor)}
-              </Text>
-            </View>
-          </MotionView>
+              <MotionView direction="left" distance={210} delayMs={90} rotateFrom={-8}>
+                <View style={styles.bankSummaryCard}>
+                  <Text style={styles.heroLabel}>Bank balance</Text>
+                  <Text style={styles.bankSummaryAmount}>{formatMinor(data.bankBalanceMinor)}</Text>
+                  <Text style={styles.heroMeta}>
+                    Savings {formatMinor(totalSavingsMinor)} · Loans {formatMinor(totalLoanRemainingMinor)}
+                  </Text>
+                </View>
+              </MotionView>
 
-          <View style={styles.heroRow}>
-            <MotionView style={styles.heroMotion} direction="up" distance={120} delayMs={170}>
-              <View style={styles.heroCard}>
-                <Text style={styles.heroLabel}>Savings total</Text>
-                <Text style={[styles.heroAmount, styles.savingsHeroAmount]}>{formatMinor(totalSavingsMinor)}</Text>
-                <Text style={styles.heroMeta}>{savingsWithHistory.length} accounts</Text>
+              <View style={styles.heroRow}>
+                <MotionView style={styles.heroMotion} direction="up" distance={120} delayMs={170}>
+                  <View style={styles.heroCard}>
+                    <Text style={styles.heroLabel}>Savings total</Text>
+                    <Text style={[styles.heroAmount, styles.savingsHeroAmount]}>{formatMinor(totalSavingsMinor)}</Text>
+                    <Text style={styles.heroMeta}>{savingsWithHistory.length} accounts</Text>
+                  </View>
+                </MotionView>
+                <MotionView style={styles.heroMotion} direction="right" distance={140} delayMs={230}>
+                  <View style={styles.heroCard}>
+                    <Text style={styles.heroLabel}>Open loans</Text>
+                    <Text style={[styles.heroAmount, styles.loanHeroAmount]}>{formatMinor(totalLoanRemainingMinor)}</Text>
+                    <Text style={styles.heroMeta}>{data.openLoans.length} active</Text>
+                  </View>
+                </MotionView>
               </View>
-            </MotionView>
-            <MotionView style={styles.heroMotion} direction="right" distance={140} delayMs={230}>
-              <View style={styles.heroCard}>
-                <Text style={styles.heroLabel}>Open loans</Text>
-                <Text style={[styles.heroAmount, styles.loanHeroAmount]}>{formatMinor(totalLoanRemainingMinor)}</Text>
-                <Text style={styles.heroMeta}>{data.openLoans.length} active</Text>
-              </View>
-            </MotionView>
-          </View>
 
-          <MotionView direction="right" distance={195} delayMs={280} rotateFrom={7}>
-            <View style={styles.owedSummaryCard}>
-              <Text style={styles.owedSummaryLabel}>Owed to you</Text>
-              <Text style={styles.owedSummaryAmount}>{formatMinor(totalReceivableRemainingMinor)}</Text>
-              <Text style={styles.heroMeta}>
-                Tracked separately. Not counted in your balances until it is actually returned.
-              </Text>
-            </View>
-          </MotionView>
-
-          <MotionView direction="left" distance={155} delayMs={320}>
-            <View style={styles.section}>
-          <View style={styles.sectionHead}>
-            <Text style={styles.sectionTitle}>Savings</Text>
-            <Pressable
-              style={({ pressed }) => [styles.inlineButton, pressed && styles.rowPressed]}
-              onPress={() =>
-                setAccountDraft({
-                  name: '',
-                  goal: '',
-                  color: '#3DD68C',
-                  icon: 'piggy-bank-outline',
-                })
-              }
-            >
-              <Text style={styles.inlineButtonText}>New savings</Text>
-            </Pressable>
-          </View>
-
-          {savingsWithHistory.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>Create a savings item here instead of burying it inside transactions.</Text>
-            </View>
-          ) : (
-            savingsWithHistory.map(({ account, totalMinor, events }) => {
-              const ratio = account.goal_minor && account.goal_minor > 0 ? totalMinor / account.goal_minor : 0;
-              const lastEvent = events[0];
-              const expanded = expandedSavingsId === account.id;
-              return (
-                <Pressable
-                  key={account.id}
-                  style={({ pressed }) => [styles.itemCard, pressed && styles.rowPressed]}
-                  onPress={() => setExpandedSavingsId((current) => (current === account.id ? null : account.id))}
-                  onLongPress={() =>
-                    Alert.alert(account.name, undefined, [
-                      {
-                        text: 'Edit',
-                        onPress: () =>
-                          setAccountDraft({
-                            id: account.id,
-                            name: account.name,
-                            goal: account.goal_minor ? (account.goal_minor / 100).toFixed(2) : '',
-                            color: account.color,
-                            icon: account.icon,
-                          }),
-                      },
-                      {
-                        text: 'Delete',
-                        style: 'destructive',
-                        onPress: () => {
-                          runDetached(removeSavingsAccount(account.id), 'bank.removeSavingsAccount');
-                        },
-                      },
-                      { text: 'Cancel', style: 'cancel' },
-                    ])
-                  }
-                >
-                  <View style={styles.itemHead}>
-                    <View style={[styles.iconWrap, { backgroundColor: `${account.color}22` }]}>
-                      <CategoryIcon name={account.icon} size={22} color={account.color} />
-                    </View>
-                    <View style={styles.itemCopy}>
-                      <Text style={styles.itemTitle}>{account.name}</Text>
-                      <Text style={styles.itemMeta}>
-                        {lastEvent ? `${lastEvent.action} · ${formatDateLabel(lastEvent.occurred_on)}` : 'No activity yet'}
-                      </Text>
-                    </View>
-                    <Text style={styles.itemAmount}>{formatMinor(totalMinor)}</Text>
-                  </View>
-                  <ProgressBar value={ratio} color={account.color} />
-                  <Text style={styles.itemMeta}>
-                    {account.goal_minor ? `Goal ${formatMinor(account.goal_minor)}` : 'No goal set yet'}
+              <MotionView direction="right" distance={195} delayMs={280} rotateFrom={7}>
+                <View style={styles.owedSummaryCard}>
+                  <Text style={styles.owedSummaryLabel}>Owed to you</Text>
+                  <Text style={styles.owedSummaryAmount}>{formatMinor(totalReceivableRemainingMinor)}</Text>
+                  <Text style={styles.heroMeta}>
+                    Tracked separately. Not counted in your balances until it is actually returned.
                   </Text>
+                </View>
+              </MotionView>
 
-                  {expanded ? (
-                    <View style={styles.expandedBody}>
-                      <View style={styles.actionRow}>
-                        {(['add', 'remove', 'set'] as const).map((action) => (
-                          <Pressable
-                            key={action}
-                            style={({ pressed }) => [styles.actionChip, pressed && styles.rowPressed]}
-                            onPress={() =>
-                              setSavingsDraft({
-                                accountId: account.id,
-                                accountName: account.name,
-                                action,
-                                amount: '',
-                                note: '',
-                              })
-                            }
-                          >
-                            <Text style={styles.actionChipText}>{action}</Text>
-                          </Pressable>
-                        ))}
-                      </View>
-                      <View style={styles.historyList}>
-                        {events.length === 0 ? (
-                          <Text style={styles.itemMeta}>No history yet.</Text>
-                        ) : (
-                          events.slice(0, 6).map((event) => (
-                            <View key={event.id} style={styles.historyRow}>
-                              <Text style={styles.historyText}>
-                                {event.action} {formatMinor(event.amount_minor)}
-                              </Text>
-                              <Text style={styles.historyMeta}>{formatDateLabel(event.occurred_on)}</Text>
-                            </View>
-                          ))
-                        )}
-                      </View>
-                    </View>
-                  ) : null}
-                </Pressable>
-              );
-            })
-          )}
-            </View>
-          </MotionView>
-
-          <MotionView direction="right" distance={155} delayMs={380}>
-            <View style={styles.section}>
-          <View style={styles.sectionHead}>
-            <Text style={styles.sectionTitle}>Loans</Text>
-            <Pressable
-              style={({ pressed }) => [styles.inlineButton, pressed && styles.rowPressed]}
-              onPress={() =>
-                setLoanDraft({
-                  name: '',
-                  principal: '',
-                  remaining: '',
-                })
-              }
-            >
-              <Text style={styles.inlineButtonText}>New loan</Text>
-            </Pressable>
-          </View>
-
-          {loansWithHistory.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>Create a loan here and keep its repayment history visible.</Text>
-            </View>
-          ) : (
-            loansWithHistory.map(({ loan, events }) => {
-              const ratio = loan.principal_minor === 0 ? 1 : 1 - loan.remaining_minor / loan.principal_minor;
-              const lastPayment = events.find((event) => event.kind === 'repaid');
-              const expanded = expandedLoanId === loan.id;
-              return (
-                <Pressable
-                  key={loan.id}
-                  style={({ pressed }) => [styles.itemCard, pressed && styles.rowPressed]}
-                  onPress={() => setExpandedLoanId((current) => (current === loan.id ? null : loan.id))}
-                  onLongPress={() =>
-                    Alert.alert(loan.name, undefined, [
-                      {
-                        text: 'Edit',
-                        onPress: () =>
-                          setLoanDraft({
-                            id: loan.id,
-                            name: loan.name,
-                            principal: (loan.principal_minor / 100).toFixed(2),
-                            remaining: (loan.remaining_minor / 100).toFixed(2),
-                          }),
-                      },
-                      {
-                        text: 'Delete',
-                        style: 'destructive',
-                        onPress: () => {
-                          runDetached(removeLoan(loan.id), 'bank.removeLoan');
-                        },
-                      },
-                      { text: 'Cancel', style: 'cancel' },
-                    ])
-                  }
-                >
-                  <View style={styles.itemHead}>
-                    <View style={[styles.iconWrap, { backgroundColor: 'rgba(124,92,255,0.18)' }]}>
-                      <MaterialCommunityIcons name="bank-outline" size={22} color={colors.accent} />
-                    </View>
-                    <View style={styles.itemCopy}>
-                      <Text style={styles.itemTitle}>{loan.name}</Text>
-                      <Text style={styles.itemMeta}>
-                        {lastPayment ? `Last payment ${formatDateLabel(lastPayment.occurred_on)}` : 'No repayments yet'}
-                      </Text>
-                    </View>
-                    <Text style={styles.itemAmount}>{formatMinor(loan.remaining_minor)}</Text>
+              <MotionView direction="left" distance={155} delayMs={320}>
+                <View style={styles.section}>
+                  <View style={styles.sectionHead}>
+                    <Text style={styles.sectionTitle}>Savings</Text>
+                    <Pressable
+                      style={({ pressed }) => [styles.inlineButton, pressed && styles.rowPressed]}
+                      onPress={() =>
+                        setAccountDraft({
+                          name: '',
+                          goal: '',
+                          color: '#3DD68C',
+                          icon: 'piggy-bank-outline',
+                        })
+                      }
+                    >
+                      <Text style={styles.inlineButtonText}>New savings</Text>
+                    </Pressable>
                   </View>
-                  <ProgressBar value={ratio} color={loan.remaining_minor === 0 ? colors.success : colors.accent} />
-                  <Text style={styles.itemMeta}>
-                    {loan.remaining_minor === 0 ? 'Closed' : `Principal ${formatMinor(loan.principal_minor)}`}
-                  </Text>
 
-                  {expanded ? (
-                    <View style={styles.expandedBody}>
-                      <View style={styles.actionRow}>
+                  {savingsWithHistory.length === 0 ? (
+                    <View style={styles.emptyCard}>
+                      <Text style={styles.emptyText}>Create a savings item here instead of burying it inside transactions.</Text>
+                    </View>
+                  ) : (
+                    savingsWithHistory.map(({ account, totalMinor, events }) => {
+                      const ratio = account.goal_minor && account.goal_minor > 0 ? totalMinor / account.goal_minor : 0;
+                      const lastEvent = events[0];
+                      const expanded = expandedSavingsId === account.id;
+                      return (
                         <Pressable
-                          style={({ pressed }) => [styles.actionChip, pressed && styles.rowPressed]}
-                          onPress={() =>
-                            setLoanEventDraft({
-                              loanId: loan.id,
-                              loanName: loan.name,
-                              kind: 'repaid',
-                              amount: '',
-                            })
+                          key={account.id}
+                          style={({ pressed }) => [styles.itemCard, pressed && styles.rowPressed]}
+                          onPress={() => setExpandedSavingsId((current) => (current === account.id ? null : account.id))}
+                          onLongPress={() =>
+                            Alert.alert(account.name, undefined, [
+                              {
+                                text: 'Edit',
+                                onPress: () =>
+                                  setAccountDraft({
+                                    id: account.id,
+                                    name: account.name,
+                                    goal: account.goal_minor ? (account.goal_minor / 100).toFixed(2) : '',
+                                    color: account.color,
+                                    icon: account.icon,
+                                  }),
+                              },
+                              {
+                                text: 'Delete',
+                                style: 'destructive',
+                                onPress: () => {
+                                  runDetached(removeSavingsAccount(account.id), 'bank.removeSavingsAccount');
+                                },
+                              },
+                              { text: 'Cancel', style: 'cancel' },
+                            ])
                           }
                         >
-                          <Text style={styles.actionChipText}>Repayment</Text>
-                        </Pressable>
-                        <Pressable
-                          style={({ pressed }) => [styles.actionChip, pressed && styles.rowPressed]}
-                          onPress={() =>
-                            setLoanEventDraft({
-                              loanId: loan.id,
-                              loanName: loan.name,
-                              kind: 'borrowed',
-                              amount: '',
-                            })
-                          }
-                        >
-                          <Text style={styles.actionChipText}>Borrow more</Text>
-                        </Pressable>
-                      </View>
-                      <View style={styles.historyList}>
-                        {events.length === 0 ? (
-                          <Text style={styles.itemMeta}>No history yet.</Text>
-                        ) : (
-                          events.slice(0, 6).map((event) => (
-                            <View key={event.id} style={styles.historyRow}>
-                              <Text style={styles.historyText}>
-                                {event.kind} {formatMinor(event.amount_minor)}
-                              </Text>
-                              <Text style={styles.historyMeta}>{formatDateLabel(event.occurred_on)}</Text>
+                          <View style={styles.itemHead}>
+                            <View style={[styles.iconWrap, { backgroundColor: `${account.color}22` }]}>
+                              <CategoryIcon name={account.icon} size={22} color={account.color} />
                             </View>
-                          ))
-                        )}
-                      </View>
-                    </View>
-                  ) : null}
-                </Pressable>
-              );
-            })
-          )}
-            </View>
-          </MotionView>
+                            <View style={styles.itemCopy}>
+                              <Text style={styles.itemTitle}>{account.name}</Text>
+                              <Text style={styles.itemMeta}>
+                                {lastEvent ? `${lastEvent.action} · ${formatDateLabel(lastEvent.occurred_on)}` : 'No activity yet'}
+                              </Text>
+                            </View>
+                            <Text style={styles.itemAmount}>{formatMinor(totalMinor)}</Text>
+                          </View>
+                          <ProgressBar value={ratio} color={account.color} />
+                          <Text style={styles.itemMeta}>
+                            {account.goal_minor ? `Goal ${formatMinor(account.goal_minor)}` : 'No goal set yet'}
+                          </Text>
 
-          <MotionView direction="left" distance={165} delayMs={440}>
-            <View style={styles.section}>
-          <View style={styles.sectionHead}>
-            <Text style={styles.sectionTitle}>Owed to you</Text>
-            <Pressable
-              style={({ pressed }) => [styles.inlineButton, pressed && styles.rowPressed]}
-              onPress={() =>
-                setReceivableDraft({
-                  name: '',
-                  principal: '',
-                  remaining: '',
-                })
-              }
-            >
-              <Text style={styles.inlineButtonText}>New item</Text>
-            </Pressable>
-          </View>
+                          {expanded ? (
+                            <View style={styles.expandedBody}>
+                              <View style={styles.actionRow}>
+                                {(['add', 'remove', 'set'] as const).map((action) => (
+                                  <Pressable
+                                    key={action}
+                                    style={({ pressed }) => [styles.actionChip, pressed && styles.rowPressed]}
+                                    onPress={() =>
+                                      setSavingsDraft({
+                                        accountId: account.id,
+                                        accountName: account.name,
+                                        action,
+                                        amount: '',
+                                        note: '',
+                                      })
+                                    }
+                                  >
+                                    <Text style={styles.actionChipText}>{action}</Text>
+                                  </Pressable>
+                                ))}
+                              </View>
+                              <View style={styles.historyList}>
+                                {events.length === 0 ? (
+                                  <Text style={styles.itemMeta}>No history yet.</Text>
+                                ) : (
+                                  events.slice(0, 6).map((event) => (
+                                    <View key={event.id} style={styles.historyRow}>
+                                      <Text style={styles.historyText}>
+                                        {event.action} {formatMinor(event.amount_minor)}
+                                      </Text>
+                                      <Text style={styles.historyMeta}>{formatDateLabel(event.occurred_on)}</Text>
+                                    </View>
+                                  ))
+                                )}
+                              </View>
+                            </View>
+                          ) : null}
+                        </Pressable>
+                      );
+                    })
+                  )}
+                </View>
+              </MotionView>
 
-          {receivablesWithHistory.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>Track money people owe you without treating it as cash-on-hand.</Text>
-            </View>
-          ) : (
-            receivablesWithHistory.map(({ receivable, events }) => {
-              const ratio = receivable.principal_minor === 0 ? 1 : 1 - receivable.remaining_minor / receivable.principal_minor;
-              const lastRepayment = events.find((event) => event.kind === 'repaid');
-              const expanded = expandedReceivableId === receivable.id;
-              return (
-                <Pressable
-                  key={receivable.id}
-                  style={({ pressed }) => [styles.itemCard, styles.receivableCard, pressed && styles.rowPressed]}
-                  onPress={() => setExpandedReceivableId((current) => (current === receivable.id ? null : receivable.id))}
-                  onLongPress={() =>
-                    Alert.alert(receivable.name, undefined, [
-                      {
-                        text: 'Edit',
-                        onPress: () =>
-                          setReceivableDraft({
-                            id: receivable.id,
-                            name: receivable.name,
-                            principal: (receivable.principal_minor / 100).toFixed(2),
-                            remaining: (receivable.remaining_minor / 100).toFixed(2),
-                          }),
-                      },
-                      {
-                        text: 'Delete',
-                        style: 'destructive',
-                        onPress: () => {
-                          runDetached(removeReceivable(receivable.id), 'bank.removeReceivable');
-                        },
-                      },
-                      { text: 'Cancel', style: 'cancel' },
-                    ])
-                  }
-                >
-                  <View style={styles.itemHead}>
-                    <View style={[styles.iconWrap, { backgroundColor: 'rgba(245,185,66,0.18)' }]}>
-                      <MaterialCommunityIcons name="cash-refund" size={22} color={colors.accentAlt} />
-                    </View>
-                    <View style={styles.itemCopy}>
-                      <Text style={styles.itemTitle}>{receivable.name}</Text>
-                      <Text style={styles.itemMeta}>
-                        {lastRepayment ? `Last return ${formatDateLabel(lastRepayment.occurred_on)}` : 'Nothing returned yet'}
-                      </Text>
-                    </View>
-                    <Text style={[styles.itemAmount, styles.receivableAmount]}>{formatMinor(receivable.remaining_minor)}</Text>
+              <MotionView direction="right" distance={155} delayMs={380}>
+                <View style={styles.section}>
+                  <View style={styles.sectionHead}>
+                    <Text style={styles.sectionTitle}>Loans</Text>
+                    <Pressable
+                      style={({ pressed }) => [styles.inlineButton, pressed && styles.rowPressed]}
+                      onPress={() =>
+                        setLoanDraft({
+                          name: '',
+                          principal: '',
+                          remaining: '',
+                        })
+                      }
+                    >
+                      <Text style={styles.inlineButtonText}>New loan</Text>
+                    </Pressable>
                   </View>
-                  <ProgressBar value={ratio} color={receivable.remaining_minor === 0 ? colors.success : colors.accentAlt} />
-                  <Text style={styles.itemMeta}>
-                    {receivable.remaining_minor === 0 ? 'Settled' : `Original amount ${formatMinor(receivable.principal_minor)}`}
-                  </Text>
 
-                  {expanded ? (
-                    <View style={styles.expandedBody}>
-                      <View style={styles.actionRow}>
-                        <Pressable
-                          style={({ pressed }) => [styles.actionChip, styles.actionChipAlt, pressed && styles.rowPressed]}
-                          onPress={() =>
-                            setReceivableEventDraft({
-                              receivableId: receivable.id,
-                              receivableName: receivable.name,
-                              kind: 'repaid',
-                              amount: '',
-                            })
-                          }
-                        >
-                          <Text style={styles.actionChipText}>Returned</Text>
-                        </Pressable>
-                        <Pressable
-                          style={({ pressed }) => [styles.actionChip, styles.actionChipAlt, pressed && styles.rowPressed]}
-                          onPress={() =>
-                            setReceivableEventDraft({
-                              receivableId: receivable.id,
-                              receivableName: receivable.name,
-                              kind: 'lent',
-                              amount: '',
-                            })
-                          }
-                        >
-                          <Text style={styles.actionChipText}>Lend more</Text>
-                        </Pressable>
-                      </View>
-                      <View style={styles.historyList}>
-                        {events.length === 0 ? (
-                          <Text style={styles.itemMeta}>No history yet.</Text>
-                        ) : (
-                          events.slice(0, 6).map((event) => (
-                            <View key={event.id} style={styles.historyRow}>
-                              <Text style={styles.historyText}>
-                                {event.kind} {formatMinor(event.amount_minor)}
-                              </Text>
-                              <Text style={styles.historyMeta}>{formatDateLabel(event.occurred_on)}</Text>
-                            </View>
-                          ))
-                        )}
-                      </View>
+                  {loansWithHistory.length === 0 ? (
+                    <View style={styles.emptyCard}>
+                      <Text style={styles.emptyText}>Create a loan here and keep its repayment history visible.</Text>
                     </View>
-                  ) : null}
-                </Pressable>
-              );
-            })
-          )}
-            </View>
-          </MotionView>
+                  ) : (
+                    loansWithHistory.map(({ loan, events }) => {
+                      const ratio = loan.principal_minor === 0 ? 1 : 1 - loan.remaining_minor / loan.principal_minor;
+                      const lastPayment = events.find((event) => event.kind === 'repaid');
+                      const expanded = expandedLoanId === loan.id;
+                      return (
+                        <Pressable
+                          key={loan.id}
+                          style={({ pressed }) => [styles.itemCard, pressed && styles.rowPressed]}
+                          onPress={() => setExpandedLoanId((current) => (current === loan.id ? null : loan.id))}
+                          onLongPress={() =>
+                            Alert.alert(loan.name, undefined, [
+                              {
+                                text: 'Edit',
+                                onPress: () =>
+                                  setLoanDraft({
+                                    id: loan.id,
+                                    name: loan.name,
+                                    principal: (loan.principal_minor / 100).toFixed(2),
+                                    remaining: (loan.remaining_minor / 100).toFixed(2),
+                                  }),
+                              },
+                              {
+                                text: 'Delete',
+                                style: 'destructive',
+                                onPress: () => {
+                                  runDetached(removeLoan(loan.id), 'bank.removeLoan');
+                                },
+                              },
+                              { text: 'Cancel', style: 'cancel' },
+                            ])
+                          }
+                        >
+                          <View style={styles.itemHead}>
+                            <View style={[styles.iconWrap, { backgroundColor: 'rgba(124,92,255,0.18)' }]}>
+                              <MaterialCommunityIcons name="bank-outline" size={22} color={colors.accent} />
+                            </View>
+                            <View style={styles.itemCopy}>
+                              <Text style={styles.itemTitle}>{loan.name}</Text>
+                              <Text style={styles.itemMeta}>
+                                {lastPayment ? `Last payment ${formatDateLabel(lastPayment.occurred_on)}` : 'No repayments yet'}
+                              </Text>
+                            </View>
+                            <Text style={styles.itemAmount}>{formatMinor(loan.remaining_minor)}</Text>
+                          </View>
+                          <ProgressBar value={ratio} color={loan.remaining_minor === 0 ? colors.success : colors.accent} />
+                          <Text style={styles.itemMeta}>
+                            {loan.remaining_minor === 0 ? 'Closed' : `Principal ${formatMinor(loan.principal_minor)}`}
+                          </Text>
+
+                          {expanded ? (
+                            <View style={styles.expandedBody}>
+                              <View style={styles.actionRow}>
+                                <Pressable
+                                  style={({ pressed }) => [styles.actionChip, pressed && styles.rowPressed]}
+                                  onPress={() =>
+                                    setLoanEventDraft({
+                                      loanId: loan.id,
+                                      loanName: loan.name,
+                                      kind: 'repaid',
+                                      amount: '',
+                                    })
+                                  }
+                                >
+                                  <Text style={styles.actionChipText}>Repayment</Text>
+                                </Pressable>
+                                <Pressable
+                                  style={({ pressed }) => [styles.actionChip, pressed && styles.rowPressed]}
+                                  onPress={() =>
+                                    setLoanEventDraft({
+                                      loanId: loan.id,
+                                      loanName: loan.name,
+                                      kind: 'borrowed',
+                                      amount: '',
+                                    })
+                                  }
+                                >
+                                  <Text style={styles.actionChipText}>Borrow more</Text>
+                                </Pressable>
+                              </View>
+                              <View style={styles.historyList}>
+                                {events.length === 0 ? (
+                                  <Text style={styles.itemMeta}>No history yet.</Text>
+                                ) : (
+                                  events.slice(0, 6).map((event) => (
+                                    <View key={event.id} style={styles.historyRow}>
+                                      <Text style={styles.historyText}>
+                                        {event.kind} {formatMinor(event.amount_minor)}
+                                      </Text>
+                                      <Text style={styles.historyMeta}>{formatDateLabel(event.occurred_on)}</Text>
+                                    </View>
+                                  ))
+                                )}
+                              </View>
+                            </View>
+                          ) : null}
+                        </Pressable>
+                      );
+                    })
+                  )}
+                </View>
+              </MotionView>
+
+              <MotionView direction="left" distance={165} delayMs={440}>
+                <View style={styles.section}>
+                  <View style={styles.sectionHead}>
+                    <Text style={styles.sectionTitle}>Owed to you</Text>
+                    <Pressable
+                      style={({ pressed }) => [styles.inlineButton, pressed && styles.rowPressed]}
+                      onPress={() =>
+                        setReceivableDraft({
+                          name: '',
+                          principal: '',
+                          remaining: '',
+                        })
+                      }
+                    >
+                      <Text style={styles.inlineButtonText}>New item</Text>
+                    </Pressable>
+                  </View>
+
+                  {receivablesWithHistory.length === 0 ? (
+                    <View style={styles.emptyCard}>
+                      <Text style={styles.emptyText}>Track money people owe you without treating it as cash-on-hand.</Text>
+                    </View>
+                  ) : (
+                    receivablesWithHistory.map(({ receivable, events }) => {
+                      const ratio = receivable.principal_minor === 0 ? 1 : 1 - receivable.remaining_minor / receivable.principal_minor;
+                      const lastRepayment = events.find((event) => event.kind === 'repaid');
+                      const expanded = expandedReceivableId === receivable.id;
+                      return (
+                        <Pressable
+                          key={receivable.id}
+                          style={({ pressed }) => [styles.itemCard, styles.receivableCard, pressed && styles.rowPressed]}
+                          onPress={() => setExpandedReceivableId((current) => (current === receivable.id ? null : receivable.id))}
+                          onLongPress={() =>
+                            Alert.alert(receivable.name, undefined, [
+                              {
+                                text: 'Edit',
+                                onPress: () =>
+                                  setReceivableDraft({
+                                    id: receivable.id,
+                                    name: receivable.name,
+                                    principal: (receivable.principal_minor / 100).toFixed(2),
+                                    remaining: (receivable.remaining_minor / 100).toFixed(2),
+                                  }),
+                              },
+                              {
+                                text: 'Delete',
+                                style: 'destructive',
+                                onPress: () => {
+                                  runDetached(removeReceivable(receivable.id), 'bank.removeReceivable');
+                                },
+                              },
+                              { text: 'Cancel', style: 'cancel' },
+                            ])
+                          }
+                        >
+                          <View style={styles.itemHead}>
+                            <View style={[styles.iconWrap, { backgroundColor: 'rgba(245,185,66,0.18)' }]}>
+                              <MaterialCommunityIcons name="cash-refund" size={22} color={colors.accentAlt} />
+                            </View>
+                            <View style={styles.itemCopy}>
+                              <Text style={styles.itemTitle}>{receivable.name}</Text>
+                              <Text style={styles.itemMeta}>
+                                {lastRepayment ? `Last return ${formatDateLabel(lastRepayment.occurred_on)}` : 'Nothing returned yet'}
+                              </Text>
+                            </View>
+                            <Text style={[styles.itemAmount, styles.receivableAmount]}>{formatMinor(receivable.remaining_minor)}</Text>
+                          </View>
+                          <ProgressBar value={ratio} color={receivable.remaining_minor === 0 ? colors.success : colors.accentAlt} />
+                          <Text style={styles.itemMeta}>
+                            {receivable.remaining_minor === 0 ? 'Settled' : `Original amount ${formatMinor(receivable.principal_minor)}`}
+                          </Text>
+
+                          {expanded ? (
+                            <View style={styles.expandedBody}>
+                              <View style={styles.actionRow}>
+                                <Pressable
+                                  style={({ pressed }) => [styles.actionChip, styles.actionChipAlt, pressed && styles.rowPressed]}
+                                  onPress={() =>
+                                    setReceivableEventDraft({
+                                      receivableId: receivable.id,
+                                      receivableName: receivable.name,
+                                      kind: 'repaid',
+                                      amount: '',
+                                    })
+                                  }
+                                >
+                                  <Text style={styles.actionChipText}>Returned</Text>
+                                </Pressable>
+                                <Pressable
+                                  style={({ pressed }) => [styles.actionChip, styles.actionChipAlt, pressed && styles.rowPressed]}
+                                  onPress={() =>
+                                    setReceivableEventDraft({
+                                      receivableId: receivable.id,
+                                      receivableName: receivable.name,
+                                      kind: 'lent',
+                                      amount: '',
+                                    })
+                                  }
+                                >
+                                  <Text style={styles.actionChipText}>Lend more</Text>
+                                </Pressable>
+                              </View>
+                              <View style={styles.historyList}>
+                                {events.length === 0 ? (
+                                  <Text style={styles.itemMeta}>No history yet.</Text>
+                                ) : (
+                                  events.slice(0, 6).map((event) => (
+                                    <View key={event.id} style={styles.historyRow}>
+                                      <Text style={styles.historyText}>
+                                        {event.kind} {formatMinor(event.amount_minor)}
+                                      </Text>
+                                      <Text style={styles.historyMeta}>{formatDateLabel(event.occurred_on)}</Text>
+                                    </View>
+                                  ))
+                                )}
+                              </View>
+                            </View>
+                          ) : null}
+                        </Pressable>
+                      );
+                    })
+                  )}
+                </View>
+              </MotionView>
             </>
           ) : null}
         </ScrollView>
