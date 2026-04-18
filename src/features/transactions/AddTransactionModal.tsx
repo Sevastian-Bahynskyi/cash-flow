@@ -1214,7 +1214,11 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
     }
   };
 
-  const visibleCategoryLabel = category ? `${category.parentName} · ${category.name}` : 'Pick a category';
+  const visibleCategoryLabel = category
+    ? category.parentName === category.name
+      ? category.name
+      : `${category.parentName} · ${category.name}`
+    : 'Pick a category';
   const showSuggestionCard = Boolean(
     !isSharedTopup &&
     suggestion &&

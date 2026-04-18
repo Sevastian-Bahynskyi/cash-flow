@@ -80,7 +80,7 @@ function CategoryRow({
         <CategoryIcon name={item.icon} size={18} color={iconColor} />
       </View>
       <View style={styles.rowCopy}>
-        <Text style={styles.rowParent}>{item.parentName}</Text>
+        {item.parentName !== item.name ? <Text style={styles.rowParent}>{item.parentName}</Text> : null}
         <Text style={styles.rowName}>{item.name}</Text>
       </View>
       <View style={styles.rowRight}>
