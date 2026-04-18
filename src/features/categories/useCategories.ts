@@ -10,6 +10,7 @@ type State =
   | { status: 'ready'; options: CategoryOption[] };
 
 let cache: CategoryOption[] | null = null;
+const parentRollupName = 'All';
 
 export const clearCategoryCache = (): void => {
   cache = null;
@@ -74,9 +75,9 @@ export function useCategories(): State {
         .filter((r) => r.level === 1 && r.name.trim().toLowerCase() !== 'income')
         .map((r) => ({
           id: r.id,
-          name: parentIdsWithChildren.has(r.id) ? 'General' : r.name,
+          name: parentIdsWithChildren.has(r.id) ? parentRollupName : r.name,
           parentName: r.name,
-          searchKey: `${r.name} general`.toLowerCase(),
+          searchKey: `${r.name} ${parentRollupName}`.toLowerCase(),
           parentId: r.id,
           icon: r.icon,
           color: r.color,
