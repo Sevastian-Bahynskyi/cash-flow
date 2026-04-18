@@ -46,10 +46,8 @@ export function useCategories(): State {
         (overridesRes.data ?? []) as CategoryOverrideRow[],
       );
       const parents = new Map<string, CategoryRow>();
-      const parentIdsWithChildren = new Set<string>();
       for (const r of rows) {
         if (r.level === 1) parents.set(r.id, r);
-        if (r.level === 2 && r.parent_id) parentIdsWithChildren.add(r.parent_id);
       }
 
       const childOptions: CategoryOption[] = rows
@@ -76,7 +74,7 @@ export function useCategories(): State {
           id: r.id,
           name: r.name,
           parentName: r.name,
-          searchKey: parentIdsWithChildren.has(r.id) ? `${r.name} all`.toLowerCase() : r.name.toLowerCase(),
+          searchKey: r.name.toLowerCase(),
           parentId: r.id,
           icon: r.icon,
           color: r.color,
