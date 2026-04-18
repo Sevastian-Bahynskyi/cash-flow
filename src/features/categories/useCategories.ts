@@ -50,7 +50,7 @@ export function useCategories(): State {
         if (r.level === 1) parents.set(r.id, r);
       }
 
-      const options: CategoryOption[] = rows
+      const childOptions: CategoryOption[] = rows
         .filter((r) => r.level === 2 && r.parent_id !== null)
         .map((r) => {
           const parent = parents.get(r.parent_id ?? '');
@@ -68,6 +68,20 @@ export function useCategories(): State {
             parentIcon: parent?.icon ?? r.icon,
           };
         });
+      const parentOptions: CategoryOption[] = rows
+        .filter((r) => r.level === 1 && r.name.trim().toLowerCase() !== 'income')
+        .map((r) => ({
+          id: r.id,
+          name: r.name,
+          parentName: r.name,
+          searchKey: r.name.toLowerCase(),
+          parentId: r.id,
+          icon: r.icon,
+          color: r.color,
+          parentColor: r.color,
+          parentIcon: r.icon,
+        }));
+      const options: CategoryOption[] = [...parentOptions, ...childOptions];
 
       cache = options;
       setState({ status: 'ready', options });
