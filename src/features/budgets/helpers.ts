@@ -11,6 +11,19 @@ export type BudgetState = {
   tone: 'neutral' | 'warning' | 'critical';
 };
 
+const personalExpenseMinor = (row: TransactionRow): number => {
+  if (row.kind !== 'expense') return 0;
+  if (row.is_shared_topup) {
+    if (typeof row.personal_effect_minor === 'number') return Math.max(0, -row.personal_effect_minor);
+    return row.shared_participant === 'gf' ? 0 : row.amount_minor;
+  }
+  if (row.shared) {
+    if (typeof row.personal_effect_minor === 'number') return Math.max(0, -row.personal_effect_minor);
+    return 0;
+  }
+  return row.amount_minor;
+};
+
 const inCycle = (occurredOn: string, cycle: SalaryCycle | null): boolean => {
   if (!cycle) return false;
   const afterStart = occurredOn >= cycle.startOn;
@@ -35,17 +48,19 @@ export const buildBudgetStateByCategory = (
 
   const spendByCategory = new Map<string, number>();
   for (const row of transactions) {
-    if (row.kind !== 'expense' || row.is_shared_topup || !row.category_id) continue;
+    if (row.kind !== 'expense' || !row.category_id) continue;
     if (!inCycle(row.occurred_on, cycle)) continue;
+    const mySpentMinor = personalExpenseMinor(row);
+    if (mySpentMinor <= 0) continue;
 
     spendByCategory.set(
       row.category_id,
-      (spendByCategory.get(row.category_id) ?? 0) + row.amount_minor,
+      (spendByCategory.get(row.category_id) ?? 0) + mySpentMinor,
     );
 
     const parentId = parentByCategoryId.get(row.category_id);
     if (parentId) {
-      spendByCategory.set(parentId, (spendByCategory.get(parentId) ?? 0) + row.amount_minor);
+      spendByCategory.set(parentId, (spendByCategory.get(parentId) ?? 0) + mySpentMinor);
     }
   }
 

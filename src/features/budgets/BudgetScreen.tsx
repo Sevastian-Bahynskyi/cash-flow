@@ -26,6 +26,7 @@ import { supabase } from '@/lib/supabase';
 import { formatMinor, formatPercent } from '@/lib/format';
 import { buildNavigableCycles, findCycleFor, type SalaryCycle } from '@/lib/cycles';
 import type { BudgetRow } from '@/features/overview/useOverview';
+import type { TransactionRow } from '@/features/transactions/types';
 import { ProgressBar } from '@/ui/ProgressBar';
 import { ScreenHeader } from '@/ui/ScreenHeader';
 import { CategoryIcon } from '@/ui/CategoryIcon';
@@ -86,6 +87,19 @@ const parseMinor = (raw: string): number | null => {
   const value = Number(normalized);
   if (!Number.isFinite(value) || value < 0) return null;
   return Math.round(value * 100);
+};
+
+const personalExpenseFromTransaction = (row: TransactionRow): number => {
+  if (row.kind !== 'expense') return 0;
+  if (row.is_shared_topup) {
+    if (typeof row.personal_effect_minor === 'number') return Math.max(0, -row.personal_effect_minor);
+    return row.shared_participant === 'gf' ? 0 : row.amount_minor;
+  }
+  if (row.shared) {
+    if (typeof row.personal_effect_minor === 'number') return Math.max(0, -row.personal_effect_minor);
+    return 0;
+  }
+  return row.amount_minor;
 };
 
 function BudgetSkeleton() {
@@ -259,16 +273,33 @@ export default function BudgetScreen() {
     return out;
   }, [budgetStates, childIdsByParentId, data.categories, incomeParentIds, isParentRollupCategory]);
 
-  const spentByCategoryId = useMemo(() => {
+  const totalSpentByCategoryId = useMemo(() => {
     if (!selectedCycle) return new Map<string, number>();
     const out = new Map<string, number>();
     for (const row of data.transactions) {
       if (row.kind !== 'expense' || row.is_shared_topup || !row.category_id) continue;
       if (!(row.occurred_on >= selectedCycle.startOn && (selectedCycle.endOnExclusive === null || row.occurred_on < selectedCycle.endOnExclusive))) continue;
       out.set(row.category_id, (out.get(row.category_id) ?? 0) + row.amount_minor);
+      const parentId = parentByCategoryId.get(row.category_id);
+      if (parentId) out.set(parentId, (out.get(parentId) ?? 0) + row.amount_minor);
     }
     return out;
-  }, [data.transactions, selectedCycle]);
+  }, [data.transactions, parentByCategoryId, selectedCycle]);
+
+  const mySpentByCategoryId = useMemo(() => {
+    if (!selectedCycle) return new Map<string, number>();
+    const out = new Map<string, number>();
+    for (const row of data.transactions) {
+      if (row.kind !== 'expense' || !row.category_id) continue;
+      if (!(row.occurred_on >= selectedCycle.startOn && (selectedCycle.endOnExclusive === null || row.occurred_on < selectedCycle.endOnExclusive))) continue;
+      const mySpentMinor = personalExpenseFromTransaction(row);
+      if (mySpentMinor <= 0) continue;
+      out.set(row.category_id, (out.get(row.category_id) ?? 0) + mySpentMinor);
+      const parentId = parentByCategoryId.get(row.category_id);
+      if (parentId) out.set(parentId, (out.get(parentId) ?? 0) + mySpentMinor);
+    }
+    return out;
+  }, [data.transactions, parentByCategoryId, selectedCycle]);
 
   const isEditableCategory = useMemo(() => {
     return (categoryId: string): boolean => {
@@ -343,14 +374,14 @@ export default function BudgetScreen() {
 
   const realAvailableMoneyMinor = useMemo(() => {
     if (!selectedCycle) return 0;
-    const totalCycleTransactionsMinor = data.transactions
+    const myCycleSpentMinor = data.transactions
       .filter(
         (row) =>
           row.occurred_on >= selectedCycle.startOn &&
           (selectedCycle.endOnExclusive === null || row.occurred_on < selectedCycle.endOnExclusive),
       )
-      .reduce((sum, row) => sum + row.amount_minor, 0);
-    return cycleSalaryMinor - totalCycleTransactionsMinor;
+      .reduce((sum, row) => sum + personalExpenseFromTransaction(row), 0);
+    return cycleSalaryMinor - myCycleSpentMinor;
   }, [cycleSalaryMinor, data.transactions, selectedCycle]);
 
   const unbudgetedParentUsage = useMemo(() => {
@@ -635,7 +666,13 @@ export default function BudgetScreen() {
                           </View>
                           <Text style={styles.rowMeta}>
                             {state
-                              ? `${formatMinor(state.spentMinor)} of ${formatMinor(state.amountMinor)}`
+                              ? (() => {
+                                const totalSpentMinor = totalSpentByCategoryId.get(parent.id) ?? state.spentMinor;
+                                if (totalSpentMinor > state.spentMinor) {
+                                  return `Total: ${formatMinor(totalSpentMinor)} | Mine: ${formatMinor(state.spentMinor)} of ${formatMinor(state.amountMinor)}`;
+                                }
+                                return `${formatMinor(state.spentMinor)} of ${formatMinor(state.amountMinor)}`;
+                              })()
                               : 'Long press to set cycle target'}
                           </Text>
                           <ProgressBar value={state?.ratio ?? 0} color={tone} />
@@ -701,9 +738,15 @@ export default function BudgetScreen() {
                                     </View>
                                     <Text style={styles.rowMeta}>
                                       {childState
-                                        ? `${formatMinor(childState.spentMinor)} of ${formatMinor(childState.amountMinor)}`
-                                        : spentByCategoryId.get(category.id)
-                                          ? `Total: ${formatMinor(spentByCategoryId.get(category.id) ?? 0)}`
+                                        ? (() => {
+                                          const totalSpentMinor = totalSpentByCategoryId.get(category.id) ?? childState.spentMinor;
+                                          if (totalSpentMinor > childState.spentMinor) {
+                                            return `Total: ${formatMinor(totalSpentMinor)} | Mine: ${formatMinor(childState.spentMinor)} of ${formatMinor(childState.amountMinor)}`;
+                                          }
+                                          return `${formatMinor(childState.spentMinor)} of ${formatMinor(childState.amountMinor)}`;
+                                        })()
+                                        : totalSpentByCategoryId.get(category.id)
+                                          ? `Total: ${formatMinor(totalSpentByCategoryId.get(category.id) ?? 0)} | Mine: ${formatMinor(mySpentByCategoryId.get(category.id) ?? 0)}`
                                           : 'Long press to set budget'}
                                     </Text>
                                     <ProgressBar value={childState?.ratio ?? 0} color={childTone} />
