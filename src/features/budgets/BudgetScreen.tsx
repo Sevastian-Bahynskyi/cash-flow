@@ -683,7 +683,13 @@ export default function BudgetScreen() {
                               ? (() => {
                                 const totalSpentMinor = totalSpentByCategoryId.get(parent.id) ?? state.spentMinor;
                                 if (totalSpentMinor > state.spentMinor) {
-                                  return `Total: ${formatMinor(totalSpentMinor)} | Mine: ${formatMinor(state.spentMinor)} of ${formatMinor(state.amountMinor)}`;
+                                  return (
+                                    <>
+                                      <Text style={styles.rowMetaLabel}>Mine:</Text> {formatMinor(state.spentMinor)} of {formatMinor(state.amountMinor)}
+                                      {'\n'}
+                                      <Text style={styles.rowMetaLabel}>Total:</Text> {formatMinor(totalSpentMinor)}
+                                    </>
+                                  );
                                 }
                                 return `${formatMinor(state.spentMinor)} of ${formatMinor(state.amountMinor)}`;
                               })()
@@ -755,12 +761,24 @@ export default function BudgetScreen() {
                                         ? (() => {
                                           const totalSpentMinor = totalSpentByCategoryId.get(category.id) ?? childState.spentMinor;
                                           if (totalSpentMinor > childState.spentMinor) {
-                                            return `Total: ${formatMinor(totalSpentMinor)} | Mine: ${formatMinor(childState.spentMinor)} of ${formatMinor(childState.amountMinor)}`;
+                                            return (
+                                              <>
+                                                <Text style={styles.rowMetaLabel}>Mine:</Text> {formatMinor(childState.spentMinor)} of {formatMinor(childState.amountMinor)}
+                                                {'\n'}
+                                                <Text style={styles.rowMetaLabel}>Total:</Text> {formatMinor(totalSpentMinor)}
+                                              </>
+                                            );
                                           }
                                           return `${formatMinor(childState.spentMinor)} of ${formatMinor(childState.amountMinor)}`;
                                         })()
                                         : totalSpentByCategoryId.get(category.id)
-                                          ? `Total: ${formatMinor(totalSpentByCategoryId.get(category.id) ?? 0)} | Mine: ${formatMinor(mySpentByCategoryId.get(category.id) ?? 0)}`
+                                          ? (
+                                            <>
+                                              <Text style={styles.rowMetaLabel}>Mine:</Text> {formatMinor(mySpentByCategoryId.get(category.id) ?? 0)}
+                                              {'\n'}
+                                              <Text style={styles.rowMetaLabel}>Total:</Text> {formatMinor(totalSpentByCategoryId.get(category.id) ?? 0)}
+                                            </>
+                                          )
                                           : 'Long press to set budget'}
                                     </Text>
                                     <ProgressBar value={childState?.ratio ?? 0} color={childTone} />
@@ -1003,6 +1021,7 @@ const styles = StyleSheet.create({
   rowRatio: { ...typography.body, fontWeight: '700' },
   rowRatioMuted: { color: colors.textMuted },
   rowMeta: { ...typography.label, color: colors.textMuted },
+  rowMetaLabel: { color: colors.text, fontWeight: '700' },
   rowNotes: { marginTop: spacing.xs, paddingTop: spacing.xs, borderTopWidth: 1, borderTopColor: colors.border },
   groupCard: { gap: spacing.sm },
   summaryCard: {
