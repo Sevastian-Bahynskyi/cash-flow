@@ -25,6 +25,7 @@ import { runDetached } from '@/lib/async';
 import { supabase } from '@/lib/supabase';
 import { formatMinor, formatPercent } from '@/lib/format';
 import { buildNavigableCycles, findCycleFor, type SalaryCycle } from '@/lib/cycles';
+import { computeSharedCycle } from '@/lib/shared';
 import type { BudgetRow } from '@/features/overview/useOverview';
 import type { TransactionRow } from '@/features/transactions/types';
 import { ProgressBar } from '@/ui/ProgressBar';
@@ -89,15 +90,14 @@ const parseMinor = (raw: string): number | null => {
   return Math.round(value * 100);
 };
 
-const personalExpenseFromTransaction = (row: TransactionRow): number => {
+const personalExpenseFromTransaction = (row: TransactionRow, sharedUserRatio: number): number => {
   if (row.kind !== 'expense') return 0;
   if (row.is_shared_topup) {
     if (typeof row.personal_effect_minor === 'number') return Math.max(0, -row.personal_effect_minor);
     return row.shared_participant === 'gf' ? 0 : row.amount_minor;
   }
   if (row.shared) {
-    if (typeof row.personal_effect_minor === 'number') return Math.max(0, -row.personal_effect_minor);
-    return 0;
+    return Math.round(row.amount_minor * sharedUserRatio);
   }
   return row.amount_minor;
 };
@@ -188,6 +188,20 @@ export default function BudgetScreen() {
     () => buildBudgetStateByCategory(data.categories, data.budgets, data.transactions, selectedCycle),
     [data.budgets, data.categories, data.transactions, selectedCycle],
   );
+  const sharedUserRatioForCycle = useMemo(() => {
+    if (!selectedCycle) return 0.5;
+    const cycleRows = data.transactions.filter(
+      (row) =>
+        row.occurred_on >= selectedCycle.startOn &&
+        (selectedCycle.endOnExclusive === null || row.occurred_on < selectedCycle.endOnExclusive),
+    );
+    const cycleSharedExpenses = cycleRows.filter((row) => row.kind === 'expense' && row.shared && !row.is_shared_topup);
+    const cycleTopups = cycleRows.filter((row) => row.is_shared_topup);
+    return computeSharedCycle(
+      cycleTopups.map((row) => ({ amount_minor: row.amount_minor, shared_participant: row.shared_participant })),
+      cycleSharedExpenses.map((row) => ({ amount_minor: row.amount_minor })),
+    ).userShareRatio;
+  }, [data.transactions, selectedCycle]);
   const amountDisplayState = useMemo(() => highlightedAmount(draft?.amount ?? ''), [draft?.amount]);
   const incomeParentIds = useMemo(() => findIncomeParentIds(data.categories), [data.categories]);
   const categoryById = useMemo(
@@ -292,14 +306,14 @@ export default function BudgetScreen() {
     for (const row of data.transactions) {
       if (row.kind !== 'expense' || !row.category_id) continue;
       if (!(row.occurred_on >= selectedCycle.startOn && (selectedCycle.endOnExclusive === null || row.occurred_on < selectedCycle.endOnExclusive))) continue;
-      const mySpentMinor = personalExpenseFromTransaction(row);
+      const mySpentMinor = personalExpenseFromTransaction(row, sharedUserRatioForCycle);
       if (mySpentMinor <= 0) continue;
       out.set(row.category_id, (out.get(row.category_id) ?? 0) + mySpentMinor);
       const parentId = parentByCategoryId.get(row.category_id);
       if (parentId) out.set(parentId, (out.get(parentId) ?? 0) + mySpentMinor);
     }
     return out;
-  }, [data.transactions, parentByCategoryId, selectedCycle]);
+  }, [data.transactions, parentByCategoryId, selectedCycle, sharedUserRatioForCycle]);
 
   const isEditableCategory = useMemo(() => {
     return (categoryId: string): boolean => {
@@ -380,9 +394,9 @@ export default function BudgetScreen() {
           row.occurred_on >= selectedCycle.startOn &&
           (selectedCycle.endOnExclusive === null || row.occurred_on < selectedCycle.endOnExclusive),
       )
-      .reduce((sum, row) => sum + personalExpenseFromTransaction(row), 0);
+      .reduce((sum, row) => sum + personalExpenseFromTransaction(row, sharedUserRatioForCycle), 0);
     return cycleSalaryMinor - myCycleSpentMinor;
-  }, [cycleSalaryMinor, data.transactions, selectedCycle]);
+  }, [cycleSalaryMinor, data.transactions, selectedCycle, sharedUserRatioForCycle]);
 
   const unbudgetedParentUsage = useMemo(() => {
     if (!selectedCycle) return [] as { id: string; label: string; color: string }[];

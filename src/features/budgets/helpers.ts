@@ -2,6 +2,7 @@ import type { CategoryRow } from '@/features/categories/types';
 import type { BudgetRow } from '@/features/overview/useOverview';
 import type { TransactionRow } from '@/features/transactions/types';
 import type { SalaryCycle } from '@/lib/cycles';
+import { computeSharedCycle } from '@/lib/shared';
 
 export type BudgetState = {
   categoryId: string;
@@ -11,15 +12,14 @@ export type BudgetState = {
   tone: 'neutral' | 'warning' | 'critical';
 };
 
-const personalExpenseMinor = (row: TransactionRow): number => {
+const personalExpenseMinor = (row: TransactionRow, sharedUserRatio: number): number => {
   if (row.kind !== 'expense') return 0;
   if (row.is_shared_topup) {
     if (typeof row.personal_effect_minor === 'number') return Math.max(0, -row.personal_effect_minor);
     return row.shared_participant === 'gf' ? 0 : row.amount_minor;
   }
   if (row.shared) {
-    if (typeof row.personal_effect_minor === 'number') return Math.max(0, -row.personal_effect_minor);
-    return 0;
+    return Math.round(row.amount_minor * sharedUserRatio);
   }
   return row.amount_minor;
 };
@@ -46,11 +46,18 @@ export const buildBudgetStateByCategory = (
     }
   }
 
+  const cycleRows = transactions.filter((row) => inCycle(row.occurred_on, cycle));
+  const cycleSharedExpenses = cycleRows.filter((row) => row.kind === 'expense' && row.shared && !row.is_shared_topup);
+  const cycleTopups = cycleRows.filter((row) => row.is_shared_topup);
+  const { userShareRatio } = computeSharedCycle(
+    cycleTopups.map((row) => ({ amount_minor: row.amount_minor, shared_participant: row.shared_participant })),
+    cycleSharedExpenses.map((row) => ({ amount_minor: row.amount_minor })),
+  );
+
   const spendByCategory = new Map<string, number>();
-  for (const row of transactions) {
+  for (const row of cycleRows) {
     if (row.kind !== 'expense' || !row.category_id) continue;
-    if (!inCycle(row.occurred_on, cycle)) continue;
-    const mySpentMinor = personalExpenseMinor(row);
+    const mySpentMinor = personalExpenseMinor(row, userShareRatio);
     if (mySpentMinor <= 0) continue;
 
     spendByCategory.set(
