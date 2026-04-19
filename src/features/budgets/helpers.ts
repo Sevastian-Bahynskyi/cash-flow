@@ -35,7 +35,7 @@ export const buildBudgetStateByCategory = (
 
   const spendByCategory = new Map<string, number>();
   for (const row of transactions) {
-    if (row.kind !== 'expense' || row.shared || row.is_shared_topup || !row.category_id) continue;
+    if (row.kind !== 'expense' || row.is_shared_topup || !row.category_id) continue;
     if (!inCycle(row.occurred_on, cycle)) continue;
 
     spendByCategory.set(

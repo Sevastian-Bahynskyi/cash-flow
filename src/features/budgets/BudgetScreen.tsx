@@ -263,7 +263,7 @@ export default function BudgetScreen() {
     if (!selectedCycle) return new Map<string, number>();
     const out = new Map<string, number>();
     for (const row of data.transactions) {
-      if (row.kind !== 'expense' || row.shared || row.is_shared_topup || !row.category_id) continue;
+      if (row.kind !== 'expense' || row.is_shared_topup || !row.category_id) continue;
       if (!(row.occurred_on >= selectedCycle.startOn && (selectedCycle.endOnExclusive === null || row.occurred_on < selectedCycle.endOnExclusive))) continue;
       out.set(row.category_id, (out.get(row.category_id) ?? 0) + row.amount_minor);
     }
@@ -357,7 +357,7 @@ export default function BudgetScreen() {
     if (!selectedCycle) return [] as { id: string; label: string; color: string }[];
     const usedParentIds = new Set<string>();
     for (const row of data.transactions) {
-      if (row.kind !== 'expense' || row.shared || row.is_shared_topup || !row.category_id) continue;
+      if (row.kind !== 'expense' || row.is_shared_topup || !row.category_id) continue;
       if (row.occurred_on < selectedCycle.startOn) continue;
       if (selectedCycle.endOnExclusive !== null && row.occurred_on >= selectedCycle.endOnExclusive) continue;
       const parentId = parentByCategoryId.get(row.category_id) ?? row.category_id;
