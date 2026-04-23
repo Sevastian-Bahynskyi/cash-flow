@@ -61,10 +61,32 @@ type HistoryFilters = {
 
 const EMPTY_IDS: readonly string[] = [];
 
+const parseScopedIdsFromParams = (
+  categoryIdsParam?: string,
+  categoryIdParam?: string,
+): readonly string[] => {
+  const fromList = typeof categoryIdsParam === 'string'
+    ? categoryIdsParam
+      .split(',')
+      .map((value) => value.trim())
+      .filter((value) => value.length > 0)
+    : [];
+  if (fromList.length > 0) return [...new Set(fromList)].sort((a, b) => a.localeCompare(b));
+
+  const single = typeof categoryIdParam === 'string' ? categoryIdParam.trim() : '';
+  if (single.length === 0) return EMPTY_IDS;
+  return [single];
+};
+
 const computeScopedIds = (
   cats: CategoryRow[],
   parentLabel: string | null,
+  explicitScopedIds: readonly string[],
 ): readonly string[] => {
+  if (explicitScopedIds.length > 0) {
+    const validIds = new Set(cats.map((row) => row.id));
+    return explicitScopedIds.filter((id) => validIds.has(id));
+  }
   if (!parentLabel) return EMPTY_IDS;
   const meta = buildCategoryMeta(cats);
   const target = parentLabel.trim().toLowerCase();
@@ -131,6 +153,16 @@ const getDisplayMinorAmount = (row: TransactionRow): number =>
   row.currency_code !== 'DKK' && row.original_amount_minor > 0
     ? row.converted_amount_minor
     : row.amount_minor;
+
+const getPersonalNetMinorAmount = (row: TransactionRow): number => {
+  if (typeof row.personal_effect_minor === 'number') return row.personal_effect_minor;
+
+  const displayMinor = getDisplayMinorAmount(row);
+  if (row.kind === 'income') return displayMinor;
+  if (row.shared && !row.is_shared_topup) return 0;
+  if (row.is_shared_topup && row.shared_participant === 'gf') return 0;
+  return -displayMinor;
+};
 
 const mergeUniqueTransactions = (
   current: readonly TransactionRow[],
@@ -448,6 +480,8 @@ export default function PersonalHistoryScreen() {
     endOnExclusive?: string;
     kind?: string;
     parentLabel?: string;
+    categoryId?: string;
+    categoryIds?: string;
     shared?: string;
     includeShared?: string;
   }>();
@@ -499,6 +533,10 @@ export default function PersonalHistoryScreen() {
   }, [query]);
 
   const categoryMeta = useMemo(() => buildCategoryMeta(categories), [categories]);
+  const explicitScopedCategoryIds = useMemo(
+    () => parseScopedIdsFromParams(params.categoryIds, params.categoryId),
+    [params.categoryId, params.categoryIds],
+  );
   const filters = useMemo<HistoryFilters>(() => {
     const startOn = typeof params.startOn === 'string' && params.startOn.trim() ? params.startOn.trim() : null;
     const endOnExclusive =
@@ -518,17 +556,8 @@ export default function PersonalHistoryScreen() {
     return { startOn, endOnExclusive, kind, parentLabel, sharedOnly, includeShared };
   }, [params.endOnExclusive, params.includeShared, params.kind, params.parentLabel, params.shared, params.startOn]);
   const hardScopedCategoryIds = useMemo(() => {
-    if (!filters.parentLabel) return EMPTY_IDS;
-    const target = filters.parentLabel.trim().toLowerCase();
-    const ids: string[] = [];
-    for (const row of categories) {
-      const meta = categoryMeta[row.id];
-      const parentLabel = meta?.parentName?.trim() ? meta.parentName : meta?.name ?? row.name;
-      if (parentLabel.trim().toLowerCase() === target) ids.push(row.id);
-    }
-    ids.sort((a, b) => a.localeCompare(b));
-    return ids;
-  }, [categories, categoryMeta, filters.parentLabel]);
+    return computeScopedIds(categories, filters.parentLabel, explicitScopedCategoryIds);
+  }, [categories, explicitScopedCategoryIds, filters.parentLabel]);
 
   const reload = useCallback(
     async (showSkeleton = false): Promise<void> => {
@@ -557,7 +586,7 @@ export default function PersonalHistoryScreen() {
         const nextCategories = await loadCategories();
         if (requestVersionRef.current !== requestVersion) return;
 
-        const freshScopedIds = computeScopedIds(nextCategories, filters.parentLabel);
+        const freshScopedIds = computeScopedIds(nextCategories, filters.parentLabel, explicitScopedCategoryIds);
 
         const firstPage = await loadTransactionPage(
           0,
@@ -622,7 +651,7 @@ export default function PersonalHistoryScreen() {
       }
     },
 
-    [debouncedQuery, filters],
+    [debouncedQuery, explicitScopedCategoryIds, filters],
   );
 
   const loadMore = useCallback(async (): Promise<void> => {
@@ -736,11 +765,7 @@ export default function PersonalHistoryScreen() {
     filters.sharedOnly ||
     filters.includeShared;
   const filteredNetTotalMinor = useMemo(
-    () =>
-      transactions.reduce((sum, row) => {
-        const signedAmount = row.kind === 'income' ? getDisplayMinorAmount(row) : -getDisplayMinorAmount(row);
-        return sum + signedAmount;
-      }, 0),
+    () => transactions.reduce((sum, row) => sum + getPersonalNetMinorAmount(row), 0),
     [transactions],
   );
   const isSearchPending = query.trim() !== debouncedQuery;
