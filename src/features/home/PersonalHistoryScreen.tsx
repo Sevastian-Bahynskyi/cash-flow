@@ -155,9 +155,8 @@ const getDisplayMinorAmount = (row: TransactionRow): number =>
     : row.amount_minor;
 
 const getPersonalNetMinorAmount = (row: TransactionRow): number => {
-  if (typeof row.personal_effect_minor === 'number') return row.personal_effect_minor;
-
   const displayMinor = getDisplayMinorAmount(row);
+  if (!row.shared && typeof row.personal_effect_minor === 'number') return row.personal_effect_minor;
   if (row.kind === 'income') return displayMinor;
   if (row.shared && !row.is_shared_topup) return 0;
   if (row.is_shared_topup && row.shared_participant === 'gf') return 0;
@@ -183,14 +182,14 @@ const buildPersonalExpenseMinorByTransactionId = (
       continue;
     }
 
-    if (typeof row.personal_effect_minor === 'number') {
-      out.set(row.id, Math.max(0, -row.personal_effect_minor));
-    } else if (row.is_shared_topup) {
+    if (row.is_shared_topup) {
       out.set(row.id, row.shared_participant === 'gf' ? 0 : row.amount_minor);
     } else if (row.shared) {
       const denom = meTopupBeforeMinor + gfTopupBeforeMinor;
       const ratio = denom === 0 ? 0.5 : meTopupBeforeMinor / denom;
       out.set(row.id, Math.round(row.amount_minor * ratio));
+    } else if (typeof row.personal_effect_minor === 'number') {
+      out.set(row.id, Math.max(0, -row.personal_effect_minor));
     } else {
       out.set(row.id, row.amount_minor);
     }
@@ -375,7 +374,7 @@ const loadFilteredNetTotalMinor = async (
   ): Promise<TransactionRow[]> => {
     let pageOffset = 0;
     const rows: TransactionRow[] = [];
-    for (;;) {
+    for (; ;) {
       const page = await loadTransactionPage(pageOffset, query, ids, filters);
       rows.push(...page);
       if (page.length < PAGE_SIZE) break;
@@ -387,11 +386,8 @@ const loadFilteredNetTotalMinor = async (
   const matchedRows = await loadAllPages(searchQuery, scopedCategoryIds);
   if (matchedRows.length === 0) return 0;
 
-  const hasSharedRowsWithoutEffect = matchedRows.some(
-    (row) => row.kind === 'expense' && row.shared && typeof row.personal_effect_minor !== 'number',
-  );
-
-  if (!hasSharedRowsWithoutEffect) {
+  const hasSharedRows = matchedRows.some((row) => row.kind === 'expense' && (row.shared || row.is_shared_topup));
+  if (!hasSharedRows) {
     return matchedRows.reduce((sum, row) => sum + getPersonalNetMinorAmount(row), 0);
   }
 
@@ -402,7 +398,7 @@ const loadFilteredNetTotalMinor = async (
   let totalMinor = 0;
 
   for (const row of matchedRows) {
-    if (typeof row.personal_effect_minor === 'number') {
+    if (!row.shared && typeof row.personal_effect_minor === 'number') {
       totalMinor += row.personal_effect_minor;
       continue;
     }

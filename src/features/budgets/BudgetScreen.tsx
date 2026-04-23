@@ -108,14 +108,14 @@ const buildPersonalExpenseMinorByTransactionId = (
       continue;
     }
 
-    if (typeof row.personal_effect_minor === 'number') {
-      out.set(row.id, Math.max(0, -row.personal_effect_minor));
-    } else if (row.is_shared_topup) {
+    if (row.is_shared_topup) {
       out.set(row.id, row.shared_participant === 'gf' ? 0 : row.amount_minor);
     } else if (row.shared) {
       const denom = meTopupBeforeMinor + gfTopupBeforeMinor;
       const ratio = denom === 0 ? 0.5 : meTopupBeforeMinor / denom;
       out.set(row.id, Math.round(row.amount_minor * ratio));
+    } else if (typeof row.personal_effect_minor === 'number') {
+      out.set(row.id, Math.max(0, -row.personal_effect_minor));
     } else {
       out.set(row.id, row.amount_minor);
     }
