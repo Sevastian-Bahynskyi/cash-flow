@@ -149,7 +149,8 @@ export const useOverview = (): OverviewData => {
           .select(
             'id, user_id, kind, amount_minor, occurred_on, name, comment, category_id, country_iso, recurring, shared, shared_participant, is_shared_topup, is_salary, currency_code, original_amount_minor, converted_amount_minor, fx_rate, personal_effect_minor, shared_effect_minor, is_neutral_display, created_at, updated_at',
           )
-          .order('occurred_on', { ascending: true }),
+          .order('occurred_on', { ascending: true })
+          .order('created_at', { ascending: true }),
         supabase
           .from('savings_accounts')
           .select('id, user_id, name, goal_minor, color, icon, created_at')

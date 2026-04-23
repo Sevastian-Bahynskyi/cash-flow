@@ -25,7 +25,6 @@ import { runDetached } from '@/lib/async';
 import { supabase } from '@/lib/supabase';
 import { formatMinor, formatPercent } from '@/lib/format';
 import { buildNavigableCycles, findCycleFor, type SalaryCycle } from '@/lib/cycles';
-import { computeSharedCycle } from '@/lib/shared';
 import type { BudgetRow } from '@/features/overview/useOverview';
 import type { TransactionRow } from '@/features/transactions/types';
 import { ProgressBar } from '@/ui/ProgressBar';
@@ -90,16 +89,44 @@ const parseMinor = (raw: string): number | null => {
   return Math.round(value * 100);
 };
 
-const personalExpenseFromTransaction = (row: TransactionRow, sharedUserRatio: number): number => {
-  if (row.kind !== 'expense') return 0;
-  if (row.is_shared_topup) {
-    if (typeof row.personal_effect_minor === 'number') return Math.max(0, -row.personal_effect_minor);
-    return row.shared_participant === 'gf' ? 0 : row.amount_minor;
+const buildPersonalExpenseMinorByTransactionId = (
+  rows: readonly TransactionRow[],
+): Map<string, number> => {
+  const orderedRows = [...rows].sort((left, right) => {
+    if (left.occurred_on !== right.occurred_on) return left.occurred_on.localeCompare(right.occurred_on);
+    if (left.created_at !== right.created_at) return left.created_at.localeCompare(right.created_at);
+    return left.id.localeCompare(right.id);
+  });
+
+  const out = new Map<string, number>();
+  let meTopupBeforeMinor = 0;
+  let gfTopupBeforeMinor = 0;
+
+  for (const row of orderedRows) {
+    if (row.kind !== 'expense') {
+      out.set(row.id, 0);
+      continue;
+    }
+
+    if (typeof row.personal_effect_minor === 'number') {
+      out.set(row.id, Math.max(0, -row.personal_effect_minor));
+    } else if (row.is_shared_topup) {
+      out.set(row.id, row.shared_participant === 'gf' ? 0 : row.amount_minor);
+    } else if (row.shared) {
+      const denom = meTopupBeforeMinor + gfTopupBeforeMinor;
+      const ratio = denom === 0 ? 0.5 : meTopupBeforeMinor / denom;
+      out.set(row.id, Math.round(row.amount_minor * ratio));
+    } else {
+      out.set(row.id, row.amount_minor);
+    }
+
+    if (row.is_shared_topup) {
+      if (row.shared_participant === 'gf') gfTopupBeforeMinor += row.amount_minor;
+      else meTopupBeforeMinor += row.amount_minor;
+    }
   }
-  if (row.shared) {
-    return Math.round(row.amount_minor * sharedUserRatio);
-  }
-  return row.amount_minor;
+
+  return out;
 };
 
 function BudgetSkeleton() {
@@ -188,20 +215,21 @@ export default function BudgetScreen() {
     () => buildBudgetStateByCategory(data.categories, data.budgets, data.transactions, selectedCycle),
     [data.budgets, data.categories, data.transactions, selectedCycle],
   );
-  const sharedUserRatioForCycle = useMemo(() => {
-    if (!selectedCycle) return 0.5;
-    const cycleRows = data.transactions.filter(
-      (row) =>
-        row.occurred_on >= selectedCycle.startOn &&
-        (selectedCycle.endOnExclusive === null || row.occurred_on < selectedCycle.endOnExclusive),
-    );
-    const cycleSharedExpenses = cycleRows.filter((row) => row.kind === 'expense' && row.shared && !row.is_shared_topup);
-    const cycleTopups = cycleRows.filter((row) => row.is_shared_topup);
-    return computeSharedCycle(
-      cycleTopups.map((row) => ({ amount_minor: row.amount_minor, shared_participant: row.shared_participant })),
-      cycleSharedExpenses.map((row) => ({ amount_minor: row.amount_minor })),
-    ).userShareRatio;
-  }, [data.transactions, selectedCycle]);
+  const selectedCycleRows = useMemo<readonly TransactionRow[]>(
+    () =>
+      selectedCycle
+        ? data.transactions.filter(
+            (row) =>
+              row.occurred_on >= selectedCycle.startOn &&
+              (selectedCycle.endOnExclusive === null || row.occurred_on < selectedCycle.endOnExclusive),
+          )
+        : [],
+    [data.transactions, selectedCycle],
+  );
+  const personalExpenseByTransactionId = useMemo<Map<string, number>>(
+    () => buildPersonalExpenseMinorByTransactionId(selectedCycleRows),
+    [selectedCycleRows],
+  );
   const amountDisplayState = useMemo(() => highlightedAmount(draft?.amount ?? ''), [draft?.amount]);
   const incomeParentIds = useMemo(() => findIncomeParentIds(data.categories), [data.categories]);
   const categoryById = useMemo(
@@ -290,30 +318,28 @@ export default function BudgetScreen() {
   const totalSpentByCategoryId = useMemo(() => {
     if (!selectedCycle) return new Map<string, number>();
     const out = new Map<string, number>();
-    for (const row of data.transactions) {
+    for (const row of selectedCycleRows) {
       if (row.kind !== 'expense' || row.is_shared_topup || !row.category_id) continue;
-      if (!(row.occurred_on >= selectedCycle.startOn && (selectedCycle.endOnExclusive === null || row.occurred_on < selectedCycle.endOnExclusive))) continue;
       out.set(row.category_id, (out.get(row.category_id) ?? 0) + row.amount_minor);
       const parentId = parentByCategoryId.get(row.category_id);
       if (parentId) out.set(parentId, (out.get(parentId) ?? 0) + row.amount_minor);
     }
     return out;
-  }, [data.transactions, parentByCategoryId, selectedCycle]);
+  }, [parentByCategoryId, selectedCycle, selectedCycleRows]);
 
   const mySpentByCategoryId = useMemo(() => {
     if (!selectedCycle) return new Map<string, number>();
     const out = new Map<string, number>();
-    for (const row of data.transactions) {
+    for (const row of selectedCycleRows) {
       if (row.kind !== 'expense' || !row.category_id) continue;
-      if (!(row.occurred_on >= selectedCycle.startOn && (selectedCycle.endOnExclusive === null || row.occurred_on < selectedCycle.endOnExclusive))) continue;
-      const mySpentMinor = personalExpenseFromTransaction(row, sharedUserRatioForCycle);
+      const mySpentMinor = personalExpenseByTransactionId.get(row.id) ?? 0;
       if (mySpentMinor <= 0) continue;
       out.set(row.category_id, (out.get(row.category_id) ?? 0) + mySpentMinor);
       const parentId = parentByCategoryId.get(row.category_id);
       if (parentId) out.set(parentId, (out.get(parentId) ?? 0) + mySpentMinor);
     }
     return out;
-  }, [data.transactions, parentByCategoryId, selectedCycle, sharedUserRatioForCycle]);
+  }, [parentByCategoryId, personalExpenseByTransactionId, selectedCycle, selectedCycleRows]);
 
   const isEditableCategory = useMemo(() => {
     return (categoryId: string): boolean => {
@@ -388,15 +414,12 @@ export default function BudgetScreen() {
 
   const realAvailableMoneyMinor = useMemo(() => {
     if (!selectedCycle) return 0;
-    const myCycleSpentMinor = data.transactions
-      .filter(
-        (row) =>
-          row.occurred_on >= selectedCycle.startOn &&
-          (selectedCycle.endOnExclusive === null || row.occurred_on < selectedCycle.endOnExclusive),
-      )
-      .reduce((sum, row) => sum + personalExpenseFromTransaction(row, sharedUserRatioForCycle), 0);
+    const myCycleSpentMinor = selectedCycleRows.reduce(
+      (sum, row) => sum + (personalExpenseByTransactionId.get(row.id) ?? 0),
+      0,
+    );
     return cycleSalaryMinor - myCycleSpentMinor;
-  }, [cycleSalaryMinor, data.transactions, selectedCycle, sharedUserRatioForCycle]);
+  }, [cycleSalaryMinor, personalExpenseByTransactionId, selectedCycle, selectedCycleRows]);
 
   const unbudgetedParentUsage = useMemo(() => {
     if (!selectedCycle) return [] as { id: string; label: string; color: string }[];

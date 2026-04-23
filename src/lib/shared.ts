@@ -14,6 +14,18 @@ export type SharedTopup = {
 };
 export type SharedExpense = { amount_minor: number };
 
+export type SharedMathTransaction = {
+  id: string;
+  kind: 'expense' | 'income';
+  amount_minor: number;
+  occurred_on: string;
+  created_at: string;
+  shared: boolean;
+  is_shared_topup: boolean;
+  shared_participant: 'me' | 'gf' | null;
+  personal_effect_minor?: number;
+};
+
 export type SharedCycleResult = {
   /** Top-ups attributed to the app user (participant me or legacy null). */
   meTopupTotal: number;
@@ -57,4 +69,48 @@ export const computeSharedCycle = (
     userEffectiveShare,
     sharedBalance,
   };
+};
+
+export const orderTransactionsForSharedMath = <T extends { id: string; occurred_on: string; created_at: string }>(
+  rows: readonly T[],
+): T[] =>
+  [...rows].sort((left, right) => {
+    if (left.occurred_on !== right.occurred_on) return left.occurred_on.localeCompare(right.occurred_on);
+    if (left.created_at !== right.created_at) return left.created_at.localeCompare(right.created_at);
+    return left.id.localeCompare(right.id);
+  });
+
+export const computePersonalExpenseMinorByTransactionId = (
+  rows: readonly SharedMathTransaction[],
+): Map<string, number> => {
+  const orderedRows = orderTransactionsForSharedMath(rows);
+  const out = new Map<string, number>();
+  let meTopupBeforeMinor = 0;
+  let gfTopupBeforeMinor = 0;
+
+  for (const row of orderedRows) {
+    if (row.kind !== 'expense') {
+      out.set(row.id, 0);
+      continue;
+    }
+
+    if (typeof row.personal_effect_minor === 'number') {
+      out.set(row.id, Math.max(0, -row.personal_effect_minor));
+    } else if (row.is_shared_topup) {
+      out.set(row.id, row.shared_participant === 'gf' ? 0 : row.amount_minor);
+    } else if (row.shared) {
+      const denom = meTopupBeforeMinor + gfTopupBeforeMinor;
+      const ratio = denom === 0 ? 0.5 : meTopupBeforeMinor / denom;
+      out.set(row.id, Math.round(row.amount_minor * ratio));
+    } else {
+      out.set(row.id, row.amount_minor);
+    }
+
+    if (row.is_shared_topup) {
+      if (row.shared_participant === 'gf') gfTopupBeforeMinor += row.amount_minor;
+      else meTopupBeforeMinor += row.amount_minor;
+    }
+  }
+
+  return out;
 };
