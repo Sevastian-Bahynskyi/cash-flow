@@ -164,6 +164,46 @@ const getPersonalNetMinorAmount = (row: TransactionRow): number => {
   return -displayMinor;
 };
 
+const buildPersonalExpenseMinorByTransactionId = (
+  rows: readonly TransactionRow[],
+): Map<string, number> => {
+  const orderedRows = [...rows].sort((left, right) => {
+    if (left.occurred_on !== right.occurred_on) return left.occurred_on.localeCompare(right.occurred_on);
+    if (left.created_at !== right.created_at) return left.created_at.localeCompare(right.created_at);
+    return left.id.localeCompare(right.id);
+  });
+
+  const out = new Map<string, number>();
+  let meTopupBeforeMinor = 0;
+  let gfTopupBeforeMinor = 0;
+
+  for (const row of orderedRows) {
+    if (row.kind !== 'expense') {
+      out.set(row.id, 0);
+      continue;
+    }
+
+    if (typeof row.personal_effect_minor === 'number') {
+      out.set(row.id, Math.max(0, -row.personal_effect_minor));
+    } else if (row.is_shared_topup) {
+      out.set(row.id, row.shared_participant === 'gf' ? 0 : row.amount_minor);
+    } else if (row.shared) {
+      const denom = meTopupBeforeMinor + gfTopupBeforeMinor;
+      const ratio = denom === 0 ? 0.5 : meTopupBeforeMinor / denom;
+      out.set(row.id, Math.round(row.amount_minor * ratio));
+    } else {
+      out.set(row.id, row.amount_minor);
+    }
+
+    if (row.is_shared_topup) {
+      if (row.shared_participant === 'gf') gfTopupBeforeMinor += row.amount_minor;
+      else meTopupBeforeMinor += row.amount_minor;
+    }
+  }
+
+  return out;
+};
+
 const mergeUniqueTransactions = (
   current: readonly TransactionRow[],
   incoming: readonly TransactionRow[],
@@ -329,16 +369,55 @@ const loadFilteredNetTotalMinor = async (
   scopedCategoryIds: readonly string[],
   filters: HistoryFilters,
 ): Promise<number> => {
-  let offset = 0;
+  const loadAllPages = async (
+    query: string,
+    ids: readonly string[],
+  ): Promise<TransactionRow[]> => {
+    let pageOffset = 0;
+    const rows: TransactionRow[] = [];
+    for (;;) {
+      const page = await loadTransactionPage(pageOffset, query, ids, filters);
+      rows.push(...page);
+      if (page.length < PAGE_SIZE) break;
+      pageOffset += page.length;
+    }
+    return rows;
+  };
+
+  const matchedRows = await loadAllPages(searchQuery, scopedCategoryIds);
+  if (matchedRows.length === 0) return 0;
+
+  const hasSharedRowsWithoutEffect = matchedRows.some(
+    (row) => row.kind === 'expense' && row.shared && typeof row.personal_effect_minor !== 'number',
+  );
+
+  if (!hasSharedRowsWithoutEffect) {
+    return matchedRows.reduce((sum, row) => sum + getPersonalNetMinorAmount(row), 0);
+  }
+
+  // Shared ratio at transaction time depends on top-ups that may be outside current category/query scope.
+  const contextRows = await loadAllPages('', EMPTY_IDS);
+  const personalExpenseByTransactionId = buildPersonalExpenseMinorByTransactionId(contextRows);
+
   let totalMinor = 0;
 
-  for (;;) {
-    const page = await loadTransactionPage(offset, searchQuery, scopedCategoryIds, filters);
-    for (const row of page) {
-      totalMinor += getPersonalNetMinorAmount(row);
+  for (const row of matchedRows) {
+    if (typeof row.personal_effect_minor === 'number') {
+      totalMinor += row.personal_effect_minor;
+      continue;
     }
-    if (page.length < PAGE_SIZE) break;
-    offset += page.length;
+
+    if (row.kind === 'income') {
+      totalMinor += getDisplayMinorAmount(row);
+      continue;
+    }
+
+    if (row.shared || row.is_shared_topup) {
+      totalMinor -= personalExpenseByTransactionId.get(row.id) ?? 0;
+      continue;
+    }
+
+    totalMinor -= getDisplayMinorAmount(row);
   }
 
   return totalMinor;
