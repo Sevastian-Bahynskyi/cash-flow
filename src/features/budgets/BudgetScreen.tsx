@@ -219,10 +219,10 @@ export default function BudgetScreen() {
     () =>
       selectedCycle
         ? data.transactions.filter(
-            (row) =>
-              row.occurred_on >= selectedCycle.startOn &&
-              (selectedCycle.endOnExclusive === null || row.occurred_on < selectedCycle.endOnExclusive),
-          )
+          (row) =>
+            row.occurred_on >= selectedCycle.startOn &&
+            (selectedCycle.endOnExclusive === null || row.occurred_on < selectedCycle.endOnExclusive),
+        )
         : [],
     [data.transactions, selectedCycle],
   );
