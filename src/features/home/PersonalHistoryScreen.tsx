@@ -127,6 +127,11 @@ const displayAmountForRow = (row: TransactionRow): string =>
     ? `${formatMinor(row.converted_amount_minor, 'DKK')} · ${formatMinor(row.original_amount_minor, row.currency_code)}`
     : formatMinor(row.amount_minor, 'DKK');
 
+const getDisplayMinorAmount = (row: TransactionRow): number =>
+  row.currency_code !== 'DKK' && row.original_amount_minor > 0
+    ? row.converted_amount_minor
+    : row.amount_minor;
+
 const mergeUniqueTransactions = (
   current: readonly TransactionRow[],
   incoming: readonly TransactionRow[],
@@ -202,7 +207,12 @@ const loadTransactionPage = async (
 ): Promise<TransactionRow[]> => {
   const startedAt = Date.now();
   const rpcArgs = buildSearchTransactionsRpcArgs(searchQuery, offset, scopedCategoryIds, filters);
-  const { data, error } = await supabase.rpc('search_transactions_v1', rpcArgs);
+  const rpcResult = (await supabase.rpc('search_transactions_v1', rpcArgs)) as {
+    data: unknown;
+    error: unknown;
+  };
+  const error = rpcResult.error;
+  const rows = Array.isArray(rpcResult.data) ? (rpcResult.data as TransactionRow[]) : [];
 
   if (error) {
     // #region agent log
@@ -219,15 +229,15 @@ const loadTransactionPage = async (
           offset,
           searchQuery,
           rpcArgs,
-          code: (error as { code?: string }).code ?? null,
-          message: (error as { message?: string }).message ?? null,
+          code: (error as { code?: string } | null)?.code ?? null,
+          message: (error as { message?: string } | null)?.message ?? null,
           elapsedMs: Date.now() - startedAt,
         },
         timestamp: Date.now(),
       }),
     }).catch(() => { });
     // #endregion
-    throw error;
+    throw error instanceof Error ? error : new Error(getErrorMessage(error, 'Transaction page query failed.'));
   }
 
   // #region agent log
@@ -244,7 +254,7 @@ const loadTransactionPage = async (
         offset,
         searchQueryLength: searchQuery.length,
         rpcArgs,
-        rows: (data ?? []).length,
+        rows: rows.length,
         elapsedMs: Date.now() - startedAt,
       },
       timestamp: Date.now(),
@@ -252,7 +262,7 @@ const loadTransactionPage = async (
   }).catch(() => { });
   // #endregion
 
-  return (data ?? []) as TransactionRow[];
+  return rows;
 };
 
 const loadMatchingTransactionIds = async (
@@ -261,10 +271,25 @@ const loadMatchingTransactionIds = async (
   filters: HistoryFilters,
 ): Promise<string[]> => {
   const rpcArgs = buildSearchTransactionIdsRpcArgs(searchQuery, scopedCategoryIds, filters);
-  const { data, error } = await supabase.rpc('search_transaction_ids_v1', rpcArgs);
+  const rpcResult = (await supabase.rpc('search_transaction_ids_v1', rpcArgs)) as {
+    data: unknown;
+    error: unknown;
+  };
+  const error = rpcResult.error;
 
-  if (error) throw error;
-  return (data ?? []).map((row: { id: string }) => row.id);
+  if (error) {
+    throw error instanceof Error ? error : new Error(getErrorMessage(error, 'Failed to load matching transaction IDs.'));
+  }
+
+  if (!Array.isArray(rpcResult.data)) return [];
+
+  const ids: string[] = [];
+  for (const row of rpcResult.data) {
+    if (!row || typeof row !== 'object') continue;
+    const maybeId = (row as { id?: unknown }).id;
+    if (typeof maybeId === 'string') ids.push(maybeId);
+  }
+  return ids;
 };
 
 const deleteTransactionIds = async (ids: readonly string[]): Promise<void> => {
@@ -702,6 +727,22 @@ export default function PersonalHistoryScreen() {
 
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const hasQuery = debouncedQuery.length > 0;
+  const hasActiveFilter =
+    hasQuery ||
+    filters.startOn !== null ||
+    filters.endOnExclusive !== null ||
+    filters.kind !== null ||
+    filters.parentLabel !== null ||
+    filters.sharedOnly ||
+    filters.includeShared;
+  const filteredNetTotalMinor = useMemo(
+    () =>
+      transactions.reduce((sum, row) => {
+        const signedAmount = row.kind === 'income' ? getDisplayMinorAmount(row) : -getDisplayMinorAmount(row);
+        return sum + signedAmount;
+      }, 0),
+    [transactions],
+  );
   const isSearchPending = query.trim() !== debouncedQuery;
   const shouldShowSkeleton = isInitialLoading;
 
@@ -890,6 +931,12 @@ export default function PersonalHistoryScreen() {
           style={{ marginBottom: spacing.md }}
         />
 
+        {hasActiveFilter ? (
+          <Text style={styles.filteredSummaryText}>
+            Filtered total: {formatMinor(filteredNetTotalMinor, 'DKK')}
+          </Text>
+        ) : null}
+
         {selectionMode ? (
           <View style={styles.selectionBar}>
             <Text style={styles.selectionLabel}>
@@ -1031,6 +1078,14 @@ const styles = StyleSheet.create({
   selectionButtonDisabled: { opacity: 0.45 },
   selectionButtonText: { ...typography.label, color: colors.text, fontWeight: '600' },
   selectionButtonTextDanger: { color: colors.danger },
+  filteredSummaryText: {
+    ...typography.label,
+    fontSize: 12,
+    color: colors.textMuted,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+    opacity: 0.9,
+  },
   errorText: { ...typography.body, color: colors.textMuted },
   skeletonWrap: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl * 4, gap: spacing.lg },
   skeletonSection: { gap: spacing.sm },
