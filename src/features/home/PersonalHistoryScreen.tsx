@@ -324,6 +324,26 @@ const loadMatchingTransactionIds = async (
   return ids;
 };
 
+const loadFilteredNetTotalMinor = async (
+  searchQuery: string,
+  scopedCategoryIds: readonly string[],
+  filters: HistoryFilters,
+): Promise<number> => {
+  let offset = 0;
+  let totalMinor = 0;
+
+  for (;;) {
+    const page = await loadTransactionPage(offset, searchQuery, scopedCategoryIds, filters);
+    for (const row of page) {
+      totalMinor += getPersonalNetMinorAmount(row);
+    }
+    if (page.length < PAGE_SIZE) break;
+    offset += page.length;
+  }
+
+  return totalMinor;
+};
+
 const deleteTransactionIds = async (ids: readonly string[]): Promise<void> => {
   for (let index = 0; index < ids.length; index += DELETE_CHUNK_SIZE) {
     const chunk = ids.slice(index, index + DELETE_CHUNK_SIZE);
@@ -497,8 +517,11 @@ export default function PersonalHistoryScreen() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [hasMore, setHasMore] = useState(true);
+  const [filteredNetTotalMinor, setFilteredNetTotalMinor] = useState(0);
+  const [isFilteredTotalLoading, setIsFilteredTotalLoading] = useState(false);
   const motionRun = useMotionRefresh();
   const requestVersionRef = useRef(0);
+  const totalRequestVersionRef = useRef(0);
   const hasLoadedOnceRef = useRef(false);
   const skipNextComposerRefreshRef = useRef(false);
   const loadMoreInProgressRef = useRef(false);
@@ -764,12 +787,59 @@ export default function PersonalHistoryScreen() {
     filters.parentLabel !== null ||
     filters.sharedOnly ||
     filters.includeShared;
-  const filteredNetTotalMinor = useMemo(
-    () => transactions.reduce((sum, row) => sum + getPersonalNetMinorAmount(row), 0),
-    [transactions],
-  );
   const isSearchPending = query.trim() !== debouncedQuery;
   const shouldShowSkeleton = isInitialLoading;
+
+  useEffect(() => {
+    if (!hasActiveFilter) {
+      setIsFilteredTotalLoading(false);
+      setFilteredNetTotalMinor(0);
+      return;
+    }
+
+    if (isInitialLoading) {
+      setIsFilteredTotalLoading(true);
+      return;
+    }
+
+    const requestVersion = totalRequestVersionRef.current + 1;
+    totalRequestVersionRef.current = requestVersion;
+    setIsFilteredTotalLoading(true);
+
+    runDetached(
+      (async () => {
+        try {
+          const totalMinor = await loadFilteredNetTotalMinor(
+            debouncedQuery,
+            hardScopedCategoryIds,
+            filters,
+          );
+          if (totalRequestVersionRef.current !== requestVersion) return;
+          setFilteredNetTotalMinor(totalMinor);
+        } catch (totalError) {
+          if (totalRequestVersionRef.current !== requestVersion) return;
+          reportDevError('personal-history.filtered-total', totalError, {
+            searchQuery: debouncedQuery,
+          });
+          setFilteredNetTotalMinor(
+            transactions.reduce((sum, row) => sum + getPersonalNetMinorAmount(row), 0),
+          );
+        } finally {
+          if (totalRequestVersionRef.current === requestVersion) {
+            setIsFilteredTotalLoading(false);
+          }
+        }
+      })(),
+      'personal-history.filtered-total',
+    );
+  }, [
+    debouncedQuery,
+    filters,
+    hardScopedCategoryIds,
+    hasActiveFilter,
+    isInitialLoading,
+    transactions,
+  ]);
 
   const flatData = useMemo<FlatHistoryItem[]>(() => {
     const grouped = new Map<string, HistoryItem[]>();
@@ -958,7 +1028,9 @@ export default function PersonalHistoryScreen() {
 
         {hasActiveFilter ? (
           <Text style={styles.filteredSummaryText}>
-            Filtered total: {formatMinor(filteredNetTotalMinor, 'DKK')}
+            {isFilteredTotalLoading
+              ? 'Filtered total: calculating...'
+              : `Filtered total: ${formatMinor(filteredNetTotalMinor, 'DKK')}`}
           </Text>
         ) : null}
 
