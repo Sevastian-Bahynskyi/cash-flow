@@ -7,6 +7,7 @@ import {
 } from '@/features/categories/helpers';
 import { useOverview } from '@/features/overview/useOverview';
 import { buildNavigableCycles, cycleMatch, formatCycleDisplayRange, type SalaryCycle } from '@/lib/cycles';
+import { computePersonalExpenseMinorByTransactionId } from '@/lib/shared';
 import { colors } from '@/ui/tokens';
 
 export type DashboardRange = 'weekly' | 'monthly' | 'yearly';
@@ -323,6 +324,42 @@ export const useDashboard = (
       { label: string; color: string; icon: string }
     >();
 
+    // Compute personal expense amounts for all transactions (proportional share for shared expenses).
+    const personalExpenseMinorById = computePersonalExpenseMinorByTransactionId(overview.transactions);
+
+    const accumulateCategoryAmount = (categoryId: string, amountMinor: number): void => {
+      const category = categoriesById.get(categoryId);
+      const parentCategory =
+        category?.level === 2 && category.parent_id
+          ? categoriesById.get(category.parent_id) ?? category
+          : category;
+      const aggregateCategoryId = parentCategory?.id ?? categoryId;
+
+      categoryTotals.set(
+        aggregateCategoryId,
+        (categoryTotals.get(aggregateCategoryId) ?? 0) + amountMinor,
+      );
+
+      if (!categoryPresentation.has(aggregateCategoryId)) {
+        const parentName = parentCategory?.name ?? categoryMeta[aggregateCategoryId]?.name ?? 'Category';
+        const parentColor = parentCategory?.color ?? categoryMeta[aggregateCategoryId]?.color ?? colors.accent;
+        const color = getCategoryDisplayColor({
+          kind: 'expense',
+          parentName,
+          name: parentName,
+          parentColor,
+          color: parentColor,
+        });
+        const icon = parentCategory?.icon ?? categoryMeta[aggregateCategoryId]?.icon ?? 'shapes';
+
+        categoryPresentation.set(aggregateCategoryId, {
+          label: parentName,
+          color,
+          icon,
+        });
+      }
+    };
+
     let incomeMinor = 0;
     let expenseMinor = 0;
     let topupMinor = 0;
@@ -342,7 +379,17 @@ export const useDashboard = (
         continue;
       }
 
-      if (row.shared) continue;
+      if (row.shared) {
+        // Shared expense: add user's proportional share to expense and category totals,
+        // but do NOT count as direct outflow (funded from shared pool via topups).
+        const myAmount = personalExpenseMinorById.get(row.id) ?? 0;
+        if (myAmount > 0) {
+          expenseMinor += myAmount;
+          bucket.expenseMinor += myAmount;
+          if (row.category_id) accumulateCategoryAmount(row.category_id, myAmount);
+        }
+        continue;
+      }
 
       outflowMinor += row.amount_minor;
       cashFlowMinor -= row.amount_minor;
@@ -358,38 +405,7 @@ export const useDashboard = (
       expenseMinor += row.amount_minor;
       bucket.expenseMinor += row.amount_minor;
 
-      if (row.category_id) {
-        const category = categoriesById.get(row.category_id);
-        const parentCategory =
-          category?.level === 2 && category.parent_id
-            ? categoriesById.get(category.parent_id) ?? category
-            : category;
-        const aggregateCategoryId = parentCategory?.id ?? row.category_id;
-
-        categoryTotals.set(
-          aggregateCategoryId,
-          (categoryTotals.get(aggregateCategoryId) ?? 0) + row.amount_minor,
-        );
-
-        if (!categoryPresentation.has(aggregateCategoryId)) {
-          const parentName = parentCategory?.name ?? categoryMeta[aggregateCategoryId]?.name ?? 'Category';
-          const parentColor = parentCategory?.color ?? categoryMeta[aggregateCategoryId]?.color ?? colors.accent;
-          const color = getCategoryDisplayColor({
-            kind: 'expense',
-            parentName,
-            name: parentName,
-            parentColor,
-            color: parentColor,
-          });
-          const icon = parentCategory?.icon ?? categoryMeta[aggregateCategoryId]?.icon ?? 'shapes';
-
-          categoryPresentation.set(aggregateCategoryId, {
-            label: parentName,
-            color,
-            icon,
-          });
-        }
-      }
+      if (row.category_id) accumulateCategoryAmount(row.category_id, row.amount_minor);
     }
 
     const buckets = descriptor.buckets.map((bucket) => bucketMap.get(bucket.key) ?? createEmptyBucket(bucket));
