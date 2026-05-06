@@ -139,6 +139,11 @@ const toIsoDate = (date: Date): string => {
   return `${year}-${month}-${day}`;
 };
 
+const isValidIsoDate = (value: string): boolean => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  return toIsoDate(parseIsoDate(value)) === value;
+};
+
 const parseAmountMinor = (raw: string): number | null => {
   const normalized = raw.trim().replace(',', '.');
   if (!normalized) return null;
@@ -265,6 +270,8 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
   const [lastCreatedDate, setLastCreatedDate] = useState(todayIso());
   const [countryIso, setCountryIso] = useState('DK');
   const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [webDateInput, setWebDateInput] = useState(todayIso());
+  const [webDateError, setWebDateError] = useState<string | null>(null);
   const [countryPickerOpen, setCountryPickerOpen] = useState(false);
   const [keypadOpen, setKeypadOpen] = useState(true);
   const [recurring, setRecurring] = useState(false);
@@ -1016,6 +1023,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
 
   const closeDatePicker = (): void => {
     setDatePickerOpen(false);
+    setWebDateError(null);
     if (reopenKeypadAfterDatePicker.current) {
       openKeypad();
       reopenKeypadAfterDatePicker.current = false;
@@ -1025,7 +1033,19 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
   const openDatePicker = (): void => {
     reopenKeypadAfterDatePicker.current = keypadOpen;
     closeKeypad();
+    setWebDateInput(date);
+    setWebDateError(null);
     setDatePickerOpen(true);
+  };
+
+  const applyWebDateInput = (): void => {
+    const nextDate = webDateInput.trim();
+    if (!isValidIsoDate(nextDate)) {
+      setWebDateError('Use YYYY-MM-DD.');
+      return;
+    }
+    setDate(nextDate);
+    closeDatePicker();
   };
 
   const handleSave = async (): Promise<void> => {
@@ -1632,6 +1652,46 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
                 />
               </View>
             </View>
+          ) : Platform.OS === 'web' ? (
+            <View style={styles.datePickerOverlay}>
+              <Pressable style={styles.datePickerBackdrop} onPress={closeDatePicker} />
+              <View style={styles.datePickerCard}>
+                <View style={styles.datePickerHeader}>
+                  <Text style={styles.datePickerTitle}>Select date</Text>
+                  <Pressable onPress={applyWebDateInput}>
+                    <Text style={styles.datePickerDone}>Done</Text>
+                  </Pressable>
+                </View>
+                <View style={styles.webDatePickerBody}>
+                  <TextInput
+                    value={webDateInput}
+                    onChangeText={(value) => {
+                      setWebDateInput(value);
+                      setWebDateError(null);
+                    }}
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor={colors.textMuted}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="numbers-and-punctuation"
+                    style={styles.webDateInput}
+                    onSubmitEditing={applyWebDateInput}
+                  />
+                  {webDateError ? <Text style={styles.webDateError}>{webDateError}</Text> : null}
+                  <Pressable
+                    style={({ pressed }) => [styles.webDateTodayButton, pressed && styles.rowPressed]}
+                    onPress={() => {
+                      const nextDate = todayIso();
+                      setWebDateInput(nextDate);
+                      setDate(nextDate);
+                      closeDatePicker();
+                    }}
+                  >
+                    <Text style={styles.webDateTodayText}>Today</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </View>
           ) : (
             <DateTimePicker value={parseIsoDate(date)} mode="date" display="calendar" onChange={onDateChange} />
           )
@@ -1955,6 +2015,31 @@ const styles = StyleSheet.create({
   },
   datePickerTitle: { ...typography.body, color: colors.text, fontWeight: '700' },
   datePickerDone: { ...typography.body, color: colors.accentAlt, fontWeight: '700' },
+  webDatePickerBody: {
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+  },
+  webDateInput: {
+    ...typography.body,
+    color: colors.text,
+    minHeight: 52,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
+    paddingHorizontal: spacing.md,
+  },
+  webDateError: { ...typography.label, color: colors.danger },
+  webDateTodayButton: {
+    minHeight: 44,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  webDateTodayText: { ...typography.body, color: colors.text, fontWeight: '700' },
   keypadPanel: {
     position: 'relative',
     overflow: 'visible',

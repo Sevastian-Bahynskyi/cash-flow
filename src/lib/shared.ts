@@ -2,9 +2,8 @@
 // All amounts in integer minor units.
 //
 // Rules (from context.md):
-//   partner_inferred = max(shared_expense_total - user_shared_topup_total, 0)
-//   user_share_ratio = user_shared_topup_total / (user_shared_topup_total + partner_inferred)
-//   if both totals are zero, ratio = 0.5
+//   user_share_ratio = user_shared_topup_total / total_topup_total
+//   if total_topup_total is zero, ratio = 0.5
 //   user_effective_share = round(shared_expense_total * user_share_ratio)
 //   shared balance = total_topup_total - shared_expense_total
 
@@ -55,8 +54,7 @@ export const computeSharedCycle = (
   const totalTopupTotal = meTopupTotal + gfTopupTotal;
   const sharedExpenseTotal = sharedExpenses.reduce((a, e) => a + e.amount_minor, 0);
   const partnerInferred = Math.max(sharedExpenseTotal - meTopupTotal, 0);
-  const denom = meTopupTotal + partnerInferred;
-  const userShareRatio = denom === 0 ? 0.5 : meTopupTotal / denom;
+  const userShareRatio = totalTopupTotal === 0 ? 0.5 : meTopupTotal / totalTopupTotal;
   const userEffectiveShare = Math.round(sharedExpenseTotal * userShareRatio);
   const sharedBalance = totalTopupTotal - sharedExpenseTotal;
   return {

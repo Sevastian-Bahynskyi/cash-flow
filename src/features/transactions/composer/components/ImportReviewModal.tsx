@@ -1,4 +1,5 @@
-import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { FontAwesome6 } from '@expo/vector-icons';
@@ -22,6 +23,23 @@ const hasValidImportedAmount = (value: string): boolean => {
   if (!normalized) return false;
   const numeric = Number(normalized);
   return Number.isFinite(numeric) && numeric > 0;
+};
+
+const parseIsoDate = (iso: string): Date => {
+  const [year = 1970, month = 1, day = 1] = iso.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
+const toIsoDate = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const isValidIsoDate = (value: string): boolean => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  return toIsoDate(parseIsoDate(value)) === value;
 };
 
 const isReadyToSaveRow = (row: ImportedTransactionDraft, categoryOptions: readonly CategoryOption[]): boolean => {
@@ -71,6 +89,8 @@ export function ImportReviewModal({
   onChangeRow,
   onRemoveRow,
 }: Props) {
+  const [webDateInput, setWebDateInput] = useState('');
+  const [webDateError, setWebDateError] = useState<string | null>(null);
   const hasRows = rows.length > 0;
   const visibleSkippedDuplicates = skippedDuplicates.slice(0, 4);
   const incomeFallbackCategoryId = findOtherIncomeCategoryOption(categoryOptions)?.id ?? null;
@@ -99,6 +119,25 @@ export function ImportReviewModal({
   });
   const canSaveImport = hasRows && !saving && !isCategorizing && rows.every((row) => isReadyToSaveRow(row, categoryOptions));
   const visibleErrorMessage = errorMessage ?? categorizationErrorMessage;
+  const closeDatePicker = (): void => {
+    setDatePickerRowId(null);
+    setWebDateError(null);
+  };
+  const openWebDatePicker = (rowId: string, currentDate: string): void => {
+    setWebDateInput(currentDate);
+    setWebDateError(null);
+    openDatePicker(rowId);
+  };
+  const applyWebDateInput = (): void => {
+    if (!datePickerRowId) return;
+    const nextDate = webDateInput.trim();
+    if (!isValidIsoDate(nextDate)) {
+      setWebDateError('Use YYYY-MM-DD.');
+      return;
+    }
+    onChangeRow(datePickerRowId, { occurredOn: nextDate });
+    closeDatePicker();
+  };
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
@@ -169,7 +208,13 @@ export function ImportReviewModal({
                 onRemove={() => onRemoveRow(row.id)}
                 onToggleExpanded={() => toggleRowExpanded(row.id)}
                 onToggleAmountPicker={() => toggleAmountPicker(row.id)}
-                onOpenDatePicker={() => openDatePicker(row.id)}
+                onOpenDatePicker={() => {
+                  if (Platform.OS === 'web') {
+                    openWebDatePicker(row.id, row.occurredOn);
+                    return;
+                  }
+                  openDatePicker(row.id);
+                }}
                 onOpenCategoryPicker={() => openCategoryPicker(row.id)}
                 onCollapseInlinePickers={closeAmountPicker}
               />
@@ -219,11 +264,11 @@ export function ImportReviewModal({
         {datePickerRowId && Platform.OS === 'ios' ? (
           <Modal transparent animationType="fade" onRequestClose={() => setDatePickerRowId(null)}>
             <View style={styles.pickerOverlay}>
-              <Pressable style={styles.pickerBackdrop} onPress={() => setDatePickerRowId(null)} />
+              <Pressable style={styles.pickerBackdrop} onPress={closeDatePicker} />
               <SafeAreaView style={styles.pickerCard} edges={['bottom']}>
                 <View style={styles.pickerHeader}>
                   <Text style={styles.pickerTitle}>Pick a date</Text>
-                  <Pressable onPress={() => setDatePickerRowId(null)} hitSlop={12}>
+                  <Pressable onPress={closeDatePicker} hitSlop={12}>
                     <Text style={styles.pickerDone}>Done</Text>
                   </Pressable>
                 </View>
@@ -235,6 +280,39 @@ export function ImportReviewModal({
                   onChange={handleDateChange}
                 />
               </SafeAreaView>
+            </View>
+          </Modal>
+        ) : null}
+
+        {datePickerRowId && Platform.OS === 'web' ? (
+          <Modal transparent animationType="fade" onRequestClose={closeDatePicker}>
+            <View style={styles.pickerOverlay}>
+              <Pressable style={styles.pickerBackdrop} onPress={closeDatePicker} />
+              <View style={styles.pickerCard}>
+                <View style={styles.pickerHeader}>
+                  <Text style={styles.pickerTitle}>Pick a date</Text>
+                  <Pressable onPress={applyWebDateInput} hitSlop={12}>
+                    <Text style={styles.pickerDone}>Done</Text>
+                  </Pressable>
+                </View>
+                <View style={styles.webDateBody}>
+                  <TextInput
+                    value={webDateInput}
+                    onChangeText={(value) => {
+                      setWebDateInput(value);
+                      setWebDateError(null);
+                    }}
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor={colors.textMuted}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="numbers-and-punctuation"
+                    style={styles.webDateInput}
+                    onSubmitEditing={applyWebDateInput}
+                  />
+                  {webDateError ? <Text style={styles.webDateError}>{webDateError}</Text> : null}
+                </View>
+              </View>
             </View>
           </Modal>
         ) : null}
@@ -325,4 +403,20 @@ const styles = StyleSheet.create({
   },
   pickerTitle: { ...typography.body, color: colors.text, fontWeight: '700' },
   pickerDone: { ...typography.body, color: colors.accent, fontWeight: '700' },
+  webDateBody: {
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+  },
+  webDateInput: {
+    ...typography.body,
+    color: colors.text,
+    minHeight: 52,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
+    paddingHorizontal: spacing.md,
+  },
+  webDateError: { ...typography.label, color: colors.danger },
 });

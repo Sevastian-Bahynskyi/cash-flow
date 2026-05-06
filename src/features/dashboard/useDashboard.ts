@@ -5,6 +5,7 @@ import {
   getCategoryDisplayColor,
   getCategoryMetaDisplayColor,
 } from '@/features/categories/helpers';
+import type { CategoryRow } from '@/features/categories/types';
 import { useOverview } from '@/features/overview/useOverview';
 import { buildNavigableCycles, cycleMatch, formatCycleDisplayRange, type SalaryCycle } from '@/lib/cycles';
 import { computePersonalExpenseMinorByTransactionId } from '@/lib/shared';
@@ -79,6 +80,20 @@ type DashboardPresentation = {
 };
 
 const pieFallbackColors = ['#7C5CFF', '#3DD68C', '#F5B942', '#5BC0EB', '#FF7A59', '#FA5AA3'];
+
+const isTransfersCategoryName = (value: string): boolean => value.trim().toLowerCase() === 'transfers';
+
+const isTransfersCategoryId = (
+  categoryId: string | null,
+  categoriesById: ReadonlyMap<string, CategoryRow>,
+): boolean => {
+  if (!categoryId) return false;
+  const category = categoriesById.get(categoryId);
+  if (!category) return false;
+  if (category.level === 1) return isTransfersCategoryName(category.name);
+  const parentCategory = category.parent_id ? categoriesById.get(category.parent_id) : null;
+  return parentCategory ? isTransfersCategoryName(parentCategory.name) : isTransfersCategoryName(category.name);
+};
 
 const pad2 = (value: number): string => String(value).padStart(2, '0');
 
@@ -382,6 +397,7 @@ export const useDashboard = (
       if (row.shared) {
         // Shared expense: add user's proportional share to expense and category totals,
         // but do NOT count as direct outflow (funded from shared pool via topups).
+        if (isTransfersCategoryId(row.category_id, categoriesById)) continue;
         const myAmount = personalExpenseMinorById.get(row.id) ?? 0;
         if (myAmount > 0) {
           expenseMinor += myAmount;
@@ -391,6 +407,7 @@ export const useDashboard = (
         continue;
       }
 
+      const isTransfer = isTransfersCategoryId(row.category_id, categoriesById);
       outflowMinor += row.amount_minor;
       cashFlowMinor -= row.amount_minor;
       bucket.outflowMinor += row.amount_minor;
@@ -401,6 +418,8 @@ export const useDashboard = (
         bucket.topupMinor += row.amount_minor;
         continue;
       }
+
+      if (isTransfer) continue;
 
       expenseMinor += row.amount_minor;
       bucket.expenseMinor += row.amount_minor;
