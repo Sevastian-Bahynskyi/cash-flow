@@ -54,8 +54,8 @@ export const computeSharedCycle = (
   );
   const totalTopupTotal = meTopupTotal + gfTopupTotal;
   const sharedExpenseTotal = sharedExpenses.reduce((a, e) => a + e.amount_minor, 0);
-  const partnerInferred = Math.max(sharedExpenseTotal - totalTopupTotal, 0);
-  const denom = meTopupTotal + gfTopupTotal + partnerInferred;
+  const partnerInferred = Math.max(sharedExpenseTotal - meTopupTotal, 0);
+  const denom = meTopupTotal + partnerInferred;
   const userShareRatio = denom === 0 ? 0.5 : meTopupTotal / denom;
   const userEffectiveShare = Math.round(sharedExpenseTotal * userShareRatio);
   const sharedBalance = totalTopupTotal - sharedExpenseTotal;

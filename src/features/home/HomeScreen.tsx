@@ -36,6 +36,7 @@ import { colors, radius, spacing, typography } from '@/ui/tokens';
 import { transactionBalance } from '@/lib/balance';
 import { formatMinor } from '@/lib/format';
 import { buildNavigableCycles, type SalaryCycle } from '@/lib/cycles';
+import { computePersonalExpenseMinorByTransactionId } from '@/lib/shared';
 import type { TransactionRow } from '@/features/transactions/types';
 import { supabase } from '@/lib/supabase';
 
@@ -292,7 +293,10 @@ export default function HomeScreen() {
       }
     >();
 
-    for (const row of personalTransactions) {
+    // Compute personal expense amounts (handles proportional share for shared expenses)
+    const personalExpenseMinorById = computePersonalExpenseMinorByTransactionId(rangeTransactions);
+
+    for (const row of rangeTransactions) {
       if (row.is_shared_topup) continue;
 
       const categoryId = row.category_id ?? null;
@@ -320,8 +324,13 @@ export default function HomeScreen() {
           color,
         };
       if (categoryId) current.scopedCategoryIds.add(categoryId);
-      if (row.kind === 'income') current.incomeMinor += row.amount_minor;
-      else current.expenseMinor += row.amount_minor;
+      if (row.kind === 'income') {
+        current.incomeMinor += row.amount_minor;
+      } else {
+        // Use personal amount (proportional share for shared expenses, full for personal)
+        const myAmount = personalExpenseMinorById.get(row.id) ?? 0;
+        current.expenseMinor += myAmount;
+      }
       byParent.set(key, current);
     }
 
@@ -347,7 +356,7 @@ export default function HomeScreen() {
     });
 
     return items.sort((a, b) => b.absMinor - a.absMinor);
-  }, [categoryMeta, data.categories, personalTransactions]);
+  }, [categoryMeta, data.categories, rangeTransactions]);
 
   const hasMoreTopCategories = topCategoryTotals.length > TOP_CATEGORIES_COLLAPSED_COUNT;
   const visibleTopCategoryTotals = topCategoriesExpanded
