@@ -14,6 +14,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useOverview } from '@/features/overview/useOverview';
+import { useProfile } from '@/features/profile/ProfileProvider';
 import { useComposer } from '@/features/transactions/composer/context/ComposerContext';
 import { TransactionList } from '@/features/transactions/TransactionList';
 import {
@@ -157,6 +158,7 @@ function HomeSkeleton() {
 export default function HomeScreen() {
   const router = useRouter();
   const data = useOverview();
+  const profile = useProfile();
   const composer = useComposer();
   const alertCount = data.budgetAlerts.length;
   const [filter, setFilter] = useState<RangeFilter>('month');
@@ -499,6 +501,7 @@ export default function HomeScreen() {
             { icon: 'bell', onPress: () => router.push('/alerts'), badgeCount: alertCount },
             { icon: 'brain', onPress: () => router.push('/ai-rules') }
           ]}
+          avatar={{ uri: profile.avatarUrl, onPress: () => router.push('/profile' as never) }}
         />
 
         {data.isInitialLoading ? <HomeSkeleton /> : null}

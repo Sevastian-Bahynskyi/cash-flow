@@ -7,6 +7,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { colors } from '@/ui/tokens';
 import { WebBackdrop } from '@/ui/WebBackdrop';
 import { AuthProvider, useAuth } from '@/features/auth/AuthProvider';
+import { ProfileProvider } from '@/features/profile/ProfileProvider';
 import { ComposerProvider } from '@/features/transactions/composer/context/ComposerContext';
 
 function AuthGate() {
@@ -40,7 +41,8 @@ function AuthGate() {
     );
   }
   return (
-    <ComposerProvider>
+    <ProfileProvider>
+      <ComposerProvider>
       <Stack
         screenOptions={{
           headerShown: false,
@@ -49,6 +51,7 @@ function AuthGate() {
         }}
       >
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="profile" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="categories" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="budgets" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="alerts" options={{ animation: 'slide_from_right' }} />
@@ -59,7 +62,8 @@ function AuthGate() {
         <Stack.Screen name="auth-callback" />
         <Stack.Screen name="oauth/consent" />
       </Stack>
-    </ComposerProvider>
+      </ComposerProvider>
+    </ProfileProvider>
   );
 }
 

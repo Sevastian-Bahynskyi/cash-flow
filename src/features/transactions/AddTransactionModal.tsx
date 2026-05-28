@@ -495,6 +495,12 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
     setUserTouchedCategory(true);
   }, [visible, isSharedTopup, sharedTopupCategory]);
 
+  // Shared top-ups always carry the fixed name "Top up" (field is disabled below).
+  useEffect(() => {
+    if (!visible || !isSharedTopup) return;
+    setName('Top up');
+  }, [visible, isSharedTopup]);
+
   useEffect(() => {
     if (!visible) return;
     runDetached(fetchTransferPeople().then((rows) => {
@@ -1326,6 +1332,8 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
             }}
             placeholder="What was it?"
             returnKeyType="done"
+            editable={!isSharedTopup}
+            style={isSharedTopup ? styles.inputDisabled : undefined}
           />
 
 
@@ -1461,6 +1469,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
                     setShared(true);
                     setIsSharedTopup(false);
                     setSharedParticipant('me');
+                    setName((current) => (current === 'Top up' ? '' : current));
                     autoAppliedCategoryId.current = null;
 
                     const isCurrentlyTopupCategory = Boolean(
@@ -1932,6 +1941,10 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     color: colors.text,
     ...typography.body,
+  },
+  inputDisabled: {
+    opacity: 0.6,
+    color: colors.textMuted,
   },
   suggestionCard: {
     padding: spacing.md,

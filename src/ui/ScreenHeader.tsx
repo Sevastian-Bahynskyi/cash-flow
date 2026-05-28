@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { FontAwesome6 } from '@expo/vector-icons';
 import { useNavigation, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,18 +13,25 @@ type Action = {
   badgeCount?: number;
 };
 
+type Avatar = {
+  uri: string | null;
+  onPress: () => void;
+};
+
 export function ScreenHeader({
   title,
   subtitle,
   back,
   onBack,
   actions,
+  avatar,
 }: {
   title: string;
   subtitle?: string;
   back?: boolean;
   onBack?: () => void;
   actions?: readonly Action[];
+  avatar?: Avatar;
 }) {
   const router = useRouter();
   const navigation = useNavigation();
@@ -84,6 +91,31 @@ export function ScreenHeader({
             </Pressable>
           </MotionView>
         ))}
+        {avatar ? (
+          <MotionView
+            index={actions?.length ?? 0}
+            direction="right"
+            distance={110}
+            delayMs={90}
+            style={styles.iconMotion}
+          >
+            <Pressable
+              onPress={avatar.onPress}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Profile"
+              style={styles.avatarButton}
+            >
+              {avatar.uri ? (
+                <Image source={{ uri: avatar.uri }} style={styles.avatarImage} />
+              ) : (
+                <View style={styles.avatarFallback}>
+                  <FontAwesome6 name="user" size={16} color={colors.textMuted} />
+                </View>
+              )}
+            </Pressable>
+          </MotionView>
+        ) : null}
       </View>
     </View>
   );
@@ -106,6 +138,25 @@ const styles = StyleSheet.create({
   iconMotion: { alignSelf: 'flex-start' },
   iconButton: { padding: 4, position: 'relative' },
   iconButtonDisabled: { opacity: 0.4 },
+  avatarButton: { marginLeft: spacing.xs },
+  avatarImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  avatarFallback: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   badge: {
     position: 'absolute',
     top: -4,
