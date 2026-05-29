@@ -11,6 +11,7 @@ type Action = {
   disabled?: boolean;
   tone?: 'default' | 'accent';
   badgeCount?: number;
+  accessibilityLabel?: string;
 };
 
 type Avatar = {
@@ -76,6 +77,8 @@ export function ScreenHeader({
               onPress={action.onPress}
               disabled={action.disabled}
               hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel={action.accessibilityLabel}
               style={[styles.iconButton, action.disabled && styles.iconButtonDisabled]}
             >
               <FontAwesome6
