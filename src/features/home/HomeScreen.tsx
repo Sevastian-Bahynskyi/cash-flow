@@ -220,10 +220,6 @@ export default function HomeScreen() {
     cyclesWithTransactions[0] ??
     null;
   const categoryMeta = useMemo(() => buildCategoryMeta(data.categories), [data.categories]);
-  const currentYearCycles = useMemo(
-    () => cycles.filter((cycle) => cycle.label.endsWith(String(currentYear))),
-    [currentYear, cycles],
-  );
   const rangeTransactions = useMemo(() => {
     if (filter === 'year') {
       return data.transactions.filter((row) => {
@@ -236,14 +232,6 @@ export default function HomeScreen() {
     return data.transactions.filter((row) => cycleMatch(row, selectedCycle));
   }, [currentYear, cycles, data.transactions, filter, selectedCycle]);
   const snapshotMinor = useMemo(() => transactionBalance(rangeTransactions), [rangeTransactions]);
-
-  const personalTransactions = useMemo(() => {
-    const base = rangeTransactions.filter((row) => !row.shared);
-    return [...base].sort((a, b) => {
-      if (a.occurred_on === b.occurred_on) return b.updated_at.localeCompare(a.updated_at);
-      return b.occurred_on.localeCompare(a.occurred_on);
-    });
-  }, [rangeTransactions]);
 
   const recentActivityTransactions = useMemo(() => {
     const base = rangeTransactions.filter((row) => !row.is_shared_topup);
@@ -452,10 +440,9 @@ export default function HomeScreen() {
         ? 'Current year balance'
         : 'Month balance';
 
-  const yearChipLabel = currentYearCycles.length > 0 ? `Current year` : `Current year`;
   const filterOptions = [
     { label: 'Month', value: 'month' as const },
-    { label: yearChipLabel, value: 'year' as const },
+    { label: 'Current year', value: 'year' as const },
     { label: 'All time', value: 'all' as const },
   ];
 
@@ -498,8 +485,8 @@ export default function HomeScreen() {
           title="Home"
           subtitle="Personal flow"
           actions={[
-            { icon: 'bell', onPress: () => router.push('/alerts'), badgeCount: alertCount },
-            { icon: 'brain', onPress: () => router.push('/ai-rules') }
+            { icon: 'bell', onPress: () => router.push('/alerts'), badgeCount: alertCount, accessibilityLabel: 'Alerts' },
+            { icon: 'brain', onPress: () => router.push('/ai-rules'), accessibilityLabel: 'AI rules' }
           ]}
           avatar={{ uri: profile.avatarUrl, onPress: () => router.push('/profile' as never) }}
         />

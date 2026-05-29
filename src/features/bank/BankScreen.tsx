@@ -499,7 +499,7 @@ export default function BankScreen() {
           <ScreenHeader
             title="Bank"
             subtitle="Savings and loans as first-class objects"
-            actions={[{ icon: 'right-from-bracket', onPress: () => void signOut() }]}
+            actions={[{ icon: 'right-from-bracket', onPress: () => void signOut(), accessibilityLabel: 'Sign out' }]}
             avatar={{ uri: profile.avatarUrl, onPress: () => router.push('/profile' as never) }}
           />
 
