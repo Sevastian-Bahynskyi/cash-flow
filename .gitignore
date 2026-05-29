@@ -2,6 +2,8 @@
 .env
 .env.*
 node_modules/
+package-lock.json
+yarn.lock
 .expo/
 dist/
 ios/

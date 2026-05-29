@@ -1,0 +1,40 @@
+name: Lockfile
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - .github/workflows/lockfile.yml
+  push:
+    branches:
+      - main
+    paths:
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - .github/workflows/lockfile.yml
+  workflow_dispatch:
+
+jobs:
+  pnpm-lockfile:
+    name: pnpm lockfile matches package.json
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Validate lockfile
+        run: pnpm lockfile:check

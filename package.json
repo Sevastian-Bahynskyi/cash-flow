@@ -1,13 +1,14 @@
 {
   "name": "cash-flow",
   "version": "0.1.0",
+  "packageManager": "pnpm@10.30.2",
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
     "start:clear": "expo start --clear",
     "web:build": "expo export -p web",
     "web:serve": "serve -s dist -l tcp://127.0.0.1:4173",
-    "my-cash-flow": "npm run web:build && npm run web:serve",
+    "my-cash-flow": "pnpm web:build && pnpm web:serve",
     "ios": "expo run:ios",
     "android": "expo run:android",
     "lint": "eslint .",
@@ -15,6 +16,7 @@
     "lint:changed": "node ./scripts/lint-changed.cjs",
     "scan:smells": "node ./scripts/scan-smells.cjs",
     "typecheck": "tsc --noEmit",
+    "lockfile:check": "pnpm install --frozen-lockfile --ignore-scripts",
     "postinstall": "patch-package"
   },
   "dependencies": {
