@@ -12,8 +12,10 @@ import {
 } from 'react-native';
 import { useMotionRefresh } from '@/ui/useMotionRefresh';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { FontAwesome6 } from '@expo/vector-icons';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { useProfile } from '@/features/profile/ProfileProvider';
 import { bankIconOptions, categoryColorOptions } from '@/features/categories/presentation';
 import { useOverview } from '@/features/overview/useOverview';
 import type { LoanEventKind } from '@/features/loans/types';
@@ -129,6 +131,8 @@ function BankSkeleton() {
 
 export default function BankScreen() {
   const { signOut } = useAuth();
+  const router = useRouter();
+  const profile = useProfile();
   const data = useOverview();
   const [refreshing, setRefreshing] = useState(false);
   const [expandedSavingsId, setExpandedSavingsId] = useState<string | null>(null);
@@ -496,6 +500,7 @@ export default function BankScreen() {
             title="Bank"
             subtitle="Savings and loans as first-class objects"
             actions={[{ icon: 'right-from-bracket', onPress: () => void signOut() }]}
+            avatar={{ uri: profile.avatarUrl, onPress: () => router.push('/profile' as never) }}
           />
 
           {data.isInitialLoading ? <BankSkeleton /> : null}

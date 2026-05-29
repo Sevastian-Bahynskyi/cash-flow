@@ -5,6 +5,7 @@ import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { runDetached } from '@/lib/async';
 import { useOverview } from '@/features/overview/useOverview';
+import { useProfile } from '@/features/profile/ProfileProvider';
 import { useComposer } from '@/features/transactions/composer/context/ComposerContext';
 import { TransactionList } from '@/features/transactions/TransactionList';
 import { buildCategoryMeta, getCategoryDisplayColor, getCategoryMetaDisplayColor } from '@/features/categories/helpers';
@@ -103,6 +104,7 @@ function SharedSkeleton() {
 export default function SharedScreen() {
   const router = useRouter();
   const data = useOverview();
+  const profile = useProfile();
   const composer = useComposer();
   const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState<RangeFilter>('month');
@@ -357,7 +359,11 @@ export default function SharedScreen() {
           contentContainerStyle={styles.content}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.text} />}
         >
-          <ScreenHeader title="Shared" subtitle="Fairness and shared spend" />
+          <ScreenHeader
+            title="Shared"
+            subtitle="Fairness and shared spend"
+            avatar={{ uri: profile.avatarUrl, onPress: () => router.push('/profile' as never) }}
+          />
 
           {data.isInitialLoading ? <SharedSkeleton /> : null}
 

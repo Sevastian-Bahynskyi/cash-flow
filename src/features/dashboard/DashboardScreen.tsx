@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { FontAwesome6 } from '@expo/vector-icons';
 import { BarChart, LineChart } from 'react-native-gifted-charts';
@@ -12,6 +13,7 @@ import { HeroPagerArrows } from '@/ui/HeroPagerArrows';
 import { useMotionRefresh } from '@/ui/useMotionRefresh';
 import { FilterChips } from '@/ui/FilterChips';
 import { ScreenHeader } from '@/ui/ScreenHeader';
+import { useProfile } from '@/features/profile/ProfileProvider';
 import { CategoryIcon } from '@/ui/CategoryIcon';
 import { SkeletonBlock, SkeletonCard } from '@/ui/Skeleton';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
@@ -116,6 +118,8 @@ function DashboardSkeleton() {
 }
 
 export default function DashboardScreen() {
+  const router = useRouter();
+  const profile = useProfile();
   const [range, setRange] = useState<DashboardRange>('monthly');
   const [selectedWindowId, setSelectedWindowId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -172,7 +176,11 @@ export default function DashboardScreen() {
           />
         }
       >
-        <ScreenHeader title="Dashboard" subtitle="Weekly, monthly, yearly flow" />
+        <ScreenHeader
+          title="Dashboard"
+          subtitle="Weekly, monthly, yearly flow"
+          avatar={{ uri: profile.avatarUrl, onPress: () => router.push('/profile' as never) }}
+        />
 
         {analytics.isInitialLoading ? <DashboardSkeleton /> : null}
 
