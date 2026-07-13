@@ -1147,7 +1147,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
           accessibilityLabel="Close transaction editor"
         />
       ) : null}
-      <SafeAreaView style={[styles.container, useWideWebPanel && styles.widePanel]} edges={['bottom']}>
+      <SafeAreaView style={useWideWebPanel ? styles.widePanel : styles.container} edges={['bottom']}>
         <View style={[styles.header, { paddingTop: Math.max(insets.top, spacing.md) }]}>
           <Pressable onPress={handleClose} hitSlop={12}>
             <Text style={styles.headerAction}>Cancel</Text>
@@ -1716,11 +1716,12 @@ const styles = StyleSheet.create({
   wideBackdrop: { ...StyleSheet.absoluteFillObject },
   container: { flex: 1, backgroundColor: colors.bg },
   widePanel: {
-    flex: 0,
     width: 560,
     maxWidth: '94%',
-    height: '90%',
+    height: '88%',
+    minHeight: 560,
     maxHeight: 820,
+    flexShrink: 0,
     backgroundColor: colors.bg,
     borderWidth: 1,
     borderColor: colors.border,
