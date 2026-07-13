@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
+  Keyboard,
   Modal,
   Pressable,
   ScrollView,
@@ -133,6 +134,7 @@ export function TransactionCurrencySelector({
   }, [value]);
 
   const openMenu = (): void => {
+    Keyboard.dismiss();
     triggerRef.current?.measureInWindow((x, y, width, height) => {
       setAnchor({ x, y, width, height });
       setOpen(true);

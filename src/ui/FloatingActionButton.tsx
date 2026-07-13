@@ -57,7 +57,7 @@ export function FloatingActionButton({
     return (
         <Animated.View
             style={[styles.outer, { bottom, right }, motionStyle]}
-            pointerEvents={hidden ? 'none' : 'box-none'}
+            pointerEvents={hidden ? 'none' : 'auto'}
         >
             <Pressable
                 accessibilityRole="button"
@@ -77,6 +77,7 @@ const styles = StyleSheet.create({
         position: 'absolute',
         width: 72,
         height: 72,
+        zIndex: 30,
     },
     fab: {
         width: 72,

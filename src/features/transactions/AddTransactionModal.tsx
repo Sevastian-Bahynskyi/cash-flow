@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
-  LayoutAnimation,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -10,7 +10,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  UIManager,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,7 +20,6 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { FontAwesome6 } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
-import { NumericKeypad } from '@/ui/NumericKeypad';
 import { supabase } from '@/lib/supabase';
 import { CategorySheet } from '@/features/categories/CategorySheet';
 import { useCategories } from '@/features/categories/useCategories';
@@ -47,9 +46,9 @@ import {
   type SuggestedCategoryResult,
 } from './suggestions';
 import { convertToDkk } from '@/lib/currency';
-import { getDeviceCountryIso, getDeviceCurrencyCode, getLiveCountryIso } from '@/lib/device';
+import { getDeviceCurrencyCode } from '@/lib/device';
 import { runDetached } from '@/lib/async';
-import { formatCountryFlag, formatDateLabel, formatMinor, normalizeCountryIso } from '@/lib/format';
+import { formatDateLabel, formatMinor } from '@/lib/format';
 import { activeCycle, buildSalaryCycles } from '@/lib/cycles';
 import { fetchTransferPeople, normalizeTransferPersonName } from '@/features/transfers/people';
 import type { TransferPersonRow } from '@/features/transfers/types';
@@ -57,7 +56,6 @@ import { ImportReviewModal } from '@/features/transactions/composer/components/I
 import {
   SharedTopupParticipantSelector,
   TransactionCurrencySelector,
-  TransactionFieldLabel,
   TransactionKindSelector,
   TransactionPickerField,
   TransactionTextField,
@@ -100,28 +98,6 @@ const participantOptions = [
   { label: 'GF', value: 'gf' },
 ] as const;
 
-const countryOptions = [
-  { code: 'DK', label: 'Denmark' },
-  { code: 'SE', label: 'Sweden' },
-  { code: 'NO', label: 'Norway' },
-  { code: 'DE', label: 'Germany' },
-  { code: 'PL', label: 'Poland' },
-  { code: 'GB', label: 'United Kingdom' },
-  { code: 'US', label: 'United States' },
-  { code: 'FR', label: 'France' },
-  { code: 'ES', label: 'Spain' },
-  { code: 'IT', label: 'Italy' },
-  { code: 'NL', label: 'Netherlands' },
-  { code: 'CH', label: 'Switzerland' },
-  { code: 'CZ', label: 'Czechia' },
-  { code: 'HU', label: 'Hungary' },
-  { code: 'RO', label: 'Romania' },
-  { code: 'UA', label: 'Ukraine' },
-  { code: 'JP', label: 'Japan' },
-  { code: 'AU', label: 'Australia' },
-  { code: 'CA', label: 'Canada' },
-] as const;
-
 const todayIso = (): string => {
   // Local day (not UTC) to stay consistent with toIsoDate and the cycle logic;
   // a UTC slice could land near-midnight transactions on the wrong day/cycle.
@@ -150,64 +126,24 @@ const isValidIsoDate = (value: string): boolean => {
 };
 
 const parseAmountMinor = (raw: string): number | null => {
-  const normalized = raw.trim().replace(',', '.');
-  if (!normalized) return null;
+  const normalized = raw.trim();
+  if (!/^\d+(?:\.\d{0,2})?$/.test(normalized)) return null;
   const value = Number(normalized);
   if (!Number.isFinite(value) || value <= 0) return null;
   return Math.round(value * 100);
 };
 
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+const normalizeAmountInput = (raw: string): string => {
+  const normalized = raw.replace(/,/g, '.').replace(/[^\d.]/g, '');
+  const [whole = '', ...fractionParts] = normalized.split('.');
+  if (fractionParts.length === 0) return whole;
 
-const animateKeypadLayout = (): void => {
-  LayoutAnimation.configureNext({
-    duration: 220,
-    create: {
-      type: LayoutAnimation.Types.easeInEaseOut,
-      property: LayoutAnimation.Properties.opacity,
-    },
-    update: {
-      type: LayoutAnimation.Types.easeInEaseOut,
-    },
-    delete: {
-      type: LayoutAnimation.Types.easeInEaseOut,
-      property: LayoutAnimation.Properties.opacity,
-    },
-  });
+  const fraction = fractionParts.join('').slice(0, 2);
+  return `${whole || '0'}.${fraction}`;
 };
 
 const minorToInput = (minor: number | undefined): string =>
   typeof minor === 'number' && minor > 0 ? (minor / 100).toFixed(2) : '';
-
-const formatAmountDisplay = (raw: string): string => {
-  if (raw.length === 0) return '0.00';
-  const normalized = raw.trim().replace(',', '.');
-  const value = Number(normalized);
-  if (!Number.isFinite(value)) return raw;
-  return value.toFixed(2);
-};
-
-const highlightedAmount = (raw: string): { display: string; activeIndex: number | null } => {
-  const display = formatAmountDisplay(raw);
-  const normalized = raw.trim().replace(',', '.');
-  const displayDotAt = display.indexOf('.');
-
-  if (normalized.endsWith('.')) {
-    return { display, activeIndex: displayDotAt >= 0 ? displayDotAt + 1 : null };
-  }
-
-  let rawIndex = normalized.length - 1;
-
-  while (rawIndex >= 0 && !/[0-9]/.test(normalized[rawIndex] ?? '')) {
-    rawIndex -= 1;
-  }
-
-  if (rawIndex < 0) return { display, activeIndex: null };
-
-  return { display, activeIndex: rawIndex };
-};
 
 const buildBudgetIndicators = async (
   categoryOptions: readonly CategoryOption[],
@@ -265,6 +201,8 @@ const buildBudgetIndicators = async (
 
 export default function AddTransactionModal({ visible, onClose, onSaved, draft, pendingImport }: Props) {
   const insets = useSafeAreaInsets();
+  const { width: viewportWidth } = useWindowDimensions();
+  const useWideWebPanel = Platform.OS === 'web' && viewportWidth >= 900;
   const [kind, setKind] = useState<TransactionKind>('expense');
   const [amount, setAmount] = useState('');
   const [currencyCode, setCurrencyCode] = useState('DKK');
@@ -273,12 +211,9 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
   const [comment, setComment] = useState('');
   const [date, setDate] = useState(todayIso());
   const [lastCreatedDate, setLastCreatedDate] = useState(todayIso());
-  const [countryIso, setCountryIso] = useState('DK');
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [webDateInput, setWebDateInput] = useState(todayIso());
   const [webDateError, setWebDateError] = useState<string | null>(null);
-  const [countryPickerOpen, setCountryPickerOpen] = useState(false);
-  const [keypadOpen, setKeypadOpen] = useState(true);
   const [recurring, setRecurring] = useState(false);
   const [shared, setShared] = useState(false);
   const [sharedParticipant, setSharedParticipant] = useState<'me' | 'gf'>('me');
@@ -298,6 +233,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
   const [imageImportVisible, setImageImportVisible] = useState(false);
   const [imageImportBusy, setImageImportBusy] = useState(false);
   const [csvImportBusy, setCsvImportBusy] = useState(false);
+  const [importExpanded, setImportExpanded] = useState(false);
   const [imageImportSaving, setImageImportSaving] = useState(false);
   const [imageImportError, setImageImportError] = useState<string | null>(null);
   const [imageImportSkippedDuplicates, setImageImportSkippedDuplicates] = useState<SkippedImportedTransaction[]>([]);
@@ -327,7 +263,6 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
   const sharedFlowLocked = Boolean(draft?.from_shared_screen && !draft?.id);
   const sharedTopupEditFlow = Boolean(editing && draft?.kind === 'expense' && draft?.is_shared_topup);
   const useSharedFlowOptions = kind === 'expense' && (sharedFlowLocked || sharedTopupEditFlow);
-  const amountDisplayState = useMemo(() => highlightedAmount(amount), [amount]);
   const selectedIsSalary = isSalaryCategoryOption(category);
   const selectedIsMobilePay = isMobilePayCategoryOption(category);
   const categoryAccentColor = category
@@ -346,37 +281,16 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
   }, [name, transferPeople]);
   const recentTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const reopenKeypadAfterDatePicker = useRef(false);
+  const amountInputRef = useRef<TextInput | null>(null);
+  const nameInputRef = useRef<TextInput | null>(null);
   const autoAppliedCategoryId = useRef<string | null>(null);
   const suggestionRunId = useRef(0);
   const handledPendingImportId = useRef<string | null>(null);
   const suppressRecentSuggestionsName = useRef<string | null>(null);
   const lastSharedExpenseCategoryId = useRef<string | null>(null);
 
-  const openKeypad = (): void => {
-    if (keypadOpen) return;
-    Keyboard.dismiss();
-    animateKeypadLayout();
-    setKeypadOpen(true);
-  };
-
-  const closeKeypad = (): void => {
-    if (!keypadOpen) return;
-    animateKeypadLayout();
-    setKeypadOpen(false);
-  };
-
-  const toggleKeypad = (): void => {
-    if (keypadOpen) {
-      closeKeypad();
-      return;
-    }
-    openKeypad();
-  };
-
   const reset = (nextDraft?: TransactionDraft | null): void => {
     const nextDate = nextDraft?.occurred_on ?? lastCreatedDate;
-    const deviceCountry = (nextDraft?.country_iso ?? getDeviceCountryIso() ?? 'DK').toUpperCase();
     const deviceCurrency = nextDraft?.currency_code ?? getDeviceCurrencyCode();
     const baseCategory =
       nextDraft?.category_id
@@ -399,10 +313,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
     setName(nextDraft?.name ?? '');
     setComment(nextDraft?.comment ?? '');
     setDate(nextDate);
-    setCountryIso(deviceCountry);
     setDatePickerOpen(false);
-    setCountryPickerOpen(false);
-    setKeypadOpen(true);
     setRecurring(nextDraft?.recurring ?? false);
     const fromSharedCreate = Boolean(nextDraft?.from_shared_screen && !nextDraft?.id);
     let nextShared = nextDraft?.shared ?? false;
@@ -435,6 +346,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
     setImageImportVisible(false);
     setImageImportBusy(false);
     setCsvImportBusy(false);
+    setImportExpanded(false);
     setImageImportSaving(false);
     setImageImportError(null);
     setImageImportSkippedDuplicates([]);
@@ -444,6 +356,10 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
       lastSharedExpenseCategoryId.current = nextCategory.id;
     } else {
       lastSharedExpenseCategoryId.current = null;
+    }
+
+    if (!nextDraft?.id) {
+      requestAnimationFrame(() => amountInputRef.current?.focus());
     }
   };
 
@@ -459,22 +375,6 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
     if (visible) return;
     handledPendingImportId.current = null;
   }, [visible]);
-
-  useEffect(() => {
-    if (!visible || draft?.country_iso) return;
-
-    let cancelled = false;
-    const localeCountry = (getDeviceCountryIso() ?? 'DK').toUpperCase();
-
-    runDetached(getLiveCountryIso().then((liveCountry) => {
-      if (cancelled || !liveCountry) return;
-      setCountryIso((current) => (current === localeCountry ? liveCountry : current));
-    }), 'transactions.liveCountry');
-
-    return () => {
-      cancelled = true;
-    };
-  }, [draft?.country_iso, visible]);
 
   useEffect(() => {
     if (!visible || categoryOptions.length === 0) return;
@@ -540,20 +440,6 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
       });
     }
   }, [categoryOptions.length, editing, pendingImport, visible]);
-
-  useEffect(() => {
-    const subscription = Keyboard.addListener('keyboardDidShow', () => {
-      setKeypadOpen((current) => {
-        if (!current) return current;
-        animateKeypadLayout();
-        return false;
-      });
-    });
-
-    return () => {
-      subscription.remove();
-    };
-  }, []);
 
   useEffect(() => {
     if (!visible) return;
@@ -960,7 +846,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
           name: normalizedName,
           comment: row.comment.trim().length > 0 ? row.comment.trim() : null,
           category_id: resolvedCategory.id,
-          country_iso: normalizeCountryIso(countryIso),
+          country_iso: null,
           recurring: false,
           shared: false,
           shared_participant: null,
@@ -1035,15 +921,10 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
   const closeDatePicker = (): void => {
     setDatePickerOpen(false);
     setWebDateError(null);
-    if (reopenKeypadAfterDatePicker.current) {
-      openKeypad();
-      reopenKeypadAfterDatePicker.current = false;
-    }
   };
 
   const openDatePicker = (): void => {
-    reopenKeypadAfterDatePicker.current = keypadOpen;
-    closeKeypad();
+    Keyboard.dismiss();
     setWebDateInput(date);
     setWebDateError(null);
     setDatePickerOpen(true);
@@ -1110,7 +991,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
         name: name.trim(),
         comment: comment.trim().length > 0 ? comment.trim() : null,
         category_id: resolvedCategory.id,
-        country_iso: normalizeCountryIso(countryIso),
+        country_iso: null,
         recurring,
         shared: kind === 'expense' && !isSharedTopup ? shared : false,
         shared_participant:
@@ -1190,7 +1071,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
         is_salary: kind === 'income' && isSalaryCategoryOption(resolvedCategory),
         is_shared_topup: isSharedTopup,
         from_shared_screen: sharedFlowLocked ? true : undefined,
-        country_iso: normalizeCountryIso(countryIso),
+        country_iso: null,
       };
 
       if (draft?.id) {
@@ -1256,9 +1137,17 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
     (!userTouchedCategory || !category || category.id !== suggestion.category.id),
   );
 
-  return (
-    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={handleClose}>
-      <SafeAreaView style={styles.container} edges={['bottom']}>
+  const modalBody = (
+    <View style={[styles.modalRoot, useWideWebPanel && styles.wideModalRoot]}>
+      {useWideWebPanel ? (
+        <Pressable
+          style={styles.wideBackdrop}
+          onPress={handleClose}
+          accessibilityRole="button"
+          accessibilityLabel="Close transaction editor"
+        />
+      ) : null}
+      <SafeAreaView style={useWideWebPanel ? styles.widePanel : styles.container} edges={['bottom']}>
         <View style={[styles.header, { paddingTop: Math.max(insets.top, spacing.md) }]}>
           <Pressable onPress={handleClose} hitSlop={12}>
             <Text style={styles.headerAction}>Cancel</Text>
@@ -1271,6 +1160,10 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
           </Pressable>
         </View>
 
+        <KeyboardAvoidingView
+          style={styles.composer}
+          behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
+        >
         <View style={styles.amountHero}>
           {!useSharedFlowOptions ? (
             <TransactionKindSelector
@@ -1293,33 +1186,32 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
               }}
             />
           ) : null}
-          <Pressable
-            style={({ pressed }) => [styles.amountFieldButton, pressed && styles.rowPressed]}
-            onPress={toggleKeypad}
-          >
-            <Text style={styles.amountValue}>
-              {amountDisplayState.display.split('').map((char, index) => (
-                <Text
-                  key={`${char}-${index}`}
-                  style={index === amountDisplayState.activeIndex ? styles.amountValueActive : undefined}
-                >
-                  {char}
-                </Text>
-              ))}
-            </Text>
+          <View style={styles.amountField}>
+            <TextInput
+              ref={amountInputRef}
+              value={amount}
+              onChangeText={(value) => setAmount(normalizeAmountInput(value))}
+              autoFocus={!editing}
+              inputMode="decimal"
+              keyboardType="decimal-pad"
+              placeholder="0.00"
+              placeholderTextColor={colors.textMuted}
+              selectionColor={colors.accentAlt}
+              cursorColor={colors.accentAlt}
+              style={styles.amountInput}
+              accessibilityLabel="Transaction amount"
+            />
             <View style={styles.amountMetaRow}>
-              <Text style={styles.amountMeta}>
-                {currencyCode === 'DKK'
-                  ? 'In DKK'
-                  : `Saved in DKK · entered in ${currencyCode}`}
-              </Text>
+              {currencyCode !== 'DKK' ? (
+                <Text style={styles.amountMeta}>Saved in DKK · entered in {currencyCode}</Text>
+              ) : null}
               <TransactionCurrencySelector
                 value={currencyCode}
                 onChange={setCurrencyCode}
                 appearance="inline"
               />
             </View>
-          </Pressable>
+          </View>
         </View>
 
         <ScrollView
@@ -1327,27 +1219,12 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
           contentContainerStyle={styles.fieldsContent}
           keyboardShouldPersistTaps="handled"
         >
-          <TransactionFieldLabel>Name</TransactionFieldLabel>
-          <TransactionTextField
-            value={name}
-            onChangeText={setName}
-            onFocus={closeKeypad}
-            onEndEditing={() => {
-              void runCategorySuggestion({ preferRemote: true });
-            }}
-            placeholder="What was it?"
-            returnKeyType="done"
-            editable={!isSharedTopup}
-            style={isSharedTopup ? styles.inputDisabled : undefined}
-          />
-
-
-          <TransactionFieldLabel>Category</TransactionFieldLabel>
           <TransactionPickerField
             text={category ? visibleCategoryLabel : ''}
             placeholder={isSharedTopup ? 'Transfers · Top up' : 'Pick a category'}
             onPress={() => {
               if (isSharedTopup) return;
+              Keyboard.dismiss();
               autoAppliedCategoryId.current = null;
               if (kind === 'income') {
                 setCategory((current) => normalizeIncomeCategoryOption(current, categoryOptions));
@@ -1363,6 +1240,21 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
                 <ActivityIndicator size="small" color={colors.textMuted} />
               ) : undefined
             }
+          />
+
+          <TextInput
+            ref={nameInputRef}
+            value={name}
+            onChangeText={setName}
+            onEndEditing={() => {
+              void runCategorySuggestion({ preferRemote: true });
+            }}
+            placeholder="Name or merchant"
+            placeholderTextColor={colors.textMuted}
+            returnKeyType="done"
+            editable={!isSharedTopup}
+            style={[styles.input, isSharedTopup && styles.inputDisabled]}
+            accessibilityLabel="Transaction name"
           />
 
           {kind === 'income' && selectedIsSalary ? (
@@ -1426,38 +1318,23 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
             </View>
           ) : null}
 
-          <TransactionFieldLabel>Details</TransactionFieldLabel>
-          <View style={styles.detailRow}>
-            <View style={styles.detailCardDate}>
-              <TransactionPickerField
-                text={formatDateLabel(date)}
-                onPress={openDatePicker}
-                leadingMaterialIcon="calendar"
-                trailing={<FontAwesome6 name="chevron-down" size={18} color={colors.textMuted} />}
-              />
-            </View>
-            <Pressable
-              style={[styles.fieldCard, styles.detailCardCountry]}
-              onPress={() => setCountryPickerOpen(true)}
-            >
-              <View style={styles.detailValueRow}>
-                <Text style={styles.flagValue}>{formatCountryFlag(countryIso)}</Text>
-              </View>
-              <FontAwesome6 name="chevron-down" size={18} color={colors.textMuted} />
-            </Pressable>
-          </View>
+          <TransactionPickerField
+            text={formatDateLabel(date)}
+            onPress={openDatePicker}
+            leadingMaterialIcon="calendar"
+            trailing={<FontAwesome6 name="chevron-down" size={18} color={colors.textMuted} />}
+          />
 
-          <TransactionFieldLabel>Note</TransactionFieldLabel>
           <TransactionTextField
             value={comment}
             onChangeText={setComment}
-            onFocus={closeKeypad}
             onEndEditing={() => {
               void runCategorySuggestion({ preferRemote: true });
             }}
-            placeholder="Optional"
+            placeholder="Add note (optional)"
             style={styles.input}
             multiline
+            accessibilityLabel="Transaction note"
           />
 
           {useSharedFlowOptions ? (
@@ -1530,44 +1407,63 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
           ) : null}
           {!editing && !sharedFlowLocked ? (
             <View style={styles.importStack}>
-              <Text style={[styles.label, { color: colors.accentAlt }]}>Import</Text>
               <Pressable
-                style={({ pressed }) => [styles.importCard, (pressed || imageImportBusy) && styles.rowPressed]}
-                onPress={() => {
-                  Keyboard.dismiss();
-                  void startImageImport();
-                }}
-                disabled={imageImportBusy}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: importExpanded }}
+                style={({ pressed }) => [styles.importDisclosure, pressed && styles.rowPressed]}
+                onPress={() => setImportExpanded((current) => !current)}
               >
-                <View style={styles.importCopy}>
-                  <Text style={styles.importTitle}>{imageImportBusy ? 'Analyzing image...' : 'Import from image'}</Text>
-                  <Text style={styles.importMeta}>Create multiple transactions from a screenshot or receipt.</Text>
+                <View style={styles.importDisclosureIcon}>
+                  <FontAwesome6 name="file-import" size={16} color={colors.textMuted} />
                 </View>
-                {imageImportBusy ? (
-                  <ActivityIndicator size="small" color={colors.text} />
-                ) : (
-                  <FontAwesome6 name="image" size={22} color={colors.text} />
-                )}
+                <View style={styles.importCopy}>
+                  <Text style={styles.importDisclosureTitle}>Import transactions</Text>
+                  <Text style={styles.importMeta}>Image or bank CSV</Text>
+                </View>
+                <FontAwesome6 name={importExpanded ? 'chevron-up' : 'chevron-down'} size={13} color={colors.textMuted} />
               </Pressable>
 
-              <Pressable
-                style={({ pressed }) => [styles.importCard, (pressed || csvImportBusy) && styles.rowPressed]}
-                onPress={() => {
-                  Keyboard.dismiss();
-                  void pickCsvImport();
-                }}
-                disabled={csvImportBusy}
-              >
-                <View style={styles.importCopy}>
-                  <Text style={styles.importTitle}>{csvImportBusy ? 'Analyzing CSV...' : 'Import bank CSV'}</Text>
-                  <Text style={styles.importMeta}>Pick a statement file and review the AI-parsed transactions.</Text>
+              {importExpanded ? (
+                <View style={styles.importOptions}>
+                  <Pressable
+                    style={({ pressed }) => [styles.importCard, (pressed || imageImportBusy) && styles.rowPressed]}
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      void startImageImport();
+                    }}
+                    disabled={imageImportBusy}
+                  >
+                    <View style={styles.importCopy}>
+                      <Text style={styles.importTitle}>{imageImportBusy ? 'Analyzing image...' : 'Import from image'}</Text>
+                      <Text style={styles.importMeta}>Screenshot or receipt</Text>
+                    </View>
+                    {imageImportBusy ? (
+                      <ActivityIndicator size="small" color={colors.text} />
+                    ) : (
+                      <FontAwesome6 name="image" size={18} color={colors.textMuted} />
+                    )}
+                  </Pressable>
+
+                  <Pressable
+                    style={({ pressed }) => [styles.importCard, (pressed || csvImportBusy) && styles.rowPressed]}
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      void pickCsvImport();
+                    }}
+                    disabled={csvImportBusy}
+                  >
+                    <View style={styles.importCopy}>
+                      <Text style={styles.importTitle}>{csvImportBusy ? 'Analyzing CSV...' : 'Import bank CSV'}</Text>
+                      <Text style={styles.importMeta}>Statement file</Text>
+                    </View>
+                    {csvImportBusy ? (
+                      <ActivityIndicator size="small" color={colors.text} />
+                    ) : (
+                      <FontAwesome6 name="file-csv" size={18} color={colors.textMuted} />
+                    )}
+                  </Pressable>
                 </View>
-                {csvImportBusy ? (
-                  <ActivityIndicator size="small" color={colors.text} />
-                ) : (
-                  <FontAwesome6 name="file-csv" size={22} color={colors.text} />
-                )}
-              </Pressable>
+              ) : null}
             </View>
           ) : null}
 
@@ -1619,32 +1515,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
 
           {validationMessage ? <Text style={styles.validation}>{validationMessage}</Text> : null}
         </ScrollView>
-
-        {keypadOpen ? (
-          <View style={styles.keypadPanel}>
-            <View pointerEvents="box-none" style={styles.keypadHideWrap}>
-              <Pressable
-                style={({ pressed }) => [styles.keypadHideButton, pressed && styles.rowPressed]}
-                onPress={closeKeypad}
-              >
-                <FontAwesome6 name="delete-left" size={16} color={colors.text} />
-                <Text style={styles.keypadHideText}>Hide</Text>
-              </Pressable>
-            </View>
-            <NumericKeypad value={amount} onChange={setAmount} />
-          </View>
-        ) : (
-          <View style={styles.keyboardDock}>
-            <Pressable
-              style={({ pressed }) => [styles.keyboardDockButton, pressed && styles.rowPressed]}
-              onPress={openKeypad}
-            >
-              <FontAwesome6 name="keyboard" size={18} color={colors.text} />
-              <Text style={styles.keyboardDockText}>Open keypad</Text>
-              <FontAwesome6 name="chevron-up" size={18} color={colors.text} />
-            </Pressable>
-          </View>
-        )}
+        </KeyboardAvoidingView>
 
         {datePickerOpen && (
           Platform.OS === 'ios' ? (
@@ -1660,9 +1531,12 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
                 <DateTimePicker
                   value={parseIsoDate(date)}
                   mode="date"
-                  display="spinner"
+                  display="inline"
                   themeVariant="dark"
+                  textColor={colors.text}
+                  accentColor={colors.accentAlt}
                   onChange={onDateChange}
+                  style={styles.datePickerCalendar}
                 />
               </View>
             </View>
@@ -1711,46 +1585,6 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
           )
         )}
 
-        {countryPickerOpen ? (
-          <View style={styles.countryPickerOverlay}>
-            <Pressable style={styles.countryPickerBackdrop} onPress={() => setCountryPickerOpen(false)} />
-            <View style={styles.countryPickerSheet}>
-              <View style={styles.countryPickerHeader}>
-                <Text style={styles.countryPickerTitle}>Select country</Text>
-                <Pressable onPress={() => setCountryPickerOpen(false)} hitSlop={12}>
-                  <Text style={styles.headerAction}>Done</Text>
-                </Pressable>
-              </View>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.countryPickerRow}
-              >
-                {countryOptions.map((option) => {
-                  const active = option.code === normalizeCountryIso(countryIso);
-                  return (
-                    <Pressable
-                      key={option.code}
-                      style={({ pressed }) => [
-                        styles.countryChip,
-                        active && styles.countryChipActive,
-                        pressed && styles.rowPressed,
-                      ]}
-                      onPress={() => {
-                        setCountryIso(option.code);
-                        setCountryPickerOpen(false);
-                      }}
-                    >
-                      <Text style={styles.countryChipFlag}>{formatCountryFlag(option.code)}</Text>
-                      <Text style={styles.countryChipLabel}>{option.label}</Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            </View>
-          </View>
-        ) : null}
-
         <CategorySheet
           visible={pickerOpen}
           onClose={() => setPickerOpen(false)}
@@ -1765,6 +1599,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
               }
             }
             setUserTouchedCategory(true);
+            requestAnimationFrame(() => nameInputRef.current?.focus());
           }}
           frequentIds={frequentIds}
           recentIds={recentCategoryIds}
@@ -1828,7 +1663,6 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
                           is_salary: saveState.lastDraft.is_salary,
                           is_shared_topup: saveState.lastDraft.is_shared_topup,
                           from_shared_screen: saveState.lastDraft.from_shared_screen,
-                          country_iso: saveState.lastDraft.country_iso,
                         })
                       }
                     >
@@ -1847,27 +1681,70 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
           </View>
         ) : null}
       </SafeAreaView>
+    </View>
+  );
+
+  if (useWideWebPanel) {
+    if (!visible) return null;
+    return <View style={styles.webModalLayer}>{modalBody}</View>;
+  }
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="fullScreen"
+      onRequestClose={handleClose}
+    >
+      {modalBody}
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  modalRoot: { flex: 1 },
+  webModalLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 1000,
+  },
+  wideModalRoot: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.xl,
+    backgroundColor: 'rgba(0,0,0,0.68)',
+  },
+  wideBackdrop: { ...StyleSheet.absoluteFillObject },
   container: { flex: 1, backgroundColor: colors.bg },
+  widePanel: {
+    width: 560,
+    maxWidth: '94%',
+    height: '88%',
+    minHeight: 560,
+    maxHeight: 820,
+    flexShrink: 0,
+    backgroundColor: colors.bg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    zIndex: 1,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
+    paddingBottom: spacing.sm,
   },
   headerTitle: { ...typography.body, color: colors.text, fontWeight: '700' },
   headerAction: { ...typography.body, color: colors.textMuted },
   headerSave: { color: colors.accent, fontWeight: '700' },
   disabled: { opacity: 0.5 },
+  composer: { flex: 1 },
   amountHero: {
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
-    gap: spacing.sm,
+    paddingBottom: spacing.sm,
+    gap: spacing.xs,
   },
   kindRow: { flexDirection: 'row', gap: spacing.sm },
   kindChip: {
@@ -1879,28 +1756,52 @@ const styles = StyleSheet.create({
   kindChipActive: { backgroundColor: colors.accent },
   kindChipText: { ...typography.label, color: colors.textMuted },
   kindChipTextActive: { color: colors.text },
-  amountFieldButton: {
+  amountField: {
     gap: spacing.xs,
     alignSelf: 'stretch',
   },
-  amountValue: { ...typography.amount, color: colors.text },
-  amountValueActive: { color: colors.accentAlt },
-  amountMeta: { ...typography.label, color: colors.textMuted },
+  amountInput: {
+    color: colors.text,
+    fontSize: 32,
+    lineHeight: 38,
+    fontWeight: '700',
+    paddingHorizontal: 0,
+    paddingVertical: spacing.xs,
+  },
+  amountMeta: { ...typography.label, color: colors.textMuted, flex: 1 },
   amountMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     gap: spacing.sm,
     flexWrap: 'wrap',
   },
   fields: { flex: 1 },
-  fieldsContent: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg, gap: spacing.sm },
+  fieldsContent: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg, gap: spacing.xs },
   importStack: { gap: spacing.sm },
+  importDisclosure: {
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  importDisclosureIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  importDisclosureTitle: { ...typography.body, color: colors.text, fontWeight: '600' },
+  importOptions: { gap: spacing.sm, paddingLeft: 40 },
   importCard: {
-    borderRadius: radius.lg,
+    borderRadius: radius.md,
     backgroundColor: colors.surfaceAlt,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -1916,29 +1817,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginTop: spacing.sm,
   },
-  fieldCard: {
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  fieldLeading: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flex: 1 },
-  categoryIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   inlineHint: { ...typography.label, color: colors.success },
-  fieldTrailing: { width: 20, alignItems: 'center', justifyContent: 'center' },
-  detailValueRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  fieldText: { ...typography.body, color: colors.text, flex: 1 },
-  flagValue: { fontSize: 24, lineHeight: 28 },
-  placeholder: { color: colors.textMuted },
   input: {
     borderRadius: radius.md,
     backgroundColor: colors.surface,
@@ -1987,9 +1866,6 @@ const styles = StyleSheet.create({
   recentCopy: { flex: 1, gap: 2 },
   recentTitle: { ...typography.body, color: colors.text, fontWeight: '600' },
   recentMeta: { ...typography.label, color: colors.textMuted },
-  detailRow: { flexDirection: 'row', gap: spacing.sm },
-  detailCardDate: { flex: 2 },
-  detailCardCountry: { flex: 1 },
   toggleChip: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
@@ -2033,6 +1909,7 @@ const styles = StyleSheet.create({
   },
   datePickerTitle: { ...typography.body, color: colors.text, fontWeight: '700' },
   datePickerDone: { ...typography.body, color: colors.accentAlt, fontWeight: '700' },
+  datePickerCalendar: { width: '100%' },
   webDatePickerBody: {
     gap: spacing.sm,
     paddingHorizontal: spacing.lg,
@@ -2058,90 +1935,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   webDateTodayText: { ...typography.body, color: colors.text, fontWeight: '700' },
-  keypadPanel: {
-    position: 'relative',
-    overflow: 'visible',
-  },
-  keypadHideWrap: {
-    position: 'absolute',
-    top: -(spacing.xl + spacing.lg),
-    right: spacing.xl,
-    zIndex: 1,
-  },
-  keypadHideButton: {
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(245,185,66,0.18)',
-    borderWidth: 1,
-    borderColor: 'rgba(245,185,66,0.32)',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  keypadHideText: { ...typography.label, color: colors.text, fontWeight: '600' },
-  keyboardDock: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  keyboardDockButton: {
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(245,185,66,0.18)',
-    borderWidth: 1,
-    borderColor: 'rgba(245,185,66,0.32)',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  keyboardDockText: { ...typography.label, color: colors.text, fontWeight: '600' },
-  countryPickerOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'flex-end',
-  },
-  countryPickerBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.36)',
-  },
-  countryPickerSheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xl,
-    gap: spacing.md,
-  },
-  countryPickerHeader: {
-    paddingHorizontal: spacing.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  countryPickerTitle: { ...typography.body, color: colors.text, fontWeight: '700' },
-  countryPickerRow: { paddingHorizontal: spacing.lg, gap: spacing.sm },
-  countryChip: {
-    width: 108,
-    minHeight: 96,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surfaceAlt,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-  },
-  countryChipActive: {
-    backgroundColor: 'rgba(124,92,255,0.18)',
-    borderWidth: 1,
-    borderColor: colors.accent,
-  },
-  countryChipFlag: { fontSize: 28, lineHeight: 32 },
-  countryChipLabel: { ...typography.label, color: colors.text, textAlign: 'center' },
   successOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.48)',

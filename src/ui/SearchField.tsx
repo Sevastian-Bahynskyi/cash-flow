@@ -18,6 +18,8 @@ export function SearchField({ value, onChangeText, placeholder, onClear, isLoadi
     <View style={[styles.wrap, style]}>
       <FontAwesome6 name="magnifying-glass" size={18} color={colors.textMuted} />
       <TextInput
+        accessibilityRole="search"
+        accessibilityLabel={placeholder ?? 'Search'}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}

@@ -1,5 +1,16 @@
 import { useState } from 'react';
-import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { FontAwesome6 } from '@expo/vector-icons';
@@ -96,10 +107,8 @@ export function ImportReviewModal({
   const incomeFallbackCategoryId = findOtherIncomeCategoryOption(categoryOptions)?.id ?? null;
   const {
     activeDateValue,
-    amountPickerRowId,
     categoryPickerRowId,
     categorizationErrorMessage,
-    closeAmountPicker,
     datePickerRowId,
     expandedRowIds,
     handleDateChange,
@@ -108,7 +117,6 @@ export function ImportReviewModal({
     openDatePicker,
     setCategoryPickerRowId,
     setDatePickerRowId,
-    toggleAmountPicker,
     toggleRowExpanded,
   } = useImportReviewState({
     visible,
@@ -150,6 +158,10 @@ export function ImportReviewModal({
           actions={[{ icon: 'check', onPress: onSave, disabled: !canSaveImport, tone: canSaveImport ? 'accent' : 'default' }]}
         />
 
+        <KeyboardAvoidingView
+          style={styles.container}
+          behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
+        >
         <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           {visibleErrorMessage ? <Text style={styles.error}>{visibleErrorMessage}</Text> : null}
 
@@ -202,12 +214,10 @@ export function ImportReviewModal({
                 categoryLoading={isCategorizing && !category}
                 categoryFailed={categoryFailed}
                 expanded={expanded}
-                amountPickerOpen={amountPickerRowId === row.id}
                 incomeFallbackCategoryId={incomeFallbackCategoryId}
                 onChangeRow={(patch) => onChangeRow(row.id, patch)}
                 onRemove={() => onRemoveRow(row.id)}
                 onToggleExpanded={() => toggleRowExpanded(row.id)}
-                onToggleAmountPicker={() => toggleAmountPicker(row.id)}
                 onOpenDatePicker={() => {
                   if (Platform.OS === 'web') {
                     openWebDatePicker(row.id, row.occurredOn);
@@ -216,7 +226,6 @@ export function ImportReviewModal({
                   openDatePicker(row.id);
                 }}
                 onOpenCategoryPicker={() => openCategoryPicker(row.id)}
-                onCollapseInlinePickers={closeAmountPicker}
               />
             );
           })}
@@ -241,6 +250,7 @@ export function ImportReviewModal({
             </Text>
           </Pressable>
         </ScrollView>
+        </KeyboardAvoidingView>
 
         <CategorySheet
           visible={categoryPickerRowId !== null}
@@ -258,7 +268,7 @@ export function ImportReviewModal({
         />
 
         {datePickerRowId && Platform.OS === 'android' ? (
-          <DateTimePicker value={activeDateValue} mode="date" display="default" onChange={handleDateChange} />
+          <DateTimePicker value={activeDateValue} mode="date" display="calendar" onChange={handleDateChange} />
         ) : null}
 
         {datePickerRowId && Platform.OS === 'ios' ? (
@@ -275,9 +285,12 @@ export function ImportReviewModal({
                 <DateTimePicker
                   value={activeDateValue}
                   mode="date"
-                  display="spinner"
+                  display="inline"
                   themeVariant="dark"
+                  textColor={colors.text}
+                  accentColor={colors.accentAlt}
                   onChange={handleDateChange}
+                  style={styles.pickerCalendar}
                 />
               </SafeAreaView>
             </View>
@@ -403,6 +416,7 @@ const styles = StyleSheet.create({
   },
   pickerTitle: { ...typography.body, color: colors.text, fontWeight: '700' },
   pickerDone: { ...typography.body, color: colors.accent, fontWeight: '700' },
+  pickerCalendar: { width: '100%' },
   webDateBody: {
     gap: spacing.sm,
     paddingHorizontal: spacing.lg,

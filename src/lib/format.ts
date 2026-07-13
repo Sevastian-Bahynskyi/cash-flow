@@ -43,17 +43,5 @@ export const formatMonthYearLabel = (iso: string): string =>
     year: 'numeric',
   }).format(parseIsoDate(iso));
 
-export const normalizeCountryIso = (value: string | null | undefined): string | null => {
-  const normalized = (value ?? '').trim().toUpperCase();
-  return /^[A-Z]{2}$/.test(normalized) ? normalized : null;
-};
-
-export const formatCountryFlag = (value: string | null | undefined): string => {
-  const normalized = normalizeCountryIso(value);
-  if (!normalized) return '🌍';
-  const codePoints = [...normalized].map((char) => 0x1f1e6 + char.charCodeAt(0) - 65);
-  return String.fromCodePoint(...codePoints);
-};
-
 export const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value));

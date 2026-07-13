@@ -29,6 +29,8 @@ const extractTokens = (url: string): { access_token: string; refresh_token: stri
   return { access_token, refresh_token };
 };
 
+const extractCode = (url: string): string | null => new URL(url).searchParams.get('code');
+
 const buildGoogleOAuthUrl = (redirectTo: string, skipHttpRedirect: boolean): string => {
   const authUrl = new URL('/auth/v1/authorize', `${supabaseAuthUrl}/`);
   authUrl.searchParams.set('provider', 'google');
@@ -125,14 +127,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (result.type !== 'success' || !result.url) return;
 
     const tokens = extractTokens(result.url);
-    if (!tokens) {
-      reportDevError('auth.signInWithGoogle', new Error('OAuth callback did not include session tokens.'));
+    if (tokens) {
+      const { error } = await supabase.auth.setSession(tokens);
+      if (error) {
+        reportDevError('auth.setSession', error);
+      }
       return;
     }
 
-    const { error } = await supabase.auth.setSession(tokens);
+    const code = extractCode(result.url);
+    if (!code) {
+      reportDevError('auth.signInWithGoogle', new Error('OAuth callback did not include a session.'));
+      return;
+    }
+
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (error) {
-      reportDevError('auth.setSession', error);
+      reportDevError('auth.exchangeCodeForSession', error);
     }
   }, []);
 

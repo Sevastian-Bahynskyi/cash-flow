@@ -4,6 +4,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import * as Linking from 'expo-linking';
 import { colors, spacing, typography } from '@/ui/tokens';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { runDetached } from '@/lib/async';
 import { reportDevError } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 
@@ -26,14 +27,15 @@ export default function AuthCallbackScreen() {
         return;
       }
 
-      const hasCode = /[?&]code=/.test(callbackUrl);
+      const url = new URL(callbackUrl);
+      const code = url.searchParams.get('code');
       const hasTokenFragment = /(access_token|refresh_token)=/.test(callbackUrl);
 
-      if (hasCode) {
-        const { error } = await supabase.auth.exchangeCodeForSession(callbackUrl);
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
         if (error) {
           reportDevError('auth.exchangeCodeForSession', error);
-          if (active) setErrorText(error.message);
+          if (active) setErrorText('Could not finish sign in. Please try again.');
         }
         return;
       }
@@ -45,7 +47,6 @@ export default function AuthCallbackScreen() {
         return;
       }
 
-      const url = new URL(callbackUrl);
       const hashParams = new URLSearchParams(url.hash.startsWith('#') ? url.hash.slice(1) : url.hash);
       const queryParams = new URLSearchParams(url.search);
       const accessToken = hashParams.get('access_token') ?? queryParams.get('access_token');
@@ -64,11 +65,13 @@ export default function AuthCallbackScreen() {
       });
       if (error) {
         reportDevError('auth.setSession', error);
-        if (active) setErrorText(error.message);
+        if (active) setErrorText('Could not finish sign in. Please try again.');
       }
     };
 
-    void completeCallback();
+    runDetached(completeCallback(), 'auth.completeCallback', () => {
+      if (active) setErrorText('Could not finish sign in. Please try again.');
+    });
     return () => {
       active = false;
     };

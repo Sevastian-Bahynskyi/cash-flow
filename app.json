@@ -13,7 +13,6 @@
       "icon": "./assets/icon.png",
       "bundleIdentifier": "com.seva.cashflow",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Cash Flow uses your location to prefill the country flag from your current location.",
         "NSPhotoLibraryUsageDescription": "Cash Flow uses your photos so you can import transactions from screenshots and receipts."
       }
     },
@@ -31,12 +30,7 @@
       ],
       "@react-native-community/datetimepicker",
       "expo-localization",
-      [
-        "expo-location",
-        {
-          "locationWhenInUsePermission": "Cash Flow uses your location to prefill the country flag from your current location."
-        }
-      ]
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true

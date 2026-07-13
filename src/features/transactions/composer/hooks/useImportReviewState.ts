@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Keyboard, Platform } from 'react-native';
+import { Platform } from 'react-native';
 import type { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { runDetached } from '@/lib/async';
 import {
@@ -63,7 +63,6 @@ const findMobilePayCategoryId = (options: readonly CategoryOption[]): string | n
 export function useImportReviewState({ visible, rows, categoryOptions, transferPeople, onChangeRow }: Args) {
   const [categoryPickerRowId, setCategoryPickerRowId] = useState<string | null>(null);
   const [datePickerRowId, setDatePickerRowId] = useState<string | null>(null);
-  const [amountPickerRowId, setAmountPickerRowId] = useState<string | null>(null);
   const [expandedRowIds, setExpandedRowIds] = useState<string[]>([]);
   const [isCategorizing, setIsCategorizing] = useState(false);
   const [categorizationErrorMessage, setCategorizationErrorMessage] = useState<string | null>(null);
@@ -92,9 +91,6 @@ export function useImportReviewState({ visible, rows, categoryOptions, transferP
   useEffect(() => {
     const validRowIds = new Set(rows.map((row) => row.id));
 
-    if (amountPickerRowId && !validRowIds.has(amountPickerRowId)) {
-      setAmountPickerRowId(null);
-    }
     if (categoryPickerRowId && !validRowIds.has(categoryPickerRowId)) {
       setCategoryPickerRowId(null);
     }
@@ -103,21 +99,10 @@ export function useImportReviewState({ visible, rows, categoryOptions, transferP
     }
 
     setExpandedRowIds((current) => current.filter((rowId) => validRowIds.has(rowId)));
-  }, [amountPickerRowId, categoryPickerRowId, datePickerRowId, rows]);
-
-  useEffect(() => {
-    const subscription = Keyboard.addListener('keyboardDidShow', () => {
-      setAmountPickerRowId(null);
-    });
-
-    return () => {
-      subscription.remove();
-    };
-  }, []);
+  }, [categoryPickerRowId, datePickerRowId, rows]);
 
   useEffect(() => {
     if (visible) return;
-    setAmountPickerRowId(null);
     setCategoryPickerRowId(null);
     setDatePickerRowId(null);
     setExpandedRowIds([]);
@@ -289,7 +274,6 @@ export function useImportReviewState({ visible, rows, categoryOptions, transferP
     setExpandedRowIds((current) => {
       const isExpanded = current.includes(rowId);
       if (isExpanded) {
-        setAmountPickerRowId((activeRowId) => (activeRowId === rowId ? null : activeRowId));
         return current.filter((value) => value !== rowId);
       }
       return [...current, rowId];
@@ -297,27 +281,13 @@ export function useImportReviewState({ visible, rows, categoryOptions, transferP
   };
 
   const openCategoryPicker = (rowId: string): void => {
-    setAmountPickerRowId(null);
     setDatePickerRowId(null);
     setCategoryPickerRowId(rowId);
   };
 
   const openDatePicker = (rowId: string): void => {
-    setAmountPickerRowId(null);
     setCategoryPickerRowId(null);
     setDatePickerRowId(rowId);
-  };
-
-  const toggleAmountPicker = (rowId: string): void => {
-    Keyboard.dismiss();
-    setCategoryPickerRowId(null);
-    setDatePickerRowId(null);
-    setExpandedRowIds((current) => (current.includes(rowId) ? current : [...current, rowId]));
-    setAmountPickerRowId((current) => (current === rowId ? null : rowId));
-  };
-
-  const closeAmountPicker = (): void => {
-    setAmountPickerRowId(null);
   };
 
   const handleDateChange = (event: DateTimePickerEvent, selected?: Date): void => {
@@ -339,10 +309,8 @@ export function useImportReviewState({ visible, rows, categoryOptions, transferP
 
   return {
     activeDateValue,
-    amountPickerRowId,
     categorizationErrorMessage,
     categoryPickerRowId,
-    closeAmountPicker,
     datePickerRowId,
     expandedRowIds,
     handleDateChange,
@@ -351,7 +319,6 @@ export function useImportReviewState({ visible, rows, categoryOptions, transferP
     openDatePicker,
     setCategoryPickerRowId,
     setDatePickerRowId,
-    toggleAmountPicker,
     toggleRowExpanded,
   };
 }

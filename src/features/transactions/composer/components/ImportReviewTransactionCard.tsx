@@ -1,6 +1,5 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { FontAwesome6 } from '@expo/vector-icons';
-import { NumericKeypad } from '@/ui/NumericKeypad';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 import { formatDateLabel } from '@/lib/format';
 import { getCategoryDisplayColor } from '@/features/categories/helpers';
@@ -16,14 +15,6 @@ import {
   TransactionTextField,
 } from './TransactionFormFields';
 
-const formatAmountDisplay = (raw: string): string => {
-  if (raw.length === 0) return '0.00';
-  const normalized = raw.trim().replace(',', '.');
-  const value = Number(normalized);
-  if (!Number.isFinite(value)) return raw;
-  return value.toFixed(2);
-};
-
 type Props = {
   row: ImportedTransactionDraft;
   index: number;
@@ -31,15 +22,12 @@ type Props = {
   categoryLoading: boolean;
   categoryFailed: boolean;
   expanded: boolean;
-  amountPickerOpen: boolean;
   incomeFallbackCategoryId: string | null;
   onChangeRow: (patch: Partial<ImportedTransactionDraft>) => void;
   onRemove: () => void;
   onToggleExpanded: () => void;
-  onToggleAmountPicker: () => void;
   onOpenDatePicker: () => void;
   onOpenCategoryPicker: () => void;
-  onCollapseInlinePickers: () => void;
 };
 
 export function ImportReviewTransactionCard({
@@ -49,15 +37,12 @@ export function ImportReviewTransactionCard({
   categoryLoading,
   categoryFailed,
   expanded,
-  amountPickerOpen,
   incomeFallbackCategoryId,
   onChangeRow,
   onRemove,
   onToggleExpanded,
-  onToggleAmountPicker,
   onOpenDatePicker,
   onOpenCategoryPicker,
-  onCollapseInlinePickers,
 }: Props) {
   const categoryLabel = category ? `${category.parentName} · ${category.name}` : '';
   const categoryAccentColor = category
@@ -91,7 +76,6 @@ export function ImportReviewTransactionCard({
       <TransactionTextField
         value={row.name}
         onChangeText={(value) => onChangeRow({ name: value })}
-        onFocus={onCollapseInlinePickers}
         placeholder="Transaction name"
         variant="card"
       />
@@ -134,19 +118,17 @@ export function ImportReviewTransactionCard({
       ) : null}
 
       <TransactionFieldLabel>Amount</TransactionFieldLabel>
-      <TransactionPickerField
-        text={formatAmountDisplay(row.amount)}
+      <TransactionTextField
+        value={row.amount}
+        onChangeText={(value) => onChangeRow({ amount: value })}
         variant="card"
-        leadingMaterialIcon="money-bill"
-        trailing={<FontAwesome6 name="keyboard" size={18} color={colors.textMuted} />}
-        onPress={onToggleAmountPicker}
+        inputMode="decimal"
+        keyboardType="decimal-pad"
+        placeholder="0.00"
+        selectionColor={colors.text}
+        cursorColor={colors.text}
+        style={styles.amountInput}
       />
-
-      {amountPickerOpen ? (
-        <View style={styles.inlineKeypadWrap}>
-          <NumericKeypad value={row.amount} onChange={(value) => onChangeRow({ amount: value })} />
-        </View>
-      ) : null}
 
       <Pressable style={({ pressed }) => [styles.showMoreButton, pressed && styles.rowPressed]} onPress={onToggleExpanded}>
         <Text style={styles.showMoreText}>{expanded ? 'Show less' : 'Show more'}</Text>
@@ -189,7 +171,6 @@ export function ImportReviewTransactionCard({
           <TransactionTextField
             value={row.comment}
             onChangeText={(value) => onChangeRow({ comment: value })}
-            onFocus={onCollapseInlinePickers}
             placeholder="Optional"
             variant="card"
             style={styles.noteInput}
@@ -242,11 +223,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   showMoreText: { ...typography.label, color: colors.textMuted },
-  inlineKeypadWrap: {
-    marginTop: spacing.xs,
-    overflow: 'hidden',
-    borderRadius: radius.lg,
-  },
+  amountInput: { fontSize: 20, fontWeight: '700' },
   categorySkeletonField: {
     minHeight: 52,
     borderRadius: radius.md,
