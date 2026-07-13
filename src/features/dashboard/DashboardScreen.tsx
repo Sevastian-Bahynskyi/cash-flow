@@ -2,12 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { BarChart } from 'react-native-gifted-charts';
+import { FontAwesome6 } from '@expo/vector-icons';
+import Svg, { Circle, Defs, Line, LinearGradient, Path, Stop, Text as SvgText } from 'react-native-svg';
 import { runDetached } from '@/lib/async';
 import { MotionScope } from '@/ui/MotionScope';
 import { MotionView } from '@/ui/MotionView';
 import { ErrorCard } from '@/ui/ErrorCard';
-import { HeroPagerArrows } from '@/ui/HeroPagerArrows';
 import { useMotionRefresh } from '@/ui/useMotionRefresh';
 import { FilterChips } from '@/ui/FilterChips';
 import { ScreenHeader } from '@/ui/ScreenHeader';
@@ -19,11 +19,84 @@ import { formatMinor, formatPercent } from '@/lib/format';
 import { type DashboardRange, useDashboard } from './useDashboard';
 import { ExpenseWaffleChart } from './ExpenseWaffleChart';
 
+type CashFlowPoint = {
+  valueMinor: number;
+  label: string;
+};
+
 const rangeOptions = [
   { label: 'Weekly', value: 'weekly' },
   { label: 'Monthly', value: 'monthly' },
   { label: 'Yearly', value: 'yearly' },
 ] as const satisfies readonly { label: string; value: DashboardRange }[];
+
+function CashFlowTrend({ points }: { points: readonly CashFlowPoint[] }) {
+  const viewWidth = 800;
+  const viewHeight = 210;
+  const plotTop = 14;
+  const plotBottom = 170;
+  const plotLeft = 12;
+  const plotRight = 12;
+  const values = [0, ...points.map((point) => point.valueMinor)];
+  const minimum = Math.min(0, ...values);
+  const maximum = Math.max(0, ...values);
+  const rawRange = Math.max(1, maximum - minimum);
+  const paddedMinimum = minimum - rawRange * 0.1;
+  const paddedMaximum = maximum + rawRange * 0.1;
+  const paddedRange = paddedMaximum - paddedMinimum;
+  const plotWidth = viewWidth - plotLeft - plotRight;
+  const plotHeight = plotBottom - plotTop;
+  const xFor = (index: number): number =>
+    plotLeft + (values.length === 1 ? 0 : (index / (values.length - 1)) * plotWidth);
+  const yFor = (value: number): number =>
+    plotTop + ((paddedMaximum - value) / paddedRange) * plotHeight;
+  const zeroY = yFor(0);
+  const linePath = values
+    .map((value, index) => `${index === 0 ? 'M' : 'L'} ${xFor(index)} ${yFor(value)}`)
+    .join(' ');
+  const areaPath = `${linePath} L ${xFor(values.length - 1)} ${zeroY} L ${xFor(0)} ${zeroY} Z`;
+  const endValue = values[values.length - 1] ?? 0;
+  const tone = endValue >= 0 ? colors.success : colors.danger;
+  const labelIndices = [...new Set([1, Math.ceil(points.length / 2), points.length])]
+    .filter((index) => index > 0 && index <= points.length);
+
+  return (
+    <View style={styles.trendChart} accessibilityLabel="Running cash flow chart">
+      <Svg width="100%" height={viewHeight} viewBox={`0 0 ${viewWidth} ${viewHeight}`}>
+        <Defs>
+          <LinearGradient id="cashFlowFill" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor={tone} stopOpacity="0.28" />
+            <Stop offset="1" stopColor={tone} stopOpacity="0" />
+          </LinearGradient>
+        </Defs>
+        <Line
+          x1={plotLeft}
+          x2={viewWidth - plotRight}
+          y1={zeroY}
+          y2={zeroY}
+          stroke={colors.border}
+          strokeWidth={1}
+          strokeDasharray="5 6"
+        />
+        <Path d={areaPath} fill="url(#cashFlowFill)" />
+        <Path d={linePath} fill="none" stroke={tone} strokeWidth={4} strokeLinecap="round" strokeLinejoin="round" />
+        <Circle cx={xFor(values.length - 1)} cy={yFor(endValue)} r={6} fill={tone} />
+        {labelIndices.map((index) => (
+          <SvgText
+            key={index}
+            x={xFor(index)}
+            y={200}
+            fill={colors.textMuted}
+            fontSize={12}
+            textAnchor={index === 1 ? 'start' : index === points.length ? 'end' : 'middle'}
+          >
+            {points[index - 1]?.label}
+          </SvgText>
+        ))}
+      </Svg>
+    </View>
+  );
+}
 
 function DashboardSkeleton() {
   return (
@@ -72,18 +145,19 @@ export default function DashboardScreen() {
   const analytics = useDashboard(range, selectedWindowId);
   const { width } = useWindowDimensions();
   const isWide = width >= 900;
-  const visibleContentWidth = Math.min(width, 1040) - spacing.lg * 4;
-  const chartWidth = Math.max(240, visibleContentWidth - 64, analytics.chartWidth);
   const waffleSize = width < 390 ? 176 : 204;
 
-  const cashFlowBarData = useMemo(
-    () => analytics.buckets.map((bucket) => ({
-      value: bucket.cashFlowMinor / 100,
-      label: bucket.axisLabel,
-      frontColor: bucket.cashFlowMinor >= 0 ? colors.success : colors.danger,
-      labelTextStyle: styles.axisText,
-      barBorderRadius: 6,
-    })),
+  const cashFlowTrend = useMemo(
+    () => {
+      let runningMinor = 0;
+      return analytics.buckets.map((bucket) => {
+        runningMinor += bucket.cashFlowMinor;
+        return {
+          valueMinor: runningMinor,
+          label: bucket.axisLabel || bucket.label,
+        };
+      });
+    },
     [analytics.buckets],
   );
 
@@ -145,7 +219,47 @@ export default function DashboardScreen() {
             <View style={styles.summaryCard}>
               <View style={styles.summaryHeader}>
                 <View style={styles.summaryCopy}>
-                  <Text style={styles.summaryLabel}>Net cash flow</Text>
+                  <View style={styles.summaryTopRow}>
+                    <Text style={styles.summaryLabel}>Net cash flow</Text>
+                    {analytics.windows.length > 1 ? (
+                      <View style={styles.periodNavigation}>
+                        <Pressable
+                          accessibilityLabel="Previous period"
+                          disabled={selectedWindowIndex <= 0}
+                          style={({ pressed }) => [
+                            styles.periodButton,
+                            selectedWindowIndex <= 0 && styles.periodButtonDisabled,
+                            pressed && styles.periodButtonPressed,
+                          ]}
+                          onPress={() => {
+                            const previous = analytics.windows[selectedWindowIndex - 1];
+                            if (!previous) return;
+                            setSelectedWindowId(previous.id);
+                            Haptics.selectionAsync().catch(() => undefined);
+                          }}
+                        >
+                          <FontAwesome6 name="chevron-left" size={14} color={colors.text} />
+                        </Pressable>
+                        <Pressable
+                          accessibilityLabel="Next period"
+                          disabled={selectedWindowIndex >= analytics.windows.length - 1}
+                          style={({ pressed }) => [
+                            styles.periodButton,
+                            selectedWindowIndex >= analytics.windows.length - 1 && styles.periodButtonDisabled,
+                            pressed && styles.periodButtonPressed,
+                          ]}
+                          onPress={() => {
+                            const next = analytics.windows[selectedWindowIndex + 1];
+                            if (!next) return;
+                            setSelectedWindowId(next.id);
+                            Haptics.selectionAsync().catch(() => undefined);
+                          }}
+                        >
+                          <FontAwesome6 name="chevron-right" size={14} color={colors.text} />
+                        </Pressable>
+                      </View>
+                    ) : null}
+                  </View>
                   <Text
                     style={[
                       styles.summaryAmount,
@@ -156,24 +270,6 @@ export default function DashboardScreen() {
                   </Text>
                   <Text style={styles.summaryPeriod}>{analytics.rangeDescription}</Text>
                 </View>
-                {analytics.windows.length > 1 ? (
-                  <HeroPagerArrows
-                    prevDisabled={selectedWindowIndex <= 0}
-                    nextDisabled={selectedWindowIndex >= analytics.windows.length - 1}
-                    onPrev={() => {
-                      const previous = analytics.windows[selectedWindowIndex - 1];
-                      if (!previous) return;
-                      setSelectedWindowId(previous.id);
-                      Haptics.selectionAsync().catch(() => undefined);
-                    }}
-                    onNext={() => {
-                      const next = analytics.windows[selectedWindowIndex + 1];
-                      if (!next) return;
-                      setSelectedWindowId(next.id);
-                      Haptics.selectionAsync().catch(() => undefined);
-                    }}
-                  />
-                ) : null}
               </View>
               <View style={styles.summaryFacts}>
                 <View style={styles.summaryFact}>
@@ -202,43 +298,21 @@ export default function DashboardScreen() {
                 <MotionView direction="up" distance={100} delayMs={120}>
                   <View style={styles.chartCard}>
                     <View>
-                      <Text style={styles.cardTitle}>Cash flow over time</Text>
-                      <Text style={styles.cardMeta}>Green means more came in. Red means more went out.</Text>
+                      <Text style={styles.cardTitle}>Cash position through the period</Text>
+                      <Text style={styles.cardMeta}>Running income minus money out. The endpoint equals net cash flow.</Text>
                     </View>
-                    <View style={styles.legendRow}>
-                      <View style={styles.legendItem}>
-                        <View style={[styles.legendDot, { backgroundColor: colors.success }]} />
-                        <Text style={styles.legendText}>Positive net</Text>
-                      </View>
-                      <View style={styles.legendItem}>
-                        <View style={[styles.legendDot, { backgroundColor: colors.danger }]} />
-                        <Text style={styles.legendText}>Negative net</Text>
-                      </View>
+                    <View style={styles.trendSummary}>
+                      <Text style={styles.trendSummaryLabel}>Started at 0</Text>
+                      <Text
+                        style={[
+                          styles.trendSummaryValue,
+                          { color: analytics.summary.cashFlowMinor >= 0 ? colors.success : colors.danger },
+                        ]}
+                      >
+                        Ended at {formatMinor(analytics.summary.cashFlowMinor)}
+                      </Text>
                     </View>
-                    <BarChart
-                      width={chartWidth}
-                      height={220}
-                      data={cashFlowBarData}
-                      isAnimated
-                      animationDuration={500}
-                      maxValue={analytics.chartBounds.cashFlowMax}
-                      mostNegativeValue={analytics.chartBounds.mostNegativeCashFlow}
-                      noOfSections={3}
-                      noOfSectionsBelowXAxis={3}
-                      spacing={range === 'monthly' ? 18 : 34}
-                      initialSpacing={12}
-                      endSpacing={20}
-                      barWidth={range === 'monthly' ? 12 : 18}
-                      yAxisColor={colors.border}
-                      xAxisColor={colors.border}
-                      rulesColor="rgba(255,255,255,0.07)"
-                      yAxisTextStyle={styles.axisText}
-                      xAxisLabelTextStyle={styles.axisText}
-                      yAxisLabelWidth={52}
-                      disableScroll={chartWidth <= visibleContentWidth}
-                      nestedScrollEnabled
-                      formatYLabel={analytics.compactAxisValue}
-                    />
+                    <CashFlowTrend points={cashFlowTrend} />
                   </View>
                 </MotionView>
 
@@ -325,11 +399,25 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     gap: spacing.sm,
   },
-  summaryHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.lg },
+  summaryHeader: { gap: spacing.sm },
   summaryCopy: { flex: 1, gap: spacing.xs },
+  summaryTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
   summaryLabel: { ...typography.label, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
-  summaryAmount: { color: colors.text, fontSize: 40, lineHeight: 46, fontWeight: '700' },
+  summaryAmount: { color: colors.text, fontSize: 36, lineHeight: 42, fontWeight: '700' },
   summaryPeriod: { ...typography.label, color: colors.textMuted },
+  periodNavigation: { flexDirection: 'row', gap: spacing.xs },
+  periodButton: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  periodButtonDisabled: { opacity: 0.3 },
+  periodButtonPressed: { opacity: 0.76 },
   summaryFacts: { flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.md },
   summaryFact: { flex: 1, gap: 3 },
   summaryFactLabel: { ...typography.label, color: colors.textMuted },
@@ -345,11 +433,10 @@ const styles = StyleSheet.create({
   },
   cardTitle: { ...typography.body, color: colors.text, fontSize: 18, fontWeight: '700' },
   cardMeta: { ...typography.label, color: colors.textMuted, marginTop: 3 },
-  axisText: { color: colors.textMuted, fontSize: 11 },
-  legendRow: { flexDirection: 'row', gap: spacing.md, flexWrap: 'wrap' },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  legendDot: { width: 8, height: 8, borderRadius: radius.pill },
-  legendText: { ...typography.label, color: colors.textMuted },
+  trendSummary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
+  trendSummaryLabel: { ...typography.label, color: colors.textMuted },
+  trendSummaryValue: { ...typography.label, fontWeight: '700' },
+  trendChart: { height: 210, width: '100%', overflow: 'hidden' },
   expenseLayout: { gap: spacing.lg },
   expenseLayoutWide: { flexDirection: 'row', alignItems: 'flex-start' },
   waffleColumn: { alignItems: 'center', gap: spacing.md, minWidth: 240 },
