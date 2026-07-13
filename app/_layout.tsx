@@ -8,7 +8,51 @@ import { colors } from '@/ui/tokens';
 import { WebBackdrop } from '@/ui/WebBackdrop';
 import { AuthProvider, useAuth } from '@/features/auth/AuthProvider';
 import { ProfileProvider } from '@/features/profile/ProfileProvider';
-import { ComposerProvider } from '@/features/transactions/composer/context/ComposerContext';
+import { ComposerProvider, useComposer } from '@/features/transactions/composer/context/ComposerContext';
+
+function WebKeyboardShortcuts({ enabled }: { enabled: boolean }) {
+  const composer = useComposer();
+
+  useEffect(() => {
+    if (!enabled || typeof document === 'undefined') return;
+
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+
+      const target = event.target;
+      const isEditing = target instanceof HTMLElement
+        && (target.isContentEditable || target.tagName === 'INPUT' || target.tagName === 'TEXTAREA');
+
+      if (event.key === 'Escape') {
+        composer.close();
+        return;
+      }
+
+      if (isEditing) return;
+
+      if (event.key.toLowerCase() === 'n') {
+        event.preventDefault();
+        composer.openCreate();
+        return;
+      }
+
+      if (event.key === '/') {
+        const search = Array.from(
+          document.querySelectorAll<HTMLElement>('[role="search"]'),
+        ).find((element) => element.getClientRects().length > 0 && !element.closest('[aria-hidden="true"]'));
+        if (search) {
+          event.preventDefault();
+          search.focus();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [composer, enabled]);
+
+  return null;
+}
 
 function AuthGate() {
   const { session, loading } = useAuth();
@@ -43,6 +87,7 @@ function AuthGate() {
   return (
     <ProfileProvider>
       <ComposerProvider>
+      <WebKeyboardShortcuts enabled={Boolean(session)} />
       <Stack
         screenOptions={{
           headerShown: false,

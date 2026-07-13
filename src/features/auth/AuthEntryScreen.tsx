@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactElement } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,7 +11,7 @@ type AuthEntryScreenProps = {
     mode: AuthEntryMode;
 };
 
-export function AuthEntryScreen({ mode }: AuthEntryScreenProps): JSX.Element {
+export function AuthEntryScreen({ mode }: AuthEntryScreenProps): ReactElement {
     const { signInWithGoogle } = useAuth();
     const router = useRouter();
     const [busy, setBusy] = useState(false);

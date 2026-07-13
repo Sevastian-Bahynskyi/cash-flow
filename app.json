@@ -36,7 +36,8 @@
         {
           "locationWhenInUsePermission": "Cash Flow uses your location to prefill the country flag from your current location."
         }
-      ]
+      ],
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true

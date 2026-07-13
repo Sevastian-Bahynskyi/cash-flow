@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
-  LayoutAnimation,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -10,7 +10,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  UIManager,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,7 +20,6 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { FontAwesome6 } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
-import { NumericKeypad } from '@/ui/NumericKeypad';
 import { supabase } from '@/lib/supabase';
 import { CategorySheet } from '@/features/categories/CategorySheet';
 import { useCategories } from '@/features/categories/useCategories';
@@ -157,57 +156,8 @@ const parseAmountMinor = (raw: string): number | null => {
   return Math.round(value * 100);
 };
 
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
-
-const animateKeypadLayout = (): void => {
-  LayoutAnimation.configureNext({
-    duration: 220,
-    create: {
-      type: LayoutAnimation.Types.easeInEaseOut,
-      property: LayoutAnimation.Properties.opacity,
-    },
-    update: {
-      type: LayoutAnimation.Types.easeInEaseOut,
-    },
-    delete: {
-      type: LayoutAnimation.Types.easeInEaseOut,
-      property: LayoutAnimation.Properties.opacity,
-    },
-  });
-};
-
 const minorToInput = (minor: number | undefined): string =>
   typeof minor === 'number' && minor > 0 ? (minor / 100).toFixed(2) : '';
-
-const formatAmountDisplay = (raw: string): string => {
-  if (raw.length === 0) return '0.00';
-  const normalized = raw.trim().replace(',', '.');
-  const value = Number(normalized);
-  if (!Number.isFinite(value)) return raw;
-  return value.toFixed(2);
-};
-
-const highlightedAmount = (raw: string): { display: string; activeIndex: number | null } => {
-  const display = formatAmountDisplay(raw);
-  const normalized = raw.trim().replace(',', '.');
-  const displayDotAt = display.indexOf('.');
-
-  if (normalized.endsWith('.')) {
-    return { display, activeIndex: displayDotAt >= 0 ? displayDotAt + 1 : null };
-  }
-
-  let rawIndex = normalized.length - 1;
-
-  while (rawIndex >= 0 && !/[0-9]/.test(normalized[rawIndex] ?? '')) {
-    rawIndex -= 1;
-  }
-
-  if (rawIndex < 0) return { display, activeIndex: null };
-
-  return { display, activeIndex: rawIndex };
-};
 
 const buildBudgetIndicators = async (
   categoryOptions: readonly CategoryOption[],
@@ -265,6 +215,8 @@ const buildBudgetIndicators = async (
 
 export default function AddTransactionModal({ visible, onClose, onSaved, draft, pendingImport }: Props) {
   const insets = useSafeAreaInsets();
+  const { width: viewportWidth } = useWindowDimensions();
+  const useWideWebPanel = Platform.OS === 'web' && viewportWidth >= 900;
   const [kind, setKind] = useState<TransactionKind>('expense');
   const [amount, setAmount] = useState('');
   const [currencyCode, setCurrencyCode] = useState('DKK');
@@ -278,7 +230,6 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
   const [webDateInput, setWebDateInput] = useState(todayIso());
   const [webDateError, setWebDateError] = useState<string | null>(null);
   const [countryPickerOpen, setCountryPickerOpen] = useState(false);
-  const [keypadOpen, setKeypadOpen] = useState(true);
   const [recurring, setRecurring] = useState(false);
   const [shared, setShared] = useState(false);
   const [sharedParticipant, setSharedParticipant] = useState<'me' | 'gf'>('me');
@@ -327,7 +278,6 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
   const sharedFlowLocked = Boolean(draft?.from_shared_screen && !draft?.id);
   const sharedTopupEditFlow = Boolean(editing && draft?.kind === 'expense' && draft?.is_shared_topup);
   const useSharedFlowOptions = kind === 'expense' && (sharedFlowLocked || sharedTopupEditFlow);
-  const amountDisplayState = useMemo(() => highlightedAmount(amount), [amount]);
   const selectedIsSalary = isSalaryCategoryOption(category);
   const selectedIsMobilePay = isMobilePayCategoryOption(category);
   const categoryAccentColor = category
@@ -346,33 +296,13 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
   }, [name, transferPeople]);
   const recentTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const reopenKeypadAfterDatePicker = useRef(false);
+  const amountInputRef = useRef<TextInput | null>(null);
+  const nameInputRef = useRef<TextInput | null>(null);
   const autoAppliedCategoryId = useRef<string | null>(null);
   const suggestionRunId = useRef(0);
   const handledPendingImportId = useRef<string | null>(null);
   const suppressRecentSuggestionsName = useRef<string | null>(null);
   const lastSharedExpenseCategoryId = useRef<string | null>(null);
-
-  const openKeypad = (): void => {
-    if (keypadOpen) return;
-    Keyboard.dismiss();
-    animateKeypadLayout();
-    setKeypadOpen(true);
-  };
-
-  const closeKeypad = (): void => {
-    if (!keypadOpen) return;
-    animateKeypadLayout();
-    setKeypadOpen(false);
-  };
-
-  const toggleKeypad = (): void => {
-    if (keypadOpen) {
-      closeKeypad();
-      return;
-    }
-    openKeypad();
-  };
 
   const reset = (nextDraft?: TransactionDraft | null): void => {
     const nextDate = nextDraft?.occurred_on ?? lastCreatedDate;
@@ -402,7 +332,6 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
     setCountryIso(deviceCountry);
     setDatePickerOpen(false);
     setCountryPickerOpen(false);
-    setKeypadOpen(true);
     setRecurring(nextDraft?.recurring ?? false);
     const fromSharedCreate = Boolean(nextDraft?.from_shared_screen && !nextDraft?.id);
     let nextShared = nextDraft?.shared ?? false;
@@ -444,6 +373,10 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
       lastSharedExpenseCategoryId.current = nextCategory.id;
     } else {
       lastSharedExpenseCategoryId.current = null;
+    }
+
+    if (!nextDraft?.id) {
+      requestAnimationFrame(() => amountInputRef.current?.focus());
     }
   };
 
@@ -540,20 +473,6 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
       });
     }
   }, [categoryOptions.length, editing, pendingImport, visible]);
-
-  useEffect(() => {
-    const subscription = Keyboard.addListener('keyboardDidShow', () => {
-      setKeypadOpen((current) => {
-        if (!current) return current;
-        animateKeypadLayout();
-        return false;
-      });
-    });
-
-    return () => {
-      subscription.remove();
-    };
-  }, []);
 
   useEffect(() => {
     if (!visible) return;
@@ -1035,15 +954,10 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
   const closeDatePicker = (): void => {
     setDatePickerOpen(false);
     setWebDateError(null);
-    if (reopenKeypadAfterDatePicker.current) {
-      openKeypad();
-      reopenKeypadAfterDatePicker.current = false;
-    }
   };
 
   const openDatePicker = (): void => {
-    reopenKeypadAfterDatePicker.current = keypadOpen;
-    closeKeypad();
+    Keyboard.dismiss();
     setWebDateInput(date);
     setWebDateError(null);
     setDatePickerOpen(true);
@@ -1257,8 +1171,23 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
   );
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={handleClose}>
-      <SafeAreaView style={styles.container} edges={['bottom']}>
+    <Modal
+      visible={visible}
+      transparent={useWideWebPanel}
+      animationType={useWideWebPanel ? 'fade' : 'slide'}
+      presentationStyle={useWideWebPanel ? 'overFullScreen' : 'fullScreen'}
+      onRequestClose={handleClose}
+    >
+      <View style={[styles.modalRoot, useWideWebPanel && styles.wideModalRoot]}>
+      {useWideWebPanel ? (
+        <Pressable
+          style={styles.wideBackdrop}
+          onPress={handleClose}
+          accessibilityRole="button"
+          accessibilityLabel="Close transaction editor"
+        />
+      ) : null}
+      <SafeAreaView style={[styles.container, useWideWebPanel && styles.widePanel]} edges={['bottom']}>
         <View style={[styles.header, { paddingTop: Math.max(insets.top, spacing.md) }]}>
           <Pressable onPress={handleClose} hitSlop={12}>
             <Text style={styles.headerAction}>Cancel</Text>
@@ -1271,6 +1200,10 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
           </Pressable>
         </View>
 
+        <KeyboardAvoidingView
+          style={styles.composer}
+          behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
+        >
         <View style={styles.amountHero}>
           {!useSharedFlowOptions ? (
             <TransactionKindSelector
@@ -1293,20 +1226,21 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
               }}
             />
           ) : null}
-          <Pressable
-            style={({ pressed }) => [styles.amountFieldButton, pressed && styles.rowPressed]}
-            onPress={toggleKeypad}
-          >
-            <Text style={styles.amountValue}>
-              {amountDisplayState.display.split('').map((char, index) => (
-                <Text
-                  key={`${char}-${index}`}
-                  style={index === amountDisplayState.activeIndex ? styles.amountValueActive : undefined}
-                >
-                  {char}
-                </Text>
-              ))}
-            </Text>
+          <View style={styles.amountField}>
+            <TextInput
+              ref={amountInputRef}
+              value={amount}
+              onChangeText={setAmount}
+              autoFocus={!editing}
+              inputMode="decimal"
+              keyboardType="decimal-pad"
+              placeholder="0.00"
+              placeholderTextColor={colors.textMuted}
+              selectionColor={colors.text}
+              cursorColor={colors.text}
+              style={styles.amountInput}
+              accessibilityLabel="Transaction amount"
+            />
             <View style={styles.amountMetaRow}>
               <Text style={styles.amountMeta}>
                 {currencyCode === 'DKK'
@@ -1319,7 +1253,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
                 appearance="inline"
               />
             </View>
-          </Pressable>
+          </View>
         </View>
 
         <ScrollView
@@ -1327,27 +1261,13 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
           contentContainerStyle={styles.fieldsContent}
           keyboardShouldPersistTaps="handled"
         >
-          <TransactionFieldLabel>Name</TransactionFieldLabel>
-          <TransactionTextField
-            value={name}
-            onChangeText={setName}
-            onFocus={closeKeypad}
-            onEndEditing={() => {
-              void runCategorySuggestion({ preferRemote: true });
-            }}
-            placeholder="What was it?"
-            returnKeyType="done"
-            editable={!isSharedTopup}
-            style={isSharedTopup ? styles.inputDisabled : undefined}
-          />
-
-
           <TransactionFieldLabel>Category</TransactionFieldLabel>
           <TransactionPickerField
             text={category ? visibleCategoryLabel : ''}
             placeholder={isSharedTopup ? 'Transfers · Top up' : 'Pick a category'}
             onPress={() => {
               if (isSharedTopup) return;
+              Keyboard.dismiss();
               autoAppliedCategoryId.current = null;
               if (kind === 'income') {
                 setCategory((current) => normalizeIncomeCategoryOption(current, categoryOptions));
@@ -1363,6 +1283,21 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
                 <ActivityIndicator size="small" color={colors.textMuted} />
               ) : undefined
             }
+          />
+
+          <TransactionFieldLabel>Name</TransactionFieldLabel>
+          <TextInput
+            ref={nameInputRef}
+            value={name}
+            onChangeText={setName}
+            onEndEditing={() => {
+              void runCategorySuggestion({ preferRemote: true });
+            }}
+            placeholder="What was it?"
+            placeholderTextColor={colors.textMuted}
+            returnKeyType="done"
+            editable={!isSharedTopup}
+            style={[styles.input, isSharedTopup && styles.inputDisabled]}
           />
 
           {kind === 'income' && selectedIsSalary ? (
@@ -1438,7 +1373,10 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
             </View>
             <Pressable
               style={[styles.fieldCard, styles.detailCardCountry]}
-              onPress={() => setCountryPickerOpen(true)}
+              onPress={() => {
+                Keyboard.dismiss();
+                setCountryPickerOpen(true);
+              }}
             >
               <View style={styles.detailValueRow}>
                 <Text style={styles.flagValue}>{formatCountryFlag(countryIso)}</Text>
@@ -1451,7 +1389,6 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
           <TransactionTextField
             value={comment}
             onChangeText={setComment}
-            onFocus={closeKeypad}
             onEndEditing={() => {
               void runCategorySuggestion({ preferRemote: true });
             }}
@@ -1619,32 +1556,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
 
           {validationMessage ? <Text style={styles.validation}>{validationMessage}</Text> : null}
         </ScrollView>
-
-        {keypadOpen ? (
-          <View style={styles.keypadPanel}>
-            <View pointerEvents="box-none" style={styles.keypadHideWrap}>
-              <Pressable
-                style={({ pressed }) => [styles.keypadHideButton, pressed && styles.rowPressed]}
-                onPress={closeKeypad}
-              >
-                <FontAwesome6 name="delete-left" size={16} color={colors.text} />
-                <Text style={styles.keypadHideText}>Hide</Text>
-              </Pressable>
-            </View>
-            <NumericKeypad value={amount} onChange={setAmount} />
-          </View>
-        ) : (
-          <View style={styles.keyboardDock}>
-            <Pressable
-              style={({ pressed }) => [styles.keyboardDockButton, pressed && styles.rowPressed]}
-              onPress={openKeypad}
-            >
-              <FontAwesome6 name="keyboard" size={18} color={colors.text} />
-              <Text style={styles.keyboardDockText}>Open keypad</Text>
-              <FontAwesome6 name="chevron-up" size={18} color={colors.text} />
-            </Pressable>
-          </View>
-        )}
+        </KeyboardAvoidingView>
 
         {datePickerOpen && (
           Platform.OS === 'ios' ? (
@@ -1765,6 +1677,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
               }
             }
             setUserTouchedCategory(true);
+            requestAnimationFrame(() => nameInputRef.current?.focus());
           }}
           frequentIds={frequentIds}
           recentIds={recentCategoryIds}
@@ -1847,12 +1760,28 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
           </View>
         ) : null}
       </SafeAreaView>
+      </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  modalRoot: { flex: 1 },
+  wideModalRoot: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(11,11,15,0.2)',
+  },
+  wideBackdrop: { ...StyleSheet.absoluteFillObject },
   container: { flex: 1, backgroundColor: colors.bg },
+  widePanel: {
+    flex: 0,
+    width: 500,
+    maxWidth: '100%',
+    height: '100%',
+    borderLeftWidth: 1,
+    borderLeftColor: colors.border,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1864,6 +1793,7 @@ const styles = StyleSheet.create({
   headerAction: { ...typography.body, color: colors.textMuted },
   headerSave: { color: colors.accent, fontWeight: '700' },
   disabled: { opacity: 0.5 },
+  composer: { flex: 1 },
   amountHero: {
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.md,
@@ -1879,12 +1809,18 @@ const styles = StyleSheet.create({
   kindChipActive: { backgroundColor: colors.accent },
   kindChipText: { ...typography.label, color: colors.textMuted },
   kindChipTextActive: { color: colors.text },
-  amountFieldButton: {
+  amountField: {
     gap: spacing.xs,
     alignSelf: 'stretch',
   },
-  amountValue: { ...typography.amount, color: colors.text },
-  amountValueActive: { color: colors.accentAlt },
+  amountInput: {
+    color: colors.text,
+    fontSize: 34,
+    lineHeight: 40,
+    fontWeight: '700',
+    paddingHorizontal: 0,
+    paddingVertical: spacing.xs,
+  },
   amountMeta: { ...typography.label, color: colors.textMuted },
   amountMetaRow: {
     flexDirection: 'row',
@@ -2058,48 +1994,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   webDateTodayText: { ...typography.body, color: colors.text, fontWeight: '700' },
-  keypadPanel: {
-    position: 'relative',
-    overflow: 'visible',
-  },
-  keypadHideWrap: {
-    position: 'absolute',
-    top: -(spacing.xl + spacing.lg),
-    right: spacing.xl,
-    zIndex: 1,
-  },
-  keypadHideButton: {
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(245,185,66,0.18)',
-    borderWidth: 1,
-    borderColor: 'rgba(245,185,66,0.32)',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  keypadHideText: { ...typography.label, color: colors.text, fontWeight: '600' },
-  keyboardDock: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  keyboardDockButton: {
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(245,185,66,0.18)',
-    borderWidth: 1,
-    borderColor: 'rgba(245,185,66,0.32)',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  keyboardDockText: { ...typography.label, color: colors.text, fontWeight: '600' },
   countryPickerOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'flex-end',

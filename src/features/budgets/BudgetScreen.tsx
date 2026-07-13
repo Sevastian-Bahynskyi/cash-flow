@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Keyboard,
   KeyboardAvoidingView,
@@ -10,6 +10,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
   UIManager,
 } from 'react-native';
@@ -31,7 +32,6 @@ import { ProgressBar } from '@/ui/ProgressBar';
 import { ScreenHeader } from '@/ui/ScreenHeader';
 import { CategoryIcon } from '@/ui/CategoryIcon';
 import { SearchField } from '@/ui/SearchField';
-import { NumericKeypad } from '@/ui/NumericKeypad';
 import { SkeletonBlock, SkeletonCard } from '@/ui/Skeleton';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 import RichTextEditor, { RichTextDisplay } from '@/ui/RichTextEditor';
@@ -47,33 +47,6 @@ type BudgetDraft = {
   amount: string;
   notes: string;
   budgetId?: string;
-};
-
-const formatAmountDisplay = (raw: string): string => {
-  if (raw.trim().length === 0) return '0.00';
-  const value = Number(raw.replace(',', '.'));
-  if (!Number.isFinite(value)) return raw;
-  return value.toFixed(2);
-};
-
-const highlightedAmount = (raw: string): { display: string; activeIndex: number | null } => {
-  const display = formatAmountDisplay(raw);
-  const normalized = raw.trim().replace(',', '.');
-  const displayDotAt = display.indexOf('.');
-
-  if (normalized.endsWith('.')) {
-    return { display, activeIndex: displayDotAt >= 0 ? displayDotAt + 1 : null };
-  }
-
-  let rawIndex = normalized.length - 1;
-
-  while (rawIndex >= 0 && !/[0-9]/.test(normalized[rawIndex] ?? '')) {
-    rawIndex -= 1;
-  }
-
-  if (rawIndex < 0) return { display, activeIndex: null };
-
-  return { display, activeIndex: rawIndex };
 };
 
 const pad2 = (value: number): string => String(value).padStart(2, '0');
@@ -175,9 +148,10 @@ export default function BudgetScreen() {
   const [draft, setDraft] = useState<BudgetDraft | null>(null);
   const [saving, setSaving] = useState(false);
   const [query, setQuery] = useState('');
-  const [keypadOpen, setKeypadOpen] = useState(true);
+  const amountInputRef = useRef<TextInput | null>(null);
   const [expandedParentIds, setExpandedParentIds] = useState<string[]>([]);
   const [selectedCycleId, setSelectedCycleId] = useState<string | null>(null);
+  const draftCategoryId = draft?.categoryId;
 
   const categoryMeta = useMemo(() => buildCategoryMeta(data.categories), [data.categories]);
   const cycles = useMemo(() => buildNavigableCycles(data.transactions), [data.transactions]);
@@ -230,7 +204,6 @@ export default function BudgetScreen() {
     () => buildPersonalExpenseMinorByTransactionId(selectedCycleRows),
     [selectedCycleRows],
   );
-  const amountDisplayState = useMemo(() => highlightedAmount(draft?.amount ?? ''), [draft?.amount]);
   const incomeParentIds = useMemo(() => findIncomeParentIds(data.categories), [data.categories]);
   const categoryById = useMemo(
     () => new Map(data.categories.map((category) => [category.id, category])),
@@ -519,7 +492,6 @@ export default function BudgetScreen() {
       if (!error) {
         await data.reload();
         setDraft(null);
-        setKeypadOpen(true);
       }
     } finally {
       setSaving(false);
@@ -531,7 +503,6 @@ export default function BudgetScreen() {
     if (!isEditableCategory(draft.categoryId)) return;
     if (!draft.budgetId && !budgetByCategoryId.get(draft.categoryId)?.id) {
       setDraft(null);
-      setKeypadOpen(true);
       return;
     }
     await removeBudget();
@@ -547,31 +518,16 @@ export default function BudgetScreen() {
       if (!error) {
         await data.reload();
         setDraft(null);
-        setKeypadOpen(true);
       }
     } finally {
       setSaving(false);
     }
   };
 
-  const openKeypad = (): void => {
-    Keyboard.dismiss();
-    setKeypadOpen(true);
-  };
-
-  const closeKeypad = (): void => {
-    setKeypadOpen(false);
-  };
-
   useEffect(() => {
-    const subscription = Keyboard.addListener('keyboardDidShow', () => {
-      setKeypadOpen((current) => (current ? false : current));
-    });
-
-    return () => {
-      subscription.remove();
-    };
-  }, []);
+    if (!draftCategoryId) return;
+    requestAnimationFrame(() => amountInputRef.current?.focus());
+  }, [draftCategoryId]);
 
   const openBudgetTransactions = (scope: { categoryId?: string; parentLabel?: string; categoryIds?: string[] }): void => {
     if (!selectedCycle) return;
@@ -677,7 +633,6 @@ export default function BudgetScreen() {
                             ? undefined
                             : () => {
                               Keyboard.dismiss();
-                              setKeypadOpen(true);
                               setDraft({
                                 categoryId: parent.id,
                                 label,
@@ -756,7 +711,6 @@ export default function BudgetScreen() {
                                   }}
                                   onLongPress={() => {
                                     Keyboard.dismiss();
-                                    setKeypadOpen(true);
                                     setDraft({
                                       categoryId: category.id,
                                       label: childLabel,
@@ -868,7 +822,6 @@ export default function BudgetScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => {
           setDraft(null);
-          setKeypadOpen(true);
         }}
       >
         <SafeAreaView style={styles.modalSafeArea} edges={['top', 'bottom']}>
@@ -876,7 +829,6 @@ export default function BudgetScreen() {
             back
             onBack={() => {
               setDraft(null);
-              setKeypadOpen(true);
             }}
             title="Edit Budget"
             subtitle={draft?.label}
@@ -889,7 +841,7 @@ export default function BudgetScreen() {
           />
           <KeyboardAvoidingView
             style={styles.modalContent}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
             keyboardVerticalOffset={spacing.md}
           >
             <ScrollView
@@ -899,20 +851,24 @@ export default function BudgetScreen() {
             >
               <Text style={styles.label}>Cycle target</Text>
               <View style={styles.amountCard}>
-                <Text style={styles.amountValue}>
-                  {amountDisplayState.display.split('').map((char, index) => (
-                    <Text
-                      key={`${char}-${index}`}
-                      style={index === amountDisplayState.activeIndex ? styles.amountValueActive : undefined}
-                    >
-                      {char}
-                    </Text>
-                  ))}
-                </Text>
+                <TextInput
+                  ref={amountInputRef}
+                  value={draft?.amount ?? ''}
+                  onChangeText={(value) => setDraft((current) => (current ? { ...current, amount: value } : current))}
+                  autoFocus
+                  inputMode="decimal"
+                  keyboardType="decimal-pad"
+                  placeholder="0.00"
+                  placeholderTextColor={colors.textMuted}
+                  selectionColor={colors.text}
+                  cursorColor={colors.text}
+                  style={styles.amountInput}
+                  accessibilityLabel="Budget amount"
+                />
                 <Text style={styles.amountCurrency}>DKK</Text>
               </View>
               <Text style={styles.helper}>
-                Use the same keypad as transactions. Progress updates automatically from transactions in the selected salary cycle.
+                Progress updates automatically from transactions in the selected salary cycle.
               </Text>
 
               <Text style={styles.label}>Notes</Text>
@@ -920,7 +876,6 @@ export default function BudgetScreen() {
                 <RichTextEditor
                   value={draft.notes}
                   onChange={(value) => setDraft((current) => (current ? { ...current, notes: value } : current))}
-                  onFocus={closeKeypad}
                   placeholder="Add notes with **bold** formatting..."
                 />
               ) : null}
@@ -941,24 +896,6 @@ export default function BudgetScreen() {
               </Pressable>
             </ScrollView>
 
-            {keypadOpen ? (
-              <NumericKeypad
-                value={draft?.amount ?? ''}
-                onChange={(value) => setDraft((current) => (current ? { ...current, amount: value } : current))}
-                onClose={closeKeypad}
-              />
-            ) : (
-              <View style={styles.keyboardDock}>
-                <Pressable
-                  style={({ pressed }) => [styles.keyboardDockButton, pressed && styles.buttonPressed]}
-                  onPress={openKeypad}
-                >
-                  <FontAwesome6 name="keyboard" size={18} color={colors.text} />
-                  <Text style={styles.keyboardDockText}>Open keypad</Text>
-                  <FontAwesome6 name="chevron-up" size={18} color={colors.text} />
-                </Pressable>
-              </View>
-            )}
           </KeyboardAvoidingView>
         </SafeAreaView>
       </Modal>
@@ -1120,8 +1057,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
   },
-  amountValue: { ...typography.amount, color: colors.text },
-  amountValueActive: { color: colors.accentAlt },
+  amountInput: {
+    color: colors.text,
+    fontSize: 34,
+    lineHeight: 40,
+    fontWeight: '700',
+    paddingHorizontal: 0,
+    paddingVertical: spacing.xs,
+    textAlign: 'center',
+    alignSelf: 'stretch',
+  },
   amountCurrency: { ...typography.label, color: colors.textMuted, letterSpacing: 0.5 },
   helper: { ...typography.label, color: colors.textMuted },
   smallButton: {
@@ -1153,24 +1098,4 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: { ...typography.body, color: colors.danger, fontWeight: '600' },
   buttonPressed: { opacity: 0.86 },
-  keyboardDock: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  keyboardDockButton: {
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(245,185,66,0.18)',
-    borderWidth: 1,
-    borderColor: 'rgba(245,185,66,0.32)',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  keyboardDockText: { ...typography.label, color: colors.text, fontWeight: '600' },
 });

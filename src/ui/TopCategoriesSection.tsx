@@ -1,3 +1,4 @@
+import type { ReactElement } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { FontAwesome6 } from '@expo/vector-icons';
 import { MotionView } from '@/ui/MotionView';
@@ -29,7 +30,7 @@ type TopCategoriesSectionProps = {
     onPressItem?: (item: TopCategoryItem) => void;
 };
 
-export function TopCategoriesSection({ title, items, emptyLabel, actions, onPressItem }: TopCategoriesSectionProps): JSX.Element {
+export function TopCategoriesSection({ title, items, emptyLabel, actions, onPressItem }: TopCategoriesSectionProps): ReactElement {
     const resolvedActions = actions ?? [];
     return (
         <View style={styles.section}>
