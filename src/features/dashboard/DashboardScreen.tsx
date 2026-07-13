@@ -3,7 +3,7 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindo
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { FontAwesome6 } from '@expo/vector-icons';
-import Svg, { Circle, Defs, Line, LinearGradient, Path, Stop, Text as SvgText } from 'react-native-svg';
+import Svg, { Circle, Defs, Line, LinearGradient, Path, Rect, Stop, Text as SvgText } from 'react-native-svg';
 import { runDetached } from '@/lib/async';
 import { MotionScope } from '@/ui/MotionScope';
 import { MotionView } from '@/ui/MotionView';
@@ -21,6 +21,8 @@ import { ExpenseWaffleChart } from './ExpenseWaffleChart';
 
 type CashFlowPoint = {
   valueMinor: number;
+  incomeMinor: number;
+  outflowMinor: number;
   label: string;
 };
 
@@ -30,7 +32,15 @@ const rangeOptions = [
   { label: 'Yearly', value: 'yearly' },
 ] as const satisfies readonly { label: string; value: DashboardRange }[];
 
-function CashFlowTrend({ points }: { points: readonly CashFlowPoint[] }) {
+function CashFlowTrend({
+  points,
+  selectedIndex,
+  onSelect,
+}: {
+  points: readonly CashFlowPoint[];
+  selectedIndex: number;
+  onSelect: (index: number) => void;
+}) {
   const viewWidth = 800;
   const viewHeight = 210;
   const plotTop = 14;
@@ -59,6 +69,8 @@ function CashFlowTrend({ points }: { points: readonly CashFlowPoint[] }) {
   const tone = endValue >= 0 ? colors.success : colors.danger;
   const labelIndices = [...new Set([1, Math.ceil(points.length / 2), points.length])]
     .filter((index) => index > 0 && index <= points.length);
+  const selectedPointIndex = Math.min(Math.max(selectedIndex + 1, 1), values.length - 1);
+  const segmentWidth = values.length > 1 ? plotWidth / (values.length - 1) : plotWidth;
 
   return (
     <View style={styles.trendChart} accessibilityLabel="Running cash flow chart">
@@ -81,6 +93,27 @@ function CashFlowTrend({ points }: { points: readonly CashFlowPoint[] }) {
         <Path d={areaPath} fill="url(#cashFlowFill)" />
         <Path d={linePath} fill="none" stroke={tone} strokeWidth={4} strokeLinecap="round" strokeLinejoin="round" />
         <Circle cx={xFor(values.length - 1)} cy={yFor(endValue)} r={6} fill={tone} />
+        {points.length > 0 ? (
+          <>
+            <Line
+              x1={xFor(selectedPointIndex)}
+              x2={xFor(selectedPointIndex)}
+              y1={plotTop}
+              y2={plotBottom}
+              stroke={colors.textMuted}
+              strokeWidth={1}
+              strokeDasharray="4 5"
+            />
+            <Circle
+              cx={xFor(selectedPointIndex)}
+              cy={yFor(values[selectedPointIndex] ?? 0)}
+              r={7}
+              fill={colors.surface}
+              stroke={tone}
+              strokeWidth={4}
+            />
+          </>
+        ) : null}
         {labelIndices.map((index) => (
           <SvgText
             key={index}
@@ -93,6 +126,22 @@ function CashFlowTrend({ points }: { points: readonly CashFlowPoint[] }) {
             {points[index - 1]?.label}
           </SvgText>
         ))}
+        {points.map((point, index) => {
+          const pointIndex = index + 1;
+          const regionStart = Math.max(plotLeft, xFor(pointIndex) - segmentWidth / 2);
+          const regionEnd = Math.min(viewWidth - plotRight, xFor(pointIndex) + segmentWidth / 2);
+          return (
+            <Rect
+              key={`${point.label}-${index}`}
+              x={regionStart}
+              y={plotTop}
+              width={Math.max(1, regionEnd - regionStart)}
+              height={plotHeight}
+              fill="rgba(255,255,255,0.001)"
+              onPress={() => onSelect(index)}
+            />
+          );
+        })}
       </Svg>
     </View>
   );
@@ -140,6 +189,7 @@ export default function DashboardScreen() {
   const [range, setRange] = useState<DashboardRange>('monthly');
   const [selectedWindowId, setSelectedWindowId] = useState<string | null>(null);
   const [selectedExpenseIndex, setSelectedExpenseIndex] = useState(0);
+  const [selectedTrendIndex, setSelectedTrendIndex] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const motionRun = useMotionRefresh();
   const analytics = useDashboard(range, selectedWindowId);
@@ -154,6 +204,8 @@ export default function DashboardScreen() {
         runningMinor += bucket.cashFlowMinor;
         return {
           valueMinor: runningMinor,
+          incomeMinor: bucket.incomeMinor,
+          outflowMinor: bucket.outflowMinor,
           label: bucket.axisLabel || bucket.label,
         };
       });
@@ -169,12 +221,17 @@ export default function DashboardScreen() {
     setSelectedExpenseIndex(0);
   }, [analytics.categoryBreakdown]);
 
+  useEffect(() => {
+    setSelectedTrendIndex(Math.max(0, cashFlowTrend.length - 1));
+  }, [analytics.selectedWindowId, cashFlowTrend.length, range]);
+
   const selectedWindowIndex = Math.max(
     0,
     analytics.windows.findIndex((window) => window.id === analytics.selectedWindowId),
   );
   const selectedExpenseCategory =
     analytics.categoryBreakdown[selectedExpenseIndex] ?? analytics.categoryBreakdown[0] ?? null;
+  const selectedTrendPoint = cashFlowTrend[selectedTrendIndex] ?? cashFlowTrend[cashFlowTrend.length - 1] ?? null;
 
   const onRefresh = async (): Promise<void> => {
     setRefreshing(true);
@@ -301,18 +358,33 @@ export default function DashboardScreen() {
                       <Text style={styles.cardTitle}>Cash position through the period</Text>
                       <Text style={styles.cardMeta}>Running income minus money out. The endpoint equals net cash flow.</Text>
                     </View>
-                    <View style={styles.trendSummary}>
-                      <Text style={styles.trendSummaryLabel}>Started at 0</Text>
-                      <Text
-                        style={[
-                          styles.trendSummaryValue,
-                          { color: analytics.summary.cashFlowMinor >= 0 ? colors.success : colors.danger },
-                        ]}
-                      >
-                        Ended at {formatMinor(analytics.summary.cashFlowMinor)}
-                      </Text>
-                    </View>
-                    <CashFlowTrend points={cashFlowTrend} />
+                    {selectedTrendPoint ? (
+                      <View style={styles.trendDetail}>
+                        <View style={styles.trendDetailTop}>
+                          <Text style={styles.trendDetailDate}>{selectedTrendPoint.label}</Text>
+                          <Text
+                            style={[
+                              styles.trendDetailBalance,
+                              { color: selectedTrendPoint.valueMinor >= 0 ? colors.success : colors.danger },
+                            ]}
+                          >
+                            {formatMinor(selectedTrendPoint.valueMinor)}
+                          </Text>
+                        </View>
+                        <Text style={styles.trendDetailMeta}>
+                          Income {formatMinor(selectedTrendPoint.incomeMinor)} · Money out {formatMinor(selectedTrendPoint.outflowMinor)}
+                        </Text>
+                      </View>
+                    ) : null}
+                    <CashFlowTrend
+                      points={cashFlowTrend}
+                      selectedIndex={selectedTrendIndex}
+                      onSelect={(index) => {
+                        setSelectedTrendIndex(index);
+                        Haptics.selectionAsync().catch(() => undefined);
+                      }}
+                    />
+                    <Text style={styles.chartHint}>Tap or click anywhere on the line to inspect that point.</Text>
                   </View>
                 </MotionView>
 
@@ -433,10 +505,21 @@ const styles = StyleSheet.create({
   },
   cardTitle: { ...typography.body, color: colors.text, fontSize: 18, fontWeight: '700' },
   cardMeta: { ...typography.label, color: colors.textMuted, marginTop: 3 },
-  trendSummary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
-  trendSummaryLabel: { ...typography.label, color: colors.textMuted },
-  trendSummaryValue: { ...typography.label, fontWeight: '700' },
+  trendDetail: {
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: 3,
+  },
+  trendDetailTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
+  trendDetailDate: { ...typography.label, color: colors.textMuted },
+  trendDetailBalance: { ...typography.body, fontWeight: '700' },
+  trendDetailMeta: { ...typography.label, color: colors.textMuted },
   trendChart: { height: 210, width: '100%', overflow: 'hidden' },
+  chartHint: { ...typography.caption, color: colors.textMuted, textAlign: 'center' },
   expenseLayout: { gap: spacing.lg },
   expenseLayoutWide: { flexDirection: 'row', alignItems: 'flex-start' },
   waffleColumn: { alignItems: 'center', gap: spacing.md, minWidth: 240 },

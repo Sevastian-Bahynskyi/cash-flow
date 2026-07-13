@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Platform, Pressable, StyleSheet, Text, ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, Text, ViewStyle } from 'react-native';
 import { FontAwesome6 } from '@expo/vector-icons';
 import Animated, {
     Easing,
@@ -62,8 +62,7 @@ export function FloatingActionButton({
             <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={accessibilityLabel}
-                onPress={Platform.OS === 'web' ? undefined : onPress}
-                onPressIn={Platform.OS === 'web' ? onPress : undefined}
+                onPress={onPress}
                 style={({ pressed }) => [styles.fab, { backgroundColor }, pressed && styles.fabPressed]}
             >
                 <FontAwesome6 name={icon} size={24} color={colors.text} />

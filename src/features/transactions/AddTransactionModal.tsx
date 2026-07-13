@@ -1137,15 +1137,8 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
     (!userTouchedCategory || !category || category.id !== suggestion.category.id),
   );
 
-  return (
-    <Modal
-      visible={visible}
-      transparent={useWideWebPanel}
-      animationType={useWideWebPanel ? 'fade' : 'slide'}
-      presentationStyle={useWideWebPanel ? 'overFullScreen' : 'fullScreen'}
-      onRequestClose={handleClose}
-    >
-      <View style={[styles.modalRoot, useWideWebPanel && styles.wideModalRoot]}>
+  const modalBody = (
+    <View style={[styles.modalRoot, useWideWebPanel && styles.wideModalRoot]}>
       {useWideWebPanel ? (
         <Pressable
           style={styles.wideBackdrop}
@@ -1688,13 +1681,32 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
           </View>
         ) : null}
       </SafeAreaView>
-      </View>
+    </View>
+  );
+
+  if (useWideWebPanel) {
+    if (!visible) return null;
+    return <View style={styles.webModalLayer}>{modalBody}</View>;
+  }
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="fullScreen"
+      onRequestClose={handleClose}
+    >
+      {modalBody}
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
   modalRoot: { flex: 1 },
+  webModalLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 1000,
+  },
   wideModalRoot: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
