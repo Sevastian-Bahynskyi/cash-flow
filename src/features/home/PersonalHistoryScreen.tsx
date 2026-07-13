@@ -17,6 +17,7 @@ import DateTimePicker, { type DateTimePickerEvent } from '@react-native-communit
 import { Swipeable } from 'react-native-gesture-handler';
 import { useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { FontAwesome6 } from '@expo/vector-icons';
 import {
   applyCategoryOverrides,
   buildCategoryMeta,
@@ -150,8 +151,6 @@ type SearchTransactionsRpcArgs = {
   p_limit: number;
   p_offset: number;
 };
-
-type SearchTransactionIdsRpcArgs = Omit<SearchTransactionsRpcArgs, 'p_limit' | 'p_offset'>;
 
 const toDuplicateDraft = (row: TransactionRow): TransactionDraft => ({
   kind: row.kind,
@@ -292,20 +291,6 @@ const buildSearchTransactionsRpcArgs = (
   p_offset: offset,
 });
 
-const buildSearchTransactionIdsRpcArgs = (
-  searchQuery: string,
-  scopedCategoryIds: readonly string[],
-  filters: HistoryFilters,
-): SearchTransactionIdsRpcArgs => ({
-  p_query: searchQuery.trim() ? searchQuery.trim() : null,
-  p_kind: filters.kind,
-  p_start_on: filters.startOn,
-  p_end_on_exclusive: filters.endOnExclusive,
-  p_shared_only: filters.sharedOnly,
-  p_include_shared: filters.includeShared,
-  p_scoped_category_ids: scopedCategoryIds.length > 0 ? [...scopedCategoryIds] : null,
-});
-
 const loadTransactionPage = async (
   offset: number,
   searchQuery: string,
@@ -370,33 +355,6 @@ const loadTransactionPage = async (
   // #endregion
 
   return rows;
-};
-
-const loadMatchingTransactionIds = async (
-  searchQuery: string,
-  scopedCategoryIds: readonly string[],
-  filters: HistoryFilters,
-): Promise<string[]> => {
-  const rpcArgs = buildSearchTransactionIdsRpcArgs(searchQuery, scopedCategoryIds, filters);
-  const rpcResult = (await supabase.rpc('search_transaction_ids_v1', rpcArgs)) as {
-    data: unknown;
-    error: unknown;
-  };
-  const error = rpcResult.error;
-
-  if (error) {
-    throw error instanceof Error ? error : new Error(getErrorMessage(error, 'Failed to load matching transaction IDs.'));
-  }
-
-  if (!Array.isArray(rpcResult.data)) return [];
-
-  const ids: string[] = [];
-  for (const row of rpcResult.data) {
-    if (!row || typeof row !== 'object') continue;
-    const maybeId = (row as { id?: unknown }).id;
-    if (typeof maybeId === 'string') ids.push(maybeId);
-  }
-  return ids;
 };
 
 const loadFilteredNetTotalMinor = async (
@@ -713,10 +671,10 @@ export default function PersonalHistoryScreen() {
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [isSelectingAll, setIsSelectingAll] = useState(false);
   const [isApplyingBulkAction, setIsApplyingBulkAction] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkActionsOpen, setBulkActionsOpen] = useState(false);
   const [bulkCategoryPickerOpen, setBulkCategoryPickerOpen] = useState(false);
   const [bulkCategoryKind, setBulkCategoryKind] = useState<TransactionKind>('expense');
   const [bulkDatePickerOpen, setBulkDatePickerOpen] = useState(false);
@@ -986,7 +944,7 @@ export default function PersonalHistoryScreen() {
   useEffect(() => {
     setSelectionMode(false);
     setSelectedIds([]);
-    setIsSelectingAll(false);
+    setBulkActionsOpen(false);
   }, [debouncedQuery]);
 
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
@@ -1153,21 +1111,9 @@ export default function PersonalHistoryScreen() {
 
   const confirmBulkDate = (date: string): void => {
     setBulkDatePickerOpen(false);
-    Alert.alert(
-      `Set date for ${selectedIds.length} transaction${selectedIds.length === 1 ? '' : 's'}?`,
-      `Every selected transaction will use ${formatDateLabel(date)}.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Set date',
-          onPress: () => {
-            runDetached(
-              applyBulkUpdate({ occurred_on: date }, 'Could not update selected dates.'),
-              'personal-history.bulk-date',
-            );
-          },
-        },
-      ],
+    runDetached(
+      applyBulkUpdate({ occurred_on: date }, 'Could not update selected dates.'),
+      'personal-history.bulk-date',
     );
   };
 
@@ -1339,25 +1285,6 @@ export default function PersonalHistoryScreen() {
     );
   };
 
-  const selectAllMatching = async (): Promise<void> => {
-    setIsSelectingAll(true);
-    try {
-      const ids = await loadMatchingTransactionIds(
-        debouncedQuery,
-        hardScopedCategoryIds,
-        filters,
-      );
-      setSelectedIds(ids);
-    } catch (selectAllError) {
-      reportDevError('personal-history.select-all', selectAllError, {
-        searchQuery: debouncedQuery,
-      });
-      setError(getErrorMessage(selectAllError, 'Failed to select matching transactions.'));
-    } finally {
-      setIsSelectingAll(false);
-    }
-  };
-
   const confirmDeleteSelected = (): void => {
     if (selectedIds.length === 0) return;
 
@@ -1379,9 +1306,7 @@ export default function PersonalHistoryScreen() {
     );
   };
 
-  const shortcutSelectAllRef = useRef(selectAllMatching);
   const shortcutDeleteRef = useRef(confirmDeleteSelected);
-  shortcutSelectAllRef.current = selectAllMatching;
   shortcutDeleteRef.current = confirmDeleteSelected;
 
   useEffect(() => {
@@ -1399,12 +1324,6 @@ export default function PersonalHistoryScreen() {
       }
       if (isTextInput) return;
 
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'a') {
-        event.preventDefault();
-        setSelectionMode(true);
-        runDetached(shortcutSelectAllRef.current(), 'personal-history.shortcut-select-all');
-        return;
-      }
       if ((event.key === 'Delete' || event.key === 'Backspace') && selectionMode && selectedIds.length > 0) {
         event.preventDefault();
         shortcutDeleteRef.current();
@@ -1447,16 +1366,20 @@ export default function PersonalHistoryScreen() {
             transactions.length > 0 || selectionMode
               ? [
                 {
-                  icon: selectionMode ? 'close' : 'square-check',
+                  icon: selectionMode ? 'xmark' : 'check',
                   onPress: () => {
                     runDetached(Haptics.selectionAsync(), 'personal-history.toggle-selection-mode.haptics');
                     setSelectionMode((current) => {
                       const next = !current;
-                      if (!next) setSelectedIds([]);
+                      if (!next) {
+                        setSelectedIds([]);
+                        setBulkActionsOpen(false);
+                      }
                       return next;
                     });
                   },
                   tone: selectionMode ? 'accent' : 'default',
+                  accessibilityLabel: selectionMode ? 'Exit selection mode' : 'Select transactions',
                 },
               ]
               : undefined
@@ -1484,69 +1407,22 @@ export default function PersonalHistoryScreen() {
             <Text style={styles.selectionLabel}>
               {selectedIds.length} selected
             </Text>
-            <View style={styles.selectionActions}>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.selectionButton,
-                  (isSelectingAll || isInitialLoading) && styles.selectionButtonDisabled,
-                  pressed && !isSelectingAll && !isInitialLoading && styles.selectionButtonPressed,
-                ]}
-                onPress={() => runDetached(selectAllMatching(), 'personal-history.select-all')}
-                disabled={isSelectingAll || isInitialLoading}
-              >
-                {isSelectingAll ? (
-                  <ActivityIndicator size="small" color={colors.text} />
-                ) : (
-                  <Text style={styles.selectionButtonText}>Select all</Text>
-                )}
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.selectionButton,
-                  (selectedIds.length === 0 || isApplyingBulkAction) && styles.selectionButtonDisabled,
-                  pressed && selectedIds.length > 0 && !isApplyingBulkAction && styles.selectionButtonPressed,
-                ]}
-                onPress={openBulkDatePicker}
-                disabled={selectedIds.length === 0 || isApplyingBulkAction}
-              >
-                <Text style={styles.selectionButtonText}>Set date</Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.selectionButton,
-                  (selectedIds.length === 0 || isApplyingBulkAction) && styles.selectionButtonDisabled,
-                  pressed && selectedIds.length > 0 && !isApplyingBulkAction && styles.selectionButtonPressed,
-                ]}
-                onPress={() => runDetached(openBulkCategoryPicker(), 'personal-history.open-bulk-category')}
-                disabled={selectedIds.length === 0 || isApplyingBulkAction}
-              >
-                <Text style={styles.selectionButtonText}>Set category</Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.selectionButton,
-                  (selectedIds.length === 0 || isApplyingBulkAction) && styles.selectionButtonDisabled,
-                  pressed && selectedIds.length > 0 && !isApplyingBulkAction && styles.selectionButtonPressed,
-                ]}
-                onPress={confirmMoveSelected}
-                disabled={selectedIds.length === 0 || isApplyingBulkAction}
-              >
-                <Text style={styles.selectionButtonText}>
-                  {filters.sharedOnly ? 'Move personal' : 'Move shared'}
-                </Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.selectionButton,
-                  (selectedIds.length === 0 || isApplyingBulkAction) && styles.selectionButtonDisabled,
-                  pressed && selectedIds.length > 0 && !isApplyingBulkAction && styles.selectionButtonPressed,
-                ]}
-                onPress={confirmDeleteSelected}
-                disabled={selectedIds.length === 0 || isApplyingBulkAction}
-              >
-                <Text style={[styles.selectionButtonText, styles.selectionButtonTextDanger]}>Delete</Text>
-              </Pressable>
-            </View>
+            <Pressable
+              style={({ pressed }) => [
+                styles.selectionButton,
+                styles.selectionButtonPrimary,
+                (selectedIds.length === 0 || isApplyingBulkAction) && styles.selectionButtonDisabled,
+                pressed && selectedIds.length > 0 && !isApplyingBulkAction && styles.selectionButtonPressed,
+              ]}
+              onPress={() => setBulkActionsOpen(true)}
+              disabled={selectedIds.length === 0 || isApplyingBulkAction}
+            >
+              {isApplyingBulkAction ? (
+                <ActivityIndicator size="small" color={colors.text} />
+              ) : (
+                <Text style={styles.selectionButtonText}>Edit selected</Text>
+              )}
+            </Pressable>
           </View>
         ) : null}
 
@@ -1642,6 +1518,91 @@ export default function PersonalHistoryScreen() {
         />
 
         <Modal
+          visible={bulkActionsOpen}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setBulkActionsOpen(false)}
+        >
+          <View style={styles.bulkActionOverlay}>
+            <Pressable style={styles.bulkActionBackdrop} onPress={() => setBulkActionsOpen(false)} />
+            <View style={styles.bulkActionSheet}>
+              <View style={styles.sheetHandle} />
+              <Text style={styles.bulkActionTitle}>
+                Edit {selectedIds.length} transaction{selectedIds.length === 1 ? '' : 's'}
+              </Text>
+              <Text style={styles.bulkActionSubtitle}>Choose one change to apply to the selection.</Text>
+              <View style={styles.bulkActionList}>
+                <Pressable
+                  style={({ pressed }) => [styles.bulkActionRow, pressed && styles.selectionButtonPressed]}
+                  onPress={() => {
+                    setBulkActionsOpen(false);
+                    openBulkDatePicker();
+                  }}
+                >
+                  <View style={styles.bulkActionIcon}>
+                    <FontAwesome6 name="calendar" size={18} color={colors.accentAlt} />
+                  </View>
+                  <View style={styles.bulkActionCopy}>
+                    <Text style={styles.bulkActionRowTitle}>Change date</Text>
+                    <Text style={styles.bulkActionRowMeta}>Set one date for every selected transaction</Text>
+                  </View>
+                  <FontAwesome6 name="chevron-right" size={16} color={colors.textMuted} />
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [styles.bulkActionRow, pressed && styles.selectionButtonPressed]}
+                  onPress={() => {
+                    setBulkActionsOpen(false);
+                    runDetached(openBulkCategoryPicker(), 'personal-history.open-bulk-category');
+                  }}
+                >
+                  <View style={styles.bulkActionIcon}>
+                    <FontAwesome6 name="tag" size={18} color={colors.accentAlt} />
+                  </View>
+                  <View style={styles.bulkActionCopy}>
+                    <Text style={styles.bulkActionRowTitle}>Change category</Text>
+                    <Text style={styles.bulkActionRowMeta}>Replace the current category</Text>
+                  </View>
+                  <FontAwesome6 name="chevron-right" size={16} color={colors.textMuted} />
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [styles.bulkActionRow, pressed && styles.selectionButtonPressed]}
+                  onPress={() => {
+                    setBulkActionsOpen(false);
+                    confirmMoveSelected();
+                  }}
+                >
+                  <View style={styles.bulkActionIcon}>
+                    <FontAwesome6 name="right-left" size={18} color={colors.accentAlt} />
+                  </View>
+                  <View style={styles.bulkActionCopy}>
+                    <Text style={styles.bulkActionRowTitle}>
+                      {filters.sharedOnly ? 'Move to personal' : 'Move to shared'}
+                    </Text>
+                    <Text style={styles.bulkActionRowMeta}>Keep amount, date, name and category</Text>
+                  </View>
+                  <FontAwesome6 name="chevron-right" size={16} color={colors.textMuted} />
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [styles.bulkActionRow, pressed && styles.selectionButtonPressed]}
+                  onPress={() => {
+                    setBulkActionsOpen(false);
+                    confirmDeleteSelected();
+                  }}
+                >
+                  <View style={[styles.bulkActionIcon, styles.bulkActionIconDanger]}>
+                    <FontAwesome6 name="trash-can" size={18} color={colors.danger} />
+                  </View>
+                  <View style={styles.bulkActionCopy}>
+                    <Text style={[styles.bulkActionRowTitle, styles.bulkActionDanger]}>Delete</Text>
+                    <Text style={styles.bulkActionRowMeta}>Permanently remove selected transactions</Text>
+                  </View>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal
           visible={bulkDatePickerOpen}
           transparent
           animationType="fade"
@@ -1650,7 +1611,11 @@ export default function PersonalHistoryScreen() {
           <View style={styles.bulkDateOverlay}>
             <Pressable style={styles.bulkDateBackdrop} onPress={() => setBulkDatePickerOpen(false)} />
             <View style={styles.bulkDateCard}>
-              <Text style={styles.bulkDateTitle}>Set selected date</Text>
+              <View style={styles.sheetHandle} />
+              <Text style={styles.bulkDateTitle}>Change date</Text>
+              <Text style={styles.bulkActionSubtitle}>
+                Apply one date to {selectedIds.length} selected transaction{selectedIds.length === 1 ? '' : 's'}.
+              </Text>
               {Platform.OS === 'web' ? (
                 <>
                   <TextInput
@@ -1668,12 +1633,18 @@ export default function PersonalHistoryScreen() {
                   {bulkWebDateError ? <Text style={styles.bulkDateError}>{bulkWebDateError}</Text> : null}
                 </>
               ) : (
-                <DateTimePicker
-                  value={parseIsoDate(bulkDate)}
-                  mode="date"
-                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                  onChange={onBulkDateChange}
-                />
+                <View style={styles.bulkDatePickerSurface}>
+                  <DateTimePicker
+                    value={parseIsoDate(bulkDate)}
+                    mode="date"
+                    display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                    themeVariant="dark"
+                    textColor={colors.text}
+                    accentColor={colors.accentAlt}
+                    onChange={onBulkDateChange}
+                    style={styles.bulkDatePicker}
+                  />
+                </View>
               )}
               {Platform.OS !== 'android' ? (
                 <View style={styles.bulkDateActions}>
@@ -1697,7 +1668,7 @@ export default function PersonalHistoryScreen() {
                       confirmBulkDate(bulkDate);
                     }}
                   >
-                    <Text style={[styles.bulkDateButtonText, styles.bulkDateButtonTextPrimary]}>Preview</Text>
+                    <Text style={[styles.bulkDateButtonText, styles.bulkDateButtonTextPrimary]}>Apply date</Text>
                   </Pressable>
                 </View>
               ) : null}
@@ -1726,21 +1697,20 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   selectionLabel: { ...typography.body, color: colors.text, fontWeight: '600' },
-  selectionActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: spacing.sm, flexWrap: 'wrap', flex: 1 },
   selectionButton: {
-    minWidth: 86,
-    minHeight: 36,
-    paddingHorizontal: spacing.md,
+    minWidth: 108,
+    minHeight: 40,
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     borderRadius: radius.pill,
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  selectionButtonPrimary: { backgroundColor: colors.accent },
   selectionButtonPressed: { opacity: 0.86 },
   selectionButtonDisabled: { opacity: 0.45 },
   selectionButtonText: { ...typography.label, color: colors.text, fontWeight: '600' },
-  selectionButtonTextDanger: { color: colors.danger },
   filteredSummaryText: {
     ...typography.label,
     fontSize: 12,
@@ -1835,17 +1805,73 @@ const styles = StyleSheet.create({
   wideCycle: { ...typography.label, color: colors.textMuted, width: 118 },
   wideCategory: { ...typography.label, color: colors.textMuted, width: 132 },
   wideAmount: { width: 148, textAlign: 'right' },
-  bulkDateOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
+  bulkActionOverlay: { flex: 1, alignItems: 'center', justifyContent: 'flex-end' },
+  bulkActionBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: '#00000099' },
+  bulkActionSheet: {
+    width: '100%',
+    maxWidth: 520,
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xxl,
+    gap: spacing.xs,
+  },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: radius.pill,
+    backgroundColor: colors.border,
+    alignSelf: 'center',
+    marginBottom: spacing.md,
+  },
+  bulkActionTitle: { ...typography.h2, color: colors.text },
+  bulkActionSubtitle: { ...typography.label, color: colors.textMuted, marginBottom: spacing.md },
+  bulkActionList: { gap: spacing.xs },
+  bulkActionRow: {
+    minHeight: 68,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  bulkActionIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.md,
+    backgroundColor: `${colors.accentAlt}18`,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bulkActionIconDanger: { backgroundColor: `${colors.danger}18` },
+  bulkActionCopy: { flex: 1, gap: 2 },
+  bulkActionRowTitle: { ...typography.body, color: colors.text, fontWeight: '600' },
+  bulkActionRowMeta: { ...typography.label, color: colors.textMuted },
+  bulkActionDanger: { color: colors.danger },
+  bulkDateOverlay: { flex: 1, alignItems: 'center', justifyContent: 'flex-end' },
   bulkDateBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: '#00000099' },
   bulkDateCard: {
     width: '100%',
-    maxWidth: 420,
-    borderRadius: radius.lg,
+    maxWidth: 520,
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
     backgroundColor: colors.surface,
-    padding: spacing.lg,
-    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xxl,
+    gap: spacing.sm,
   },
   bulkDateTitle: { ...typography.h2, color: colors.text },
+  bulkDatePickerSurface: {
+    borderRadius: radius.lg,
+    backgroundColor: colors.surfaceAlt,
+    overflow: 'hidden',
+    paddingVertical: spacing.xs,
+  },
+  bulkDatePicker: { width: '100%' },
   bulkDateInput: {
     ...typography.body,
     color: colors.text,

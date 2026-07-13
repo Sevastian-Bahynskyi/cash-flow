@@ -287,6 +287,8 @@ export function ImportReviewModal({
                   mode="date"
                   display="spinner"
                   themeVariant="dark"
+                  textColor={colors.text}
+                  accentColor={colors.accentAlt}
                   onChange={handleDateChange}
                 />
               </SafeAreaView>

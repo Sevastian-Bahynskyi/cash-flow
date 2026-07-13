@@ -273,6 +273,8 @@ export default function ProfileScreen() {
               mode="date"
               display="spinner"
               themeVariant="dark"
+              textColor={colors.text}
+              accentColor={colors.accentAlt}
               onChange={(event, selected) => onDateChange(datePicker, event, selected)}
             />
           </View>
