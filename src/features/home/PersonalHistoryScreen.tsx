@@ -1637,7 +1637,7 @@ export default function PersonalHistoryScreen() {
                   <DateTimePicker
                     value={parseIsoDate(bulkDate)}
                     mode="date"
-                    display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                    display={Platform.OS === 'ios' ? 'inline' : 'calendar'}
                     themeVariant="dark"
                     textColor={colors.text}
                     accentColor={colors.accentAlt}

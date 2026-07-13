@@ -271,11 +271,12 @@ export default function ProfileScreen() {
             <DateTimePicker
               value={parseIsoDate(datePicker === 'start' ? startOn : endOn)}
               mode="date"
-              display="spinner"
+              display="inline"
               themeVariant="dark"
               textColor={colors.text}
               accentColor={colors.accentAlt}
               onChange={(event, selected) => onDateChange(datePicker, event, selected)}
+              style={styles.datePickerCalendar}
             />
           </View>
         </View>
@@ -285,6 +286,7 @@ export default function ProfileScreen() {
         <DateTimePicker
           value={parseIsoDate(datePicker === 'start' ? startOn : endOn)}
           mode="date"
+          display="calendar"
           onChange={(event, selected) => onDateChange(datePicker, event, selected)}
         />
       ) : null}
@@ -386,4 +388,5 @@ const styles = StyleSheet.create({
   },
   datePickerTitle: { ...typography.body, color: colors.text, fontWeight: '600' },
   datePickerDone: { ...typography.body, color: colors.accent, fontWeight: '600' },
+  datePickerCalendar: { width: '100%' },
 });

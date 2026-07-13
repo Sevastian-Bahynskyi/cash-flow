@@ -1538,11 +1538,12 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
                 <DateTimePicker
                   value={parseIsoDate(date)}
                   mode="date"
-                  display="spinner"
+                  display="inline"
                   themeVariant="dark"
                   textColor={colors.text}
                   accentColor={colors.accentAlt}
                   onChange={onDateChange}
+                  style={styles.datePickerCalendar}
                 />
               </View>
             </View>
@@ -1889,6 +1890,7 @@ const styles = StyleSheet.create({
   },
   datePickerTitle: { ...typography.body, color: colors.text, fontWeight: '700' },
   datePickerDone: { ...typography.body, color: colors.accentAlt, fontWeight: '700' },
+  datePickerCalendar: { width: '100%' },
   webDatePickerBody: {
     gap: spacing.sm,
     paddingHorizontal: spacing.lg,

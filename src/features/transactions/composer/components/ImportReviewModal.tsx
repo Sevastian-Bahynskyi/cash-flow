@@ -268,7 +268,7 @@ export function ImportReviewModal({
         />
 
         {datePickerRowId && Platform.OS === 'android' ? (
-          <DateTimePicker value={activeDateValue} mode="date" display="default" onChange={handleDateChange} />
+          <DateTimePicker value={activeDateValue} mode="date" display="calendar" onChange={handleDateChange} />
         ) : null}
 
         {datePickerRowId && Platform.OS === 'ios' ? (
@@ -285,11 +285,12 @@ export function ImportReviewModal({
                 <DateTimePicker
                   value={activeDateValue}
                   mode="date"
-                  display="spinner"
+                  display="inline"
                   themeVariant="dark"
                   textColor={colors.text}
                   accentColor={colors.accentAlt}
                   onChange={handleDateChange}
+                  style={styles.pickerCalendar}
                 />
               </SafeAreaView>
             </View>
@@ -415,6 +416,7 @@ const styles = StyleSheet.create({
   },
   pickerTitle: { ...typography.body, color: colors.text, fontWeight: '700' },
   pickerDone: { ...typography.body, color: colors.accent, fontWeight: '700' },
+  pickerCalendar: { width: '100%' },
   webDateBody: {
     gap: spacing.sm,
     paddingHorizontal: spacing.lg,
