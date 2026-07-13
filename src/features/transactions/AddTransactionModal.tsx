@@ -233,6 +233,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
   const [imageImportVisible, setImageImportVisible] = useState(false);
   const [imageImportBusy, setImageImportBusy] = useState(false);
   const [csvImportBusy, setCsvImportBusy] = useState(false);
+  const [importExpanded, setImportExpanded] = useState(false);
   const [imageImportSaving, setImageImportSaving] = useState(false);
   const [imageImportError, setImageImportError] = useState<string | null>(null);
   const [imageImportSkippedDuplicates, setImageImportSkippedDuplicates] = useState<SkippedImportedTransaction[]>([]);
@@ -345,6 +346,7 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
     setImageImportVisible(false);
     setImageImportBusy(false);
     setCsvImportBusy(false);
+    setImportExpanded(false);
     setImageImportSaving(false);
     setImageImportError(null);
     setImageImportSkippedDuplicates([]);
@@ -1412,44 +1414,63 @@ export default function AddTransactionModal({ visible, onClose, onSaved, draft, 
           ) : null}
           {!editing && !sharedFlowLocked ? (
             <View style={styles.importStack}>
-              <Text style={[styles.label, { color: colors.accentAlt }]}>Import</Text>
               <Pressable
-                style={({ pressed }) => [styles.importCard, (pressed || imageImportBusy) && styles.rowPressed]}
-                onPress={() => {
-                  Keyboard.dismiss();
-                  void startImageImport();
-                }}
-                disabled={imageImportBusy}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: importExpanded }}
+                style={({ pressed }) => [styles.importDisclosure, pressed && styles.rowPressed]}
+                onPress={() => setImportExpanded((current) => !current)}
               >
-                <View style={styles.importCopy}>
-                  <Text style={styles.importTitle}>{imageImportBusy ? 'Analyzing image...' : 'Import from image'}</Text>
-                  <Text style={styles.importMeta}>Create multiple transactions from a screenshot or receipt.</Text>
+                <View style={styles.importDisclosureIcon}>
+                  <FontAwesome6 name="file-import" size={16} color={colors.textMuted} />
                 </View>
-                {imageImportBusy ? (
-                  <ActivityIndicator size="small" color={colors.text} />
-                ) : (
-                  <FontAwesome6 name="image" size={22} color={colors.text} />
-                )}
+                <View style={styles.importCopy}>
+                  <Text style={styles.importDisclosureTitle}>Import transactions</Text>
+                  <Text style={styles.importMeta}>Image or bank CSV</Text>
+                </View>
+                <FontAwesome6 name={importExpanded ? 'chevron-up' : 'chevron-down'} size={13} color={colors.textMuted} />
               </Pressable>
 
-              <Pressable
-                style={({ pressed }) => [styles.importCard, (pressed || csvImportBusy) && styles.rowPressed]}
-                onPress={() => {
-                  Keyboard.dismiss();
-                  void pickCsvImport();
-                }}
-                disabled={csvImportBusy}
-              >
-                <View style={styles.importCopy}>
-                  <Text style={styles.importTitle}>{csvImportBusy ? 'Analyzing CSV...' : 'Import bank CSV'}</Text>
-                  <Text style={styles.importMeta}>Pick a statement file and review the AI-parsed transactions.</Text>
+              {importExpanded ? (
+                <View style={styles.importOptions}>
+                  <Pressable
+                    style={({ pressed }) => [styles.importCard, (pressed || imageImportBusy) && styles.rowPressed]}
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      void startImageImport();
+                    }}
+                    disabled={imageImportBusy}
+                  >
+                    <View style={styles.importCopy}>
+                      <Text style={styles.importTitle}>{imageImportBusy ? 'Analyzing image...' : 'Import from image'}</Text>
+                      <Text style={styles.importMeta}>Screenshot or receipt</Text>
+                    </View>
+                    {imageImportBusy ? (
+                      <ActivityIndicator size="small" color={colors.text} />
+                    ) : (
+                      <FontAwesome6 name="image" size={18} color={colors.textMuted} />
+                    )}
+                  </Pressable>
+
+                  <Pressable
+                    style={({ pressed }) => [styles.importCard, (pressed || csvImportBusy) && styles.rowPressed]}
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      void pickCsvImport();
+                    }}
+                    disabled={csvImportBusy}
+                  >
+                    <View style={styles.importCopy}>
+                      <Text style={styles.importTitle}>{csvImportBusy ? 'Analyzing CSV...' : 'Import bank CSV'}</Text>
+                      <Text style={styles.importMeta}>Statement file</Text>
+                    </View>
+                    {csvImportBusy ? (
+                      <ActivityIndicator size="small" color={colors.text} />
+                    ) : (
+                      <FontAwesome6 name="file-csv" size={18} color={colors.textMuted} />
+                    )}
+                  </Pressable>
                 </View>
-                {csvImportBusy ? (
-                  <ActivityIndicator size="small" color={colors.text} />
-                ) : (
-                  <FontAwesome6 name="file-csv" size={22} color={colors.text} />
-                )}
-              </Pressable>
+              ) : null}
             </View>
           ) : null}
 
@@ -1738,11 +1759,29 @@ const styles = StyleSheet.create({
   fields: { flex: 1 },
   fieldsContent: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg, gap: spacing.xs },
   importStack: { gap: spacing.sm },
+  importDisclosure: {
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  importDisclosureIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  importDisclosureTitle: { ...typography.body, color: colors.text, fontWeight: '600' },
+  importOptions: { gap: spacing.sm, paddingLeft: 40 },
   importCard: {
-    borderRadius: radius.lg,
+    borderRadius: radius.md,
     backgroundColor: colors.surfaceAlt,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
