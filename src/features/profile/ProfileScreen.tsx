@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -7,6 +7,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -21,6 +22,11 @@ import { runDetached } from '@/lib/async';
 import { getErrorMessage } from '@/lib/errors';
 import { formatDateLabel } from '@/lib/format';
 import { toLocalIsoDay } from '@/lib/cycles';
+import {
+  disableDailyExpenseReminder,
+  enableDailyExpenseReminder,
+  isDailyExpenseReminderEnabled,
+} from '@/lib/notifications';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useProfile } from './ProfileProvider';
 import { exportTransactions, type ExportFormat } from './export';
@@ -50,6 +56,9 @@ export default function ProfileScreen() {
   const [savingName, setSavingName] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [reminderEnabled, setReminderEnabled] = useState(false);
+  const [reminderLoading, setReminderLoading] = useState(Platform.OS !== 'web');
+  const [reminderMessage, setReminderMessage] = useState<string | null>(null);
 
   const [startOn, setStartOn] = useState(daysAgoIso(30));
   const [endOn, setEndOn] = useState(daysAgoIso(0));
@@ -64,6 +73,57 @@ export default function ProfileScreen() {
   );
 
   const nameDirty = name.trim() !== displayName.trim();
+
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+
+    let active = true;
+    const loadReminder = async (): Promise<void> => {
+      try {
+        const enabled = await isDailyExpenseReminderEnabled();
+        if (active) setReminderEnabled(enabled);
+      } catch (error) {
+        if (active) setReminderMessage(getErrorMessage(error, 'Could not read reminder settings.'));
+      } finally {
+        if (active) setReminderLoading(false);
+      }
+    };
+
+    loadReminder().catch((error: unknown) => {
+      if (active) {
+        setReminderMessage(getErrorMessage(error, 'Could not read reminder settings.'));
+        setReminderLoading(false);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleReminderChange = async (enabled: boolean): Promise<void> => {
+    if (reminderLoading) return;
+    setReminderLoading(true);
+    setReminderMessage(null);
+    try {
+      if (enabled) {
+        const scheduled = await enableDailyExpenseReminder();
+        setReminderEnabled(scheduled);
+        setReminderMessage(
+          scheduled
+            ? 'Daily reminder scheduled for 18:00.'
+            : 'Notifications are disabled. Allow them in iPhone Settings, then try again.',
+        );
+      } else {
+        await disableDailyExpenseReminder();
+        setReminderEnabled(false);
+        setReminderMessage('Daily reminder disabled.');
+      }
+    } catch (error) {
+      setReminderMessage(getErrorMessage(error, 'Could not update the daily reminder.'));
+    } finally {
+      setReminderLoading(false);
+    }
+  };
 
   const pickAvatar = async (): Promise<void> => {
     if (uploading) return;
@@ -181,6 +241,33 @@ export default function ProfileScreen() {
         </Pressable>
 
         <View style={styles.divider} />
+
+        {Platform.OS !== 'web' ? (
+          <>
+            <Text style={styles.sectionTitle}>Reminders</Text>
+            <Text style={styles.sectionHint}>A calm daily nudge to capture today’s spending.</Text>
+            <View style={styles.reminderRow}>
+              <View style={styles.reminderIcon}>
+                <FontAwesome6 name="bell" size={16} color={colors.accentAlt} />
+              </View>
+              <View style={styles.reminderCopy}>
+                <Text style={styles.reminderTitle}>Daily expense reminder</Text>
+                <Text style={styles.reminderTime}>Every day at 18:00</Text>
+              </View>
+              <Switch
+                value={reminderEnabled}
+                disabled={reminderLoading}
+                onValueChange={(enabled) => void handleReminderChange(enabled)}
+                trackColor={{ false: colors.border, true: colors.accent }}
+                thumbColor={colors.text}
+                accessibilityLabel="Daily expense reminder at 18:00"
+              />
+            </View>
+            {reminderMessage ? <Text style={styles.message}>{reminderMessage}</Text> : null}
+
+            <View style={styles.divider} />
+          </>
+        ) : null}
 
         <Text style={styles.sectionTitle}>Export data</Text>
         <Text style={styles.sectionHint}>Pick a date range and a format. Everything in range is included.</Text>
@@ -357,6 +444,25 @@ const styles = StyleSheet.create({
   divider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.lg },
   sectionTitle: { ...typography.h2, color: colors.text },
   sectionHint: { ...typography.label, color: colors.textMuted, marginBottom: spacing.xs },
+  reminderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+  },
+  reminderIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceAlt,
+  },
+  reminderCopy: { flex: 1, gap: spacing.xs },
+  reminderTitle: { ...typography.body, color: colors.text, fontWeight: '600' },
+  reminderTime: { ...typography.label, color: colors.textMuted },
   message: { ...typography.label, color: colors.accentAlt, marginTop: spacing.sm },
   signOut: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingVertical: spacing.md },
   signOutText: { ...typography.body, color: colors.danger, fontWeight: '600' },

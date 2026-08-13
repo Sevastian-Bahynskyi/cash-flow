@@ -30,7 +30,8 @@
       ],
       "@react-native-community/datetimepicker",
       "expo-localization",
-      "expo-font"
+      "expo-font",
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true

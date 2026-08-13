@@ -9,6 +9,9 @@ import { WebBackdrop } from '@/ui/WebBackdrop';
 import { AuthProvider, useAuth } from '@/features/auth/AuthProvider';
 import { ProfileProvider } from '@/features/profile/ProfileProvider';
 import { ComposerProvider, useComposer } from '@/features/transactions/composer/context/ComposerContext';
+import { configureNotificationHandling } from '@/lib/notifications';
+
+configureNotificationHandling();
 
 function WebKeyboardShortcuts({ enabled }: { enabled: boolean }) {
   const composer = useComposer();
