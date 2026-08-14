@@ -40,7 +40,7 @@ type ResponseBody = {
   error?: string;
 };
 
-const GROQ_IMAGE_MODEL = "meta-llama/llama-4-maverick-17b-128e-instruct";
+const GROQ_IMAGE_MODEL = "qwen/qwen3.6-27b";
 
 const json = (body: ResponseBody, init?: ResponseInit): Response =>
   new Response(JSON.stringify(body), {
