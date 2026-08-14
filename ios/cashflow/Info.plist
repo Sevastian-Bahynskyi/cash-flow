@@ -28,7 +28,7 @@
         <key>CFBundleURLSchemes</key>
         <array>
           <string>cashflow</string>
-          <string>com.seva.cashflow</string>
+          <string>com.sevastian.cashflow</string>
         </array>
       </dict>
     </array>

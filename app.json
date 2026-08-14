@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": false,
       "icon": "./assets/icon.png",
-      "bundleIdentifier": "com.seva.cashflow",
+      "bundleIdentifier": "com.sevastian.cashflow",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Cash Flow uses your photos so you can import transactions from screenshots and receipts."
       }
