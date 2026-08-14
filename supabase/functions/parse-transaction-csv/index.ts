@@ -3,7 +3,7 @@ import {
   normalizeMerchantContext,
   resolveCuratedCategoryId,
   type Candidate,
-} from "../_shared/merchant-intelligence";
+} from "../_shared/merchant-intelligence.ts";
 
 declare const Deno: {
   env: {

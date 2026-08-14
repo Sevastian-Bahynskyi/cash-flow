@@ -5,7 +5,7 @@ import {
   resolveCuratedCategoryId,
   type Candidate,
   type TransactionKind,
-} from "../_shared/merchant-intelligence";
+} from "../_shared/merchant-intelligence.ts";
 
 declare const Deno: {
   env: {
