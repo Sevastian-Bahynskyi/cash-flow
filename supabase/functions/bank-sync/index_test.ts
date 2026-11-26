@@ -1,6 +1,6 @@
 // bank-sync auth and throttle, in-process: the handler runs against the LOCAL stack, and every
 // call to Enable Banking is answered by a stub (no network, no real keys).
-// The gateway's verify_jwt is checked statically by supabase/tests/run.sh (config.toml).
+// verify_jwt is off (ES256 user tokens); supabase/tests/run.sh checks the handler's own auth statically.
 // Run: deno test -A --node-modules-dir=none supabase/functions/bank-sync/index_test.ts
 import { assert, assertEquals } from "jsr:@std/assert@1";
 import { createClient } from "npm:@supabase/supabase-js@2";

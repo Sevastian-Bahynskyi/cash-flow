@@ -52,7 +52,11 @@ for f in $NEW; do
 done
 
 CFG="$ROOT/supabase/config.toml"
-if grep -A2 '^\[functions.bank-sync\]' "$CFG" | grep -q 'verify_jwt *= *true'; then ok "config: bank-sync verify_jwt = true"; else bad "config: bank-sync verify_jwt = true"; fi
+# verify_jwt is off (ES256 user tokens); each handler must authenticate itself.
+for fn in bank-sync bank-consent; do
+  grep -q 'auth.getUser(token)' "$ROOT/supabase/functions/$fn/index.ts" && ok "auth: $fn checks the user token" || bad "auth: $fn checks the user token"
+done
+grep -q 'constantTimeEqual(cronSecret, expected)' "$ROOT/supabase/functions/bank-sync/index.ts" && ok "auth: bank-sync checks the cron secret" || bad "auth: bank-sync checks the cron secret"
 
 # --- SQL checks --------------------------------------------------------------------------
 OUT=$("${PSQL[@]}" -v ON_ERROR_STOP=0 -At -f - < "$ROOT/supabase/tests/checks.sql" 2>&1)
