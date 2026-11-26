@@ -1,0 +1,2749 @@
+{
+ "merchants": [
+  {
+   "key": "citybee lt",
+   "class": "merchant",
+   "category": "Transport",
+   "parent": "Travel",
+   "clean_name": "CityBee",
+   "confidence": 0.9,
+   "reason": "Lithuanian car sharing (citybee.lt)"
+  },
+  {
+   "key": "",
+   "class": "merchant",
+   "category": "MobilePay",
+   "parent": null,
+   "clean_name": "MobilePay (unnamed)",
+   "confidence": 0.4,
+   "reason": "MobilePay payment with blank payee; real outflow"
+  },
+  {
+   "key": "nortec system",
+   "class": "merchant",
+   "category": "Bills",
+   "parent": null,
+   "clean_name": "Nortec System",
+   "confidence": 0.9,
+   "reason": "Building laundry payment system (MCC 7211)"
+  },
+  {
+   "key": "transfer",
+   "class": "own",
+   "category": "Transfer",
+   "parent": null,
+   "clean_name": "Transfer",
+   "confidence": 0.6,
+   "reason": "Generic incoming transfer, likely own Revolut top-up"
+  },
+  {
+   "key": "lidl198arhushasle",
+   "class": "merchant",
+   "category": "Groceries",
+   "parent": null,
+   "clean_name": "Lidl",
+   "confidence": 0.97,
+   "reason": "Lidl store 198 Aarhus Hasle"
+  },
+  {
+   "key": "service navigo",
+   "class": "merchant",
+   "category": "Transport",
+   "parent": "Travel",
+   "clean_name": "Navigo (RATP Paris)",
+   "confidence": 0.9,
+   "reason": "Paris public transport pass"
+  },
+  {
+   "key": "jem and fix tilst",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": null,
+   "clean_name": "Jem & Fix",
+   "confidence": 0.9,
+   "reason": "DIY hardware chain, Tilst"
+  },
+  {
+   "key": "godsbanens bne vjrks",
+   "class": "merchant",
+   "category": "Entertainment",
+   "parent": null,
+   "clean_name": "Godsbanens Åbne Værksteder",
+   "confidence": 0.6,
+   "reason": "Aarhus open workshops, hobby materials"
+  },
+  {
+   "key": "to dkk",
+   "class": "own",
+   "category": "Transfer",
+   "parent": null,
+   "clean_name": "Currency exchange",
+   "confidence": 0.95,
+   "reason": "Revolut exchange into DKK pocket"
+  },
+  {
+   "key": "apcoa parking",
+   "class": "merchant",
+   "category": "Transport",
+   "parent": null,
+   "clean_name": "APCOA Parking",
+   "confidence": 0.85,
+   "reason": "Parking operator"
+  },
+  {
+   "key": "visma logbuy",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": null,
+   "clean_name": "Visma Logbuy",
+   "confidence": 0.6,
+   "reason": "Employee discount shop (gift cards, cinema)"
+  },
+  {
+   "key": "trenitalia",
+   "class": "merchant",
+   "category": "Transport",
+   "parent": "Travel",
+   "clean_name": "Trenitalia",
+   "confidence": 0.95,
+   "reason": "Italian rail tickets"
+  },
+  {
+   "key": "booking",
+   "class": "merchant",
+   "category": "Stay",
+   "parent": "Travel",
+   "clean_name": "Booking.com",
+   "confidence": 0.85,
+   "reason": "Hotel booking; positive amount = refund"
+  },
+  {
+   "key": "hotel at booking",
+   "class": "merchant",
+   "category": "Stay",
+   "parent": "Travel",
+   "clean_name": "Booking.com",
+   "confidence": 0.95,
+   "reason": "Hotel via Booking.com"
+  },
+  {
+   "key": "q park magasin",
+   "class": "merchant",
+   "category": "Transport",
+   "parent": null,
+   "clean_name": "Q-Park",
+   "confidence": 0.9,
+   "reason": "Q-Park parking, Magasin Aarhus"
+  },
+  {
+   "key": "storcenter nord",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": null,
+   "clean_name": "Storcenter Nord",
+   "confidence": 0.5,
+   "reason": "Aarhus shopping centre, small purchase"
+  },
+  {
+   "key": "cdon",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": null,
+   "clean_name": "CDON",
+   "confidence": 0.9,
+   "reason": "Nordic online marketplace"
+  },
+  {
+   "key": "bs ca a kasse",
+   "class": "merchant",
+   "category": "Bills",
+   "parent": null,
+   "clean_name": "CA a-kasse",
+   "confidence": 0.97,
+   "reason": "Betalingsservice unemployment insurance fund"
+  },
+  {
+   "key": "okq8",
+   "class": "merchant",
+   "category": "Transport",
+   "parent": null,
+   "clean_name": "OKQ8",
+   "confidence": 0.9,
+   "reason": "Fuel station chain"
+  },
+  {
+   "key": "la makeup sp z o",
+   "class": "merchant",
+   "category": "Health",
+   "parent": null,
+   "clean_name": "La Makeup",
+   "confidence": 0.55,
+   "reason": "Polish online cosmetics/health shop"
+  },
+  {
+   "key": "fk feriepenge",
+   "class": "merchant",
+   "category": "Holidaypay",
+   "parent": null,
+   "clean_name": "Feriepenge (FerieKonto)",
+   "confidence": 0.97,
+   "reason": "Holiday pay payout"
+  },
+  {
+   "key": "godt and blandet",
+   "class": "merchant",
+   "category": "Groceries",
+   "parent": null,
+   "clean_name": "Godt & Blandet",
+   "confidence": 0.6,
+   "reason": "Pick-and-mix candy shop"
+  },
+  {
+   "key": "tbc horsens ny",
+   "class": "merchant",
+   "category": "Restaurants",
+   "parent": null,
+   "clean_name": "The Burger Concept",
+   "confidence": 0.95,
+   "reason": "The Burger Concept Horsens"
+  },
+  {
+   "key": "conference manager",
+   "class": "merchant",
+   "category": "Other",
+   "parent": null,
+   "clean_name": "Conference Manager",
+   "confidence": 0.4,
+   "reason": "Event fee, refunded later (net zero)"
+  },
+  {
+   "key": "stof2000",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": null,
+   "clean_name": "Stof 2000",
+   "confidence": 0.9,
+   "reason": "Fabric and sewing store"
+  },
+  {
+   "key": "gameskarrusellalou",
+   "class": "merchant",
+   "category": "Entertainment",
+   "parent": null,
+   "clean_name": "Games Karrusellen",
+   "confidence": 0.45,
+   "reason": "Games/toy webshop"
+  },
+  {
+   "key": "ebillet",
+   "class": "merchant",
+   "category": "Entertainment",
+   "parent": null,
+   "clean_name": "Ebillet",
+   "confidence": 0.85,
+   "reason": "Cinema ticket sales"
+  },
+  {
+   "key": "r de kors gr nl",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": null,
+   "clean_name": "Røde Kors (second hand)",
+   "confidence": 0.85,
+   "reason": "Red Cross charity shop"
+  },
+  {
+   "key": "europark",
+   "class": "merchant",
+   "category": "Other",
+   "parent": null,
+   "clean_name": "EuroPark (control fee)",
+   "confidence": 0.6,
+   "reason": "Parking control fee amounts, like parking fine"
+  },
+  {
+   "key": "canva",
+   "class": "merchant",
+   "category": "Bills",
+   "parent": null,
+   "clean_name": "Canva",
+   "confidence": 0.75,
+   "reason": "Design software subscription"
+  },
+  {
+   "key": "snoopreport personl",
+   "class": "merchant",
+   "category": "Bills",
+   "parent": null,
+   "clean_name": "SnoopReport",
+   "confidence": 0.55,
+   "reason": "Online subscription service"
+  },
+  {
+   "key": "rimi",
+   "class": "merchant",
+   "category": "Food",
+   "parent": "Travel",
+   "clean_name": "Rimi",
+   "confidence": 0.9,
+   "reason": "Estonian supermarket (Tallinn)"
+  },
+  {
+   "key": "bolt",
+   "class": "merchant",
+   "category": "Transport",
+   "parent": "Travel",
+   "clean_name": "Bolt",
+   "confidence": 0.8,
+   "reason": "Ride hailing/scooters abroad (Tallinn)"
+  },
+  {
+   "key": "toilet service paygo",
+   "class": "merchant",
+   "category": "Other",
+   "parent": null,
+   "clean_name": "Pay toilet",
+   "confidence": 0.8,
+   "reason": "Public toilet fee"
+  },
+  {
+   "key": "kiiu teenindusjaam",
+   "class": "merchant",
+   "category": "Food",
+   "parent": "Travel",
+   "clean_name": "Kiiu service station",
+   "confidence": 0.5,
+   "reason": "Estonian roadside station, small snack"
+  },
+  {
+   "key": "tap",
+   "class": "merchant",
+   "category": "Entertainment",
+   "parent": null,
+   "clean_name": "FunPay",
+   "confidence": 0.65,
+   "reason": "Gaming marketplace (TAP*funpay)"
+  },
+  {
+   "key": "biltema",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": null,
+   "clean_name": "Biltema",
+   "confidence": 0.75,
+   "reason": "Car/DIY/leisure retail chain"
+  },
+  {
+   "key": "paypal",
+   "class": "merchant",
+   "category": "Transport",
+   "parent": null,
+   "clean_name": "PayPal *Isarnem",
+   "confidence": 0.4,
+   "reason": "PayPal merchant, MCC 5532 tyres"
+  },
+  {
+   "key": "6634",
+   "class": "merchant",
+   "category": "Other",
+   "parent": null,
+   "clean_name": "Cash withdrawal (Horsens ATM)",
+   "confidence": 0.6,
+   "reason": "ATM withdrawal Løvenørnsgade Horsens"
+  },
+  {
+   "key": "megascope",
+   "class": "merchant",
+   "category": "Entertainment",
+   "parent": null,
+   "clean_name": "Megascope",
+   "confidence": 0.9,
+   "reason": "Cinema in Horsens"
+  },
+  {
+   "key": "compumail",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": null,
+   "clean_name": "Compumail",
+   "confidence": 0.85,
+   "reason": "Danish computer/electronics webshop"
+  },
+  {
+   "key": "ing bank slaski jagiello",
+   "class": "merchant",
+   "category": "Travel",
+   "parent": null,
+   "clean_name": "Cash withdrawal (ING Poland)",
+   "confidence": 0.75,
+   "reason": "ATM cash on Poland trip"
+  },
+  {
+   "key": "amz",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": null,
+   "clean_name": "Amazon.de",
+   "confidence": 0.85,
+   "reason": "Amazon Germany purchase"
+  },
+  {
+   "key": "inco cc aarhus",
+   "class": "merchant",
+   "category": "Groceries",
+   "parent": null,
+   "clean_name": "Inco Cash & Carry",
+   "confidence": 0.55,
+   "reason": "Wholesale food store Aarhus"
+  },
+  {
+   "key": "brf sb oestbirk",
+   "class": "merchant",
+   "category": "Groceries",
+   "parent": null,
+   "clean_name": "SuperBrugsen Østbirk",
+   "confidence": 0.9,
+   "reason": "Brugsforening SuperBrugsen supermarket"
+  },
+  {
+   "key": "198arhushasle",
+   "class": "merchant",
+   "category": "Groceries",
+   "parent": null,
+   "clean_name": "Lidl",
+   "confidence": 0.9,
+   "reason": "Lidl store 198 Aarhus Hasle, prefix cut"
+  },
+  {
+   "key": "lidl221arhusskejby",
+   "class": "merchant",
+   "category": "Groceries",
+   "parent": null,
+   "clean_name": "Lidl",
+   "confidence": 0.97,
+   "reason": "Lidl store 221 Aarhus Skejby"
+  },
+  {
+   "key": "notino",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": null,
+   "clean_name": "Notino",
+   "confidence": 0.65,
+   "reason": "Online perfume and cosmetics shop"
+  },
+  {
+   "key": "q8service",
+   "class": "merchant",
+   "category": "Transport",
+   "parent": null,
+   "clean_name": "Q8",
+   "confidence": 0.9,
+   "reason": "Q8 fuel station"
+  },
+  {
+   "key": "postnord",
+   "class": "merchant",
+   "category": "Other",
+   "parent": null,
+   "clean_name": "PostNord",
+   "confidence": 0.6,
+   "reason": "Postage/parcel fee"
+  },
+  {
+   "key": "parking fee apcoa parking",
+   "class": "merchant",
+   "category": "Other",
+   "parent": null,
+   "clean_name": "APCOA (control fee)",
+   "confidence": 0.7,
+   "reason": "APCOA control fee, owner logs fines as Other"
+  },
+  {
+   "key": "cleverlog autoteile",
+   "class": "merchant",
+   "category": "Transport",
+   "parent": null,
+   "clean_name": "Cleverlog-Autoteile",
+   "confidence": 0.85,
+   "reason": "German online car parts"
+  },
+  {
+   "key": "carservice",
+   "class": "merchant",
+   "category": "Transport",
+   "parent": null,
+   "clean_name": "Car service",
+   "confidence": 0.85,
+   "reason": "Car repair workshop (MCC 7531)"
+  },
+  {
+   "key": "norlys",
+   "class": "merchant",
+   "category": "Bills",
+   "parent": null,
+   "clean_name": "Norlys",
+   "confidence": 0.85,
+   "reason": "Danish electricity/internet provider"
+  },
+  {
+   "key": "vibholm",
+   "class": "merchant",
+   "category": "Girlfriend",
+   "parent": null,
+   "clean_name": "Vibholm",
+   "confidence": 0.5,
+   "reason": "Danish jeweller, likely gift for partner"
+  },
+  {
+   "key": "nordisk film bi",
+   "class": "merchant",
+   "category": "Entertainment",
+   "parent": null,
+   "clean_name": "Nordisk Film Biografer",
+   "confidence": 0.9,
+   "reason": "Cinema chain"
+  },
+  {
+   "key": "order",
+   "class": "fee",
+   "category": "Other",
+   "parent": null,
+   "clean_name": "Lunar card order",
+   "confidence": 0.8,
+   "reason": "Lunar card order fee"
+  },
+  {
+   "key": "tst svommeklub",
+   "class": "merchant",
+   "category": "Sport",
+   "parent": null,
+   "clean_name": "TST Svømmeklub",
+   "confidence": 0.8,
+   "reason": "Swimming club entry"
+  },
+  {
+   "key": "oil tank go tilst v",
+   "class": "merchant",
+   "category": "Transport",
+   "parent": null,
+   "clean_name": "OIL! tank & go",
+   "confidence": 0.95,
+   "reason": "Fuel station Tilst"
+  },
+  {
+   "key": "salon ayah aarhus c",
+   "class": "merchant",
+   "category": "Other",
+   "parent": null,
+   "clean_name": "Salon Ayah",
+   "confidence": 0.8,
+   "reason": "Hair salon; owner logs haircut as Other"
+  },
+  {
+   "key": "aarhus kommune parkering",
+   "class": "merchant",
+   "category": "Transport",
+   "parent": null,
+   "clean_name": "Aarhus Kommune parking",
+   "confidence": 0.9,
+   "reason": "Municipal parking"
+  },
+  {
+   "key": "coolshop",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": null,
+   "clean_name": "Coolshop",
+   "confidence": 0.7,
+   "reason": "Danish webshop; this one was gift for partner"
+  },
+  {
+   "key": "av cables",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": null,
+   "clean_name": "AV-Cables",
+   "confidence": 0.65,
+   "reason": "Electronics webshop; owner tagged Girlfriend once"
+  },
+  {
+   "key": "tax for 2025 frivillig ind skat",
+   "class": "merchant",
+   "category": "Other",
+   "parent": null,
+   "clean_name": "SKAT voluntary tax payment",
+   "confidence": 0.9,
+   "reason": "Voluntary tax payment; owner logs tax as Other"
+  },
+  {
+   "key": "bl kors aarhus",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": null,
+   "clean_name": "Blå Kors (second hand)",
+   "confidence": 0.85,
+   "reason": "Charity second-hand shop"
+  },
+  {
+   "key": "parkzone",
+   "class": "merchant",
+   "category": "Other",
+   "parent": null,
+   "clean_name": "ParkZone (control fee)",
+   "confidence": 0.65,
+   "reason": "Parking control fee amount"
+  },
+  {
+   "key": "punkt1",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": null,
+   "clean_name": "Punkt1",
+   "confidence": 0.85,
+   "reason": "Electronics webshop"
+  },
+  {
+   "key": "peecho",
+   "class": "merchant",
+   "category": "Girlfriend",
+   "parent": null,
+   "clean_name": "Peecho",
+   "confidence": 0.55,
+   "reason": "Print-on-demand journal, gift for partner"
+  },
+  {
+   "key": "vero moda",
+   "class": "merchant",
+   "category": "Girlfriend",
+   "parent": null,
+   "clean_name": "Vero Moda",
+   "confidence": 0.55,
+   "reason": "Women fashion, likely for partner"
+  },
+  {
+   "key": "amzn mktp de",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": null,
+   "clean_name": "Amazon.de",
+   "confidence": 0.8,
+   "reason": "Amazon marketplace Germany"
+  },
+  {
+   "key": "info teria hylk",
+   "class": "merchant",
+   "category": "Groceries",
+   "parent": null,
+   "clean_name": "Info-teria Hylke",
+   "confidence": 0.45,
+   "reason": "Kiosk/cafeteria small purchase"
+  },
+  {
+   "key": "euroflorist",
+   "class": "merchant",
+   "category": "Gifts",
+   "parent": null,
+   "clean_name": "Euroflorist",
+   "confidence": 0.7,
+   "reason": "Flower delivery (flowers for moms)"
+  },
+  {
+   "key": "sp fashionnova",
+   "class": "merchant",
+   "category": "Girlfriend",
+   "parent": null,
+   "clean_name": "Fashion Nova",
+   "confidence": 0.5,
+   "reason": "Women fashion webshop"
+  },
+  {
+   "key": "fodevarecheck udbetalt af atp laes mere pa borger",
+   "class": "merchant",
+   "category": "Other income",
+   "parent": null,
+   "clean_name": "Fødevarecheck (ATP)",
+   "confidence": 0.9,
+   "reason": "Government food cheque payout"
+  },
+  {
+   "key": "michael kors denmark ap",
+   "class": "merchant",
+   "category": "Girlfriend",
+   "parent": null,
+   "clean_name": "Michael Kors",
+   "confidence": 0.7,
+   "reason": "Handbag bought for partner"
+  },
+  {
+   "key": "netbyggemarkeddk",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": null,
+   "clean_name": "Netbyggemarked",
+   "confidence": 0.65,
+   "reason": "Online DIY/home shop"
+  },
+  {
+   "key": "avxperten",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": null,
+   "clean_name": "AV-Xperten",
+   "confidence": 0.85,
+   "reason": "Electronics webshop"
+  },
+  {
+   "key": "hm dk0860",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": null,
+   "clean_name": "H&M",
+   "confidence": 0.95,
+   "reason": "H&M store"
+  },
+  {
+   "key": "loko keramik",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": null,
+   "clean_name": "LOKO Keramik",
+   "confidence": 0.75,
+   "reason": "Ceramics shop"
+  },
+  {
+   "key": "kop and kande hor",
+   "class": "merchant",
+   "category": "Girlfriend",
+   "parent": null,
+   "clean_name": "Kop & Kande",
+   "confidence": 0.8,
+   "reason": "Kitchenware; owner rule kop & kande Girlfriend"
+  },
+  {
+   "key": "apartment move in honingvaenget m fl",
+   "class": "merchant",
+   "category": "Rent",
+   "parent": null,
+   "clean_name": "Apartment move-in (Honingvænget)",
+   "confidence": 0.85,
+   "reason": "Deposit and prepaid rent"
+  },
+  {
+   "key": "oil tank go",
+   "class": "merchant",
+   "category": "Transport",
+   "parent": null,
+   "clean_name": "OIL! tank & go",
+   "confidence": 0.95,
+   "reason": "Fuel station Horsens"
+  },
+  {
+   "key": "apcoa flow",
+   "class": "merchant",
+   "category": "Transport",
+   "parent": null,
+   "clean_name": "APCOA Flow",
+   "confidence": 0.9,
+   "reason": "Camera-based parking"
+  },
+  {
+   "key": "nabogo 3316027 nabogo",
+   "class": "merchant",
+   "category": "Other income",
+   "parent": null,
+   "clean_name": "Nabogo",
+   "confidence": 0.75,
+   "reason": "Peer rental platform payout"
+  },
+  {
+   "key": "fujifilm nordic",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": null,
+   "clean_name": "Fujifilm",
+   "confidence": 0.75,
+   "reason": "Photo prints"
+  },
+  {
+   "key": "spiselauget",
+   "class": "merchant",
+   "category": "Restaurants",
+   "parent": null,
+   "clean_name": "Spiselauget",
+   "confidence": 0.8,
+   "reason": "Restaurant/canteen"
+  },
+  {
+   "key": "a siam sushi re",
+   "class": "merchant",
+   "category": "Restaurants",
+   "parent": null,
+   "clean_name": "A+ Siam Sushi",
+   "confidence": 0.9,
+   "reason": "Sushi restaurant"
+  },
+  {
+   "key": "barber s house",
+   "class": "merchant",
+   "category": "Other",
+   "parent": null,
+   "clean_name": "Barber's House",
+   "confidence": 0.8,
+   "reason": "Barber; owner logs haircut as Other"
+  },
+  {
+   "key": "deichmann sko aps vkst",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": null,
+   "clean_name": "Deichmann",
+   "confidence": 0.9,
+   "reason": "Shoe store"
+  },
+  {
+   "key": "parfumdreams de",
+   "class": "merchant",
+   "category": "Girlfriend",
+   "parent": null,
+   "clean_name": "Parfumdreams",
+   "confidence": 0.5,
+   "reason": "Perfume webshop; owner tags fragrances Girlfriend"
+  },
+  {
+   "key": "babunia",
+   "class": "merchant",
+   "category": "Restaurants",
+   "parent": null,
+   "clean_name": "Babunia",
+   "confidence": 0.55,
+   "reason": "Small eatery/bakery"
+  },
+  {
+   "key": "new onerepair",
+   "class": "merchant",
+   "category": "Other",
+   "parent": null,
+   "clean_name": "OneRepair",
+   "confidence": 0.7,
+   "reason": "Phone repair; owner logs repairs Other"
+  },
+  {
+   "key": "wolkenpizza",
+   "class": "merchant",
+   "category": "Food",
+   "parent": "Travel",
+   "clean_name": "Wolkenpizza",
+   "confidence": 0.55,
+   "reason": "Pizza during Vienna trip"
+  },
+  {
+   "key": "koon",
+   "class": "merchant",
+   "category": "Food",
+   "parent": "Travel",
+   "clean_name": "Koon",
+   "confidence": 0.5,
+   "reason": "Restaurant during Vienna trip"
+  },
+  {
+   "key": "yuna",
+   "class": "merchant",
+   "category": "Food",
+   "parent": "Travel",
+   "clean_name": "Yuna",
+   "confidence": 0.6,
+   "reason": "Restaurant during Vienna trip"
+  },
+  {
+   "key": "tgtg bzm65kfk1mdg0",
+   "class": "merchant",
+   "category": "Food",
+   "parent": "Travel",
+   "clean_name": "Too Good To Go",
+   "confidence": 0.6,
+   "reason": "TGTG during Vienna trip"
+  },
+  {
+   "key": "tgtg qnmy5y41sm8r0",
+   "class": "merchant",
+   "category": "Food",
+   "parent": "Travel",
+   "clean_name": "Too Good To Go",
+   "confidence": 0.6,
+   "reason": "TGTG during Vienna trip"
+  },
+  {
+   "key": "tiqets",
+   "class": "merchant",
+   "category": "Entertainment",
+   "parent": "Travel",
+   "clean_name": "Tiqets",
+   "confidence": 0.9,
+   "reason": "Museum/attraction tickets"
+  },
+  {
+   "key": "wellone",
+   "class": "merchant",
+   "category": "Entertainment",
+   "parent": "Travel",
+   "clean_name": "Wellone",
+   "confidence": 0.4,
+   "reason": "Spa/wellness, during Vienna trip"
+  },
+  {
+   "key": "bao mebu",
+   "class": "merchant",
+   "category": "Food",
+   "parent": "Travel",
+   "clean_name": "Bao Mebu",
+   "confidence": 0.85,
+   "reason": "Restaurant in Vienna"
+  },
+  {
+   "key": "gifts united",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": "Travel",
+   "clean_name": "Gifts United",
+   "confidence": 0.8,
+   "reason": "Souvenir shop Vienna"
+  },
+  {
+   "key": "billa dankt",
+   "class": "merchant",
+   "category": "Food",
+   "parent": "Travel",
+   "clean_name": "Billa",
+   "confidence": 0.9,
+   "reason": "Austrian supermarket"
+  },
+  {
+   "key": "oebb ticket automat",
+   "class": "merchant",
+   "category": "Transport",
+   "parent": "Travel",
+   "clean_name": "ÖBB",
+   "confidence": 0.95,
+   "reason": "Austrian rail ticket machine"
+  },
+  {
+   "key": "tgtg bxztgrvenzwa0",
+   "class": "merchant",
+   "category": "Food",
+   "parent": "Travel",
+   "clean_name": "Too Good To Go",
+   "confidence": 0.6,
+   "reason": "TGTG during Vienna trip"
+  },
+  {
+   "key": "starbucks",
+   "class": "merchant",
+   "category": "Coffee",
+   "parent": null,
+   "clean_name": "Starbucks",
+   "confidence": 0.85,
+   "reason": "Coffee chain"
+  },
+  {
+   "key": "spar dankt",
+   "class": "merchant",
+   "category": "Food",
+   "parent": "Travel",
+   "clean_name": "Spar (Austria)",
+   "confidence": 0.85,
+   "reason": "Austrian Spar supermarket"
+  },
+  {
+   "key": "museumsquartier",
+   "class": "merchant",
+   "category": "Entertainment",
+   "parent": "Travel",
+   "clean_name": "MuseumsQuartier Wien",
+   "confidence": 0.8,
+   "reason": "Vienna museum quarter"
+  },
+  {
+   "key": "a052 dk cph la place",
+   "class": "merchant",
+   "category": "Food",
+   "parent": "Travel",
+   "clean_name": "CPH Airport La Place",
+   "confidence": 0.75,
+   "reason": "Airport food, departing trip"
+  },
+  {
+   "key": "gebr heinemann",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": "Travel",
+   "clean_name": "Heinemann Duty Free",
+   "confidence": 0.85,
+   "reason": "Airport duty free"
+  },
+  {
+   "key": "tbc bruuns galleri ny",
+   "class": "merchant",
+   "category": "Restaurants",
+   "parent": null,
+   "clean_name": "The Burger Concept",
+   "confidence": 0.95,
+   "reason": "The Burger Concept Bruuns Galleri"
+  },
+  {
+   "key": "imerco bruuns g",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": null,
+   "clean_name": "Imerco",
+   "confidence": 0.9,
+   "reason": "Kitchen/home store"
+  },
+  {
+   "key": "nabogo 3174093 nabogo",
+   "class": "merchant",
+   "category": "Other income",
+   "parent": null,
+   "clean_name": "Nabogo",
+   "confidence": 0.75,
+   "reason": "Peer rental platform payout"
+  },
+  {
+   "key": "rc horsens soendergade",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": null,
+   "clean_name": "RC Horsens",
+   "confidence": 0.45,
+   "reason": "Cosmetics store Søndergade (MCC 5977)"
+  },
+  {
+   "key": "aarhusboligdk",
+   "class": "merchant",
+   "category": "Rent",
+   "parent": null,
+   "clean_name": "AarhusBolig",
+   "confidence": 0.85,
+   "reason": "Housing waiting-list fee"
+  },
+  {
+   "key": "fine q park afgift",
+   "class": "merchant",
+   "category": "Other",
+   "parent": null,
+   "clean_name": "Q-Park control fee",
+   "confidence": 0.85,
+   "reason": "Parking fine; owner logs fines Other"
+  },
+  {
+   "key": "ryanair",
+   "class": "merchant",
+   "category": "Transport",
+   "parent": "Travel",
+   "clean_name": "Ryanair",
+   "confidence": 0.95,
+   "reason": "Airline"
+  },
+  {
+   "key": "ms",
+   "class": "merchant",
+   "category": "Stay",
+   "parent": "Travel",
+   "clean_name": "GoHotel",
+   "confidence": 0.75,
+   "reason": "Hotel booking (MS* GoHotel)"
+  },
+  {
+   "key": "ida",
+   "class": "merchant",
+   "category": "Bills",
+   "parent": null,
+   "clean_name": "IDA",
+   "confidence": 0.5,
+   "reason": "Engineers union membership fee"
+  },
+  {
+   "key": "q park denmark as q park afgift",
+   "class": "merchant",
+   "category": "Other",
+   "parent": null,
+   "clean_name": "Q-Park control fee",
+   "confidence": 0.85,
+   "reason": "Parking fine; owner logs fines Other"
+  },
+  {
+   "key": "peking grill v yen",
+   "class": "merchant",
+   "category": "Restaurants",
+   "parent": null,
+   "clean_name": "Peking Grill",
+   "confidence": 0.85,
+   "reason": "Takeaway grill"
+  },
+  {
+   "key": "tgtg b45a6kys55s90",
+   "class": "merchant",
+   "category": "Restaurants",
+   "parent": null,
+   "clean_name": "Too Good To Go",
+   "confidence": 0.9,
+   "reason": "Food rescue app"
+  },
+  {
+   "key": "tgtg teknmvfjgkze0",
+   "class": "merchant",
+   "category": "Restaurants",
+   "parent": null,
+   "clean_name": "Too Good To Go",
+   "confidence": 0.9,
+   "reason": "Food rescue app"
+  },
+  {
+   "key": "tgtg kc5r6qepk5fw0",
+   "class": "merchant",
+   "category": "Restaurants",
+   "parent": null,
+   "clean_name": "Too Good To Go",
+   "confidence": 0.9,
+   "reason": "Food rescue app"
+  },
+  {
+   "key": "nabogo 2931537 nabogo",
+   "class": "merchant",
+   "category": "Other income",
+   "parent": null,
+   "clean_name": "Nabogo",
+   "confidence": 0.75,
+   "reason": "Peer rental platform payout"
+  },
+  {
+   "key": "apcoa",
+   "class": "merchant",
+   "category": "Other",
+   "parent": null,
+   "clean_name": "APCOA (control fee)",
+   "confidence": 0.6,
+   "reason": "875 DKK equals APCOA control fee"
+  },
+  {
+   "key": "uno x 2422 hasselager",
+   "class": "merchant",
+   "category": "Transport",
+   "parent": null,
+   "clean_name": "Uno-X",
+   "confidence": 0.95,
+   "reason": "Fuel station Hasselager"
+  },
+  {
+   "key": "pay4it a mfkkortet",
+   "class": "merchant",
+   "category": "Transport",
+   "parent": null,
+   "clean_name": "Pay4it",
+   "confidence": 0.4,
+   "reason": "1 DKK card check, transit/parking app"
+  },
+  {
+   "key": "sushi springtime",
+   "class": "merchant",
+   "category": "Restaurants",
+   "parent": null,
+   "clean_name": "Sushi Springtime",
+   "confidence": 0.9,
+   "reason": "Sushi restaurant"
+  },
+  {
+   "key": "marias auto v",
+   "class": "merchant",
+   "category": "Transport",
+   "parent": null,
+   "clean_name": "Marias Auto",
+   "confidence": 0.85,
+   "reason": "Car repair workshop"
+  },
+  {
+   "key": "thansen gruppen",
+   "class": "merchant",
+   "category": "Transport",
+   "parent": null,
+   "clean_name": "Thansen",
+   "confidence": 0.85,
+   "reason": "Car parts chain"
+  },
+  {
+   "key": "anpartsselskabet lightho",
+   "class": "merchant",
+   "category": "Entertainment",
+   "parent": null,
+   "clean_name": "Lighthouse (attraction)",
+   "confidence": 0.5,
+   "reason": "Tourist attraction MCC 7991"
+  },
+  {
+   "key": "mammis gelato",
+   "class": "merchant",
+   "category": "Restaurants",
+   "parent": null,
+   "clean_name": "Mammis Gelato",
+   "confidence": 0.7,
+   "reason": "Ice cream shop"
+  },
+  {
+   "key": "svend a larsen",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": null,
+   "clean_name": "Svend A. Larsen",
+   "confidence": 0.85,
+   "reason": "Bookstore Aarhus"
+  },
+  {
+   "key": "horsens skomager og no",
+   "class": "merchant",
+   "category": "Other",
+   "parent": null,
+   "clean_name": "Horsens Skomager",
+   "confidence": 0.7,
+   "reason": "Shoe repair/key service"
+  },
+  {
+   "key": "tomra 9gnru",
+   "class": "merchant",
+   "category": "Other income",
+   "parent": null,
+   "clean_name": "Tomra (pant)",
+   "confidence": 0.8,
+   "reason": "Bottle deposit refund"
+  },
+  {
+   "key": "middelalder p",
+   "class": "merchant",
+   "category": "Transport",
+   "parent": null,
+   "clean_name": "Middelalderfestival parking",
+   "confidence": 0.5,
+   "reason": "Horsens medieval festival, likely parking"
+  },
+  {
+   "key": "kila nordic",
+   "class": "merchant",
+   "category": "Entertainment",
+   "parent": null,
+   "clean_name": "Kila Nordic",
+   "confidence": 0.45,
+   "reason": "Stall at Horsens medieval festival"
+  },
+  {
+   "key": "eventium",
+   "class": "merchant",
+   "category": "Restaurants",
+   "parent": null,
+   "clean_name": "Eventium",
+   "confidence": 0.5,
+   "reason": "Food at festival event"
+  },
+  {
+   "key": "the black knight",
+   "class": "merchant",
+   "category": "Entertainment",
+   "parent": null,
+   "clean_name": "The Black Knight",
+   "confidence": 0.5,
+   "reason": "Stall at Horsens medieval festival"
+  },
+  {
+   "key": "bla kors danmar",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": null,
+   "clean_name": "Blå Kors (second hand)",
+   "confidence": 0.85,
+   "reason": "Charity second-hand shop"
+  },
+  {
+   "key": "avolta valencia tg dft21",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": "Travel",
+   "clean_name": "Avolta Duty Free",
+   "confidence": 0.85,
+   "reason": "Valencia airport duty free"
+  },
+  {
+   "key": "decathlon city valencia",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": "Travel",
+   "clean_name": "Decathlon",
+   "confidence": 0.8,
+   "reason": "Sports store Valencia"
+  },
+  {
+   "key": "7 eleven b108",
+   "class": "merchant",
+   "category": "Groceries",
+   "parent": null,
+   "clean_name": "7-Eleven",
+   "confidence": 0.9,
+   "reason": "Convenience store; owner tags Groceries"
+  },
+  {
+   "key": "europeiske rejseforsik",
+   "class": "merchant",
+   "category": "Travel",
+   "parent": null,
+   "clean_name": "Europæiske Rejseforsikring",
+   "confidence": 0.8,
+   "reason": "Travel insurance"
+  },
+  {
+   "key": "restaurant okse",
+   "class": "merchant",
+   "category": "Restaurants",
+   "parent": null,
+   "clean_name": "Restaurant Okse",
+   "confidence": 0.9,
+   "reason": "Restaurant"
+  },
+  {
+   "key": "locked",
+   "class": "merchant",
+   "category": "Entertainment",
+   "parent": null,
+   "clean_name": "Locked escape room",
+   "confidence": 0.75,
+   "reason": "Escape room (MCC 7999)"
+  },
+  {
+   "key": "voi",
+   "class": "merchant",
+   "category": "Transport",
+   "parent": null,
+   "clean_name": "Voi",
+   "confidence": 0.9,
+   "reason": "E-scooter rental"
+  },
+  {
+   "key": "tomra rt96f",
+   "class": "merchant",
+   "category": "Other income",
+   "parent": null,
+   "clean_name": "Tomra (pant)",
+   "confidence": 0.8,
+   "reason": "Bottle deposit refund"
+  },
+  {
+   "key": "brain games",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": "Travel",
+   "clean_name": "Brain Games",
+   "confidence": 0.75,
+   "reason": "Board game shop Tallinn"
+  },
+  {
+   "key": "peetri selver",
+   "class": "merchant",
+   "category": "Food",
+   "parent": "Travel",
+   "clean_name": "Selver",
+   "confidence": 0.9,
+   "reason": "Estonian supermarket"
+  },
+  {
+   "key": "airbaltic",
+   "class": "merchant",
+   "category": "Transport",
+   "parent": "Travel",
+   "clean_name": "airBaltic",
+   "confidence": 0.95,
+   "reason": "Airline"
+  },
+  {
+   "key": "zara ulemiste keskus",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": "Travel",
+   "clean_name": "Zara",
+   "confidence": 0.9,
+   "reason": "Zara at Ülemiste mall Tallinn"
+  },
+  {
+   "key": "haa eesti asi",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": "Travel",
+   "clean_name": "Haa Eesti Asi",
+   "confidence": 0.75,
+   "reason": "Estonian souvenir/design shop"
+  },
+  {
+   "key": "acoolakids",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": "Travel",
+   "clean_name": "A Coola Kids",
+   "confidence": 0.55,
+   "reason": "Shop in Tallinn"
+  },
+  {
+   "key": "citybee ee",
+   "class": "merchant",
+   "category": "Transport",
+   "parent": "Travel",
+   "clean_name": "CityBee",
+   "confidence": 0.9,
+   "reason": "Estonian car sharing"
+  },
+  {
+   "key": "bolt eur2507300927",
+   "class": "merchant",
+   "category": "Transport",
+   "parent": "Travel",
+   "clean_name": "Bolt",
+   "confidence": 0.75,
+   "reason": "Bolt scooter/ride Tallinn"
+  },
+  {
+   "key": "iii draakon",
+   "class": "merchant",
+   "category": "Food",
+   "parent": "Travel",
+   "clean_name": "III Draakon",
+   "confidence": 0.9,
+   "reason": "Medieval tavern Tallinn"
+  },
+  {
+   "key": "lido solaris",
+   "class": "merchant",
+   "category": "Food",
+   "parent": "Travel",
+   "clean_name": "Lido",
+   "confidence": 0.9,
+   "reason": "Latvian buffet restaurant Tallinn"
+  },
+  {
+   "key": "kiosk reidi tee",
+   "class": "merchant",
+   "category": "Food",
+   "parent": "Travel",
+   "clean_name": "Kiosk Reidi tee",
+   "confidence": 0.7,
+   "reason": "Kiosk Tallinn"
+  },
+  {
+   "key": "kadrioru kunstimuuseum",
+   "class": "merchant",
+   "category": "Entertainment",
+   "parent": "Travel",
+   "clean_name": "Kadriorg Art Museum",
+   "confidence": 0.9,
+   "reason": "Museum Tallinn"
+  },
+  {
+   "key": "bolt eur2507301412",
+   "class": "merchant",
+   "category": "Food",
+   "parent": "Travel",
+   "clean_name": "Bolt Food",
+   "confidence": 0.7,
+   "reason": "Bolt Food order Tallinn (MCC 5812)"
+  },
+  {
+   "key": "prisma sikupilli",
+   "class": "merchant",
+   "category": "Food",
+   "parent": "Travel",
+   "clean_name": "Prisma",
+   "confidence": 0.9,
+   "reason": "Estonian supermarket"
+  },
+  {
+   "key": "vabaduse valjaku parkimi",
+   "class": "merchant",
+   "category": "Transport",
+   "parent": "Travel",
+   "clean_name": "Vabaduse väljak parking",
+   "confidence": 0.85,
+   "reason": "Parking in Tallinn"
+  },
+  {
+   "key": "solarise toidupood",
+   "class": "merchant",
+   "category": "Food",
+   "parent": "Travel",
+   "clean_name": "Solaris food store",
+   "confidence": 0.85,
+   "reason": "Grocery Tallinn"
+  },
+  {
+   "key": "circle k iru",
+   "class": "merchant",
+   "category": "Food",
+   "parent": "Travel",
+   "clean_name": "Circle K Iru",
+   "confidence": 0.5,
+   "reason": "Estonian station small snack"
+  },
+  {
+   "key": "ramen copenhagen airport",
+   "class": "merchant",
+   "category": "Food",
+   "parent": "Travel",
+   "clean_name": "Ramen CPH Airport",
+   "confidence": 0.75,
+   "reason": "Airport food, departing trip"
+  },
+  {
+   "key": "ramos pizza",
+   "class": "merchant",
+   "category": "Restaurants",
+   "parent": null,
+   "clean_name": "Ramos Pizza",
+   "confidence": 0.8,
+   "reason": "Pizzeria"
+  },
+  {
+   "key": "panduro",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": null,
+   "clean_name": "Panduro",
+   "confidence": 0.85,
+   "reason": "Hobby and craft store"
+  },
+  {
+   "key": "sp kuurth",
+   "class": "merchant",
+   "category": "Girlfriend",
+   "parent": null,
+   "clean_name": "Kuurth",
+   "confidence": 0.5,
+   "reason": "Danish jewellery brand, likely for partner"
+  },
+  {
+   "key": "lidl111hobro",
+   "class": "merchant",
+   "category": "Groceries",
+   "parent": null,
+   "clean_name": "Lidl",
+   "confidence": 0.97,
+   "reason": "Lidl store 111 Hobro"
+  },
+  {
+   "key": "bruun s galleri",
+   "class": "merchant",
+   "category": "Transport",
+   "parent": null,
+   "clean_name": "Bruun's Galleri parking",
+   "confidence": 0.85,
+   "reason": "Mall parking (MCC 7523)"
+  },
+  {
+   "key": "hm dk0857",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": null,
+   "clean_name": "H&M",
+   "confidence": 0.95,
+   "reason": "H&M store"
+  },
+  {
+   "key": "relay daily mon",
+   "class": "merchant",
+   "category": "Food",
+   "parent": "Travel",
+   "clean_name": "Relay",
+   "confidence": 0.6,
+   "reason": "Station newsagent snack, Paris"
+  },
+  {
+   "key": "relay",
+   "class": "merchant",
+   "category": "Food",
+   "parent": "Travel",
+   "clean_name": "Relay",
+   "confidence": 0.6,
+   "reason": "Station newsagent snack, Paris"
+  },
+  {
+   "key": "les amours in p",
+   "class": "merchant",
+   "category": "Food",
+   "parent": "Travel",
+   "clean_name": "Les Amours",
+   "confidence": 0.8,
+   "reason": "Restaurant Paris"
+  },
+  {
+   "key": "berger wc",
+   "class": "merchant",
+   "category": "Other",
+   "parent": null,
+   "clean_name": "Pay toilet",
+   "confidence": 0.75,
+   "reason": "Public toilet fee Paris"
+  },
+  {
+   "key": "eklo paris",
+   "class": "merchant",
+   "category": "Stay",
+   "parent": "Travel",
+   "clean_name": "Eklo Hotel Paris",
+   "confidence": 0.9,
+   "reason": "Hotel Paris"
+  },
+  {
+   "key": "pull and bear paris foru",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": "Travel",
+   "clean_name": "Pull&Bear",
+   "confidence": 0.9,
+   "reason": "Clothing store Paris"
+  },
+  {
+   "key": "sete tour eiffel",
+   "class": "merchant",
+   "category": "Entertainment",
+   "parent": "Travel",
+   "clean_name": "Eiffel Tower (SETE)",
+   "confidence": 0.95,
+   "reason": "Eiffel Tower tickets"
+  },
+  {
+   "key": "oueghlani market",
+   "class": "merchant",
+   "category": "Food",
+   "parent": "Travel",
+   "clean_name": "Oueghlani Market",
+   "confidence": 0.8,
+   "reason": "Mini market Paris"
+  },
+  {
+   "key": "sc paris belle",
+   "class": "merchant",
+   "category": "Food",
+   "parent": "Travel",
+   "clean_name": "Paris Belle",
+   "confidence": 0.7,
+   "reason": "Café/restaurant Paris"
+  },
+  {
+   "key": "maison isabelle",
+   "class": "merchant",
+   "category": "Food",
+   "parent": "Travel",
+   "clean_name": "Maison Isabelle",
+   "confidence": 0.85,
+   "reason": "Bakery Paris"
+  },
+  {
+   "key": "skeat",
+   "class": "merchant",
+   "category": "Food",
+   "parent": "Travel",
+   "clean_name": "Skeat",
+   "confidence": 0.75,
+   "reason": "Restaurant Paris"
+  },
+  {
+   "key": "snoopreprt",
+   "class": "merchant",
+   "category": "Bills",
+   "parent": null,
+   "clean_name": "SnoopReport",
+   "confidence": 0.55,
+   "reason": "Online subscription service"
+  },
+  {
+   "key": "bone s restaura",
+   "class": "merchant",
+   "category": "Restaurants",
+   "parent": null,
+   "clean_name": "Bone's",
+   "confidence": 0.9,
+   "reason": "Danish rib restaurant chain"
+  },
+  {
+   "key": "oil tank go randers mess",
+   "class": "merchant",
+   "category": "Transport",
+   "parent": null,
+   "clean_name": "OIL! tank & go",
+   "confidence": 0.95,
+   "reason": "Fuel station Randers"
+  },
+  {
+   "key": "eventpark aarhus",
+   "class": "merchant",
+   "category": "Entertainment",
+   "parent": null,
+   "clean_name": "Eventpark Aarhus",
+   "confidence": 0.8,
+   "reason": "Activity/event park"
+  },
+  {
+   "key": "gamesweb",
+   "class": "merchant",
+   "category": "Entertainment",
+   "parent": null,
+   "clean_name": "GamesWeb",
+   "confidence": 0.75,
+   "reason": "Games webshop"
+  },
+  {
+   "key": "velliv",
+   "class": "merchant",
+   "category": "Other income",
+   "parent": null,
+   "clean_name": "Velliv",
+   "confidence": 0.6,
+   "reason": "Pension company payout"
+  },
+  {
+   "key": "velliv foreningen bonus fra velliv foreningen du er medlem af foreningen fordi du er k unde i pensionsselskabet velliv l s mere pa vellivforeningen dk eller ring pa",
+   "class": "merchant",
+   "category": "Other income",
+   "parent": null,
+   "clean_name": "Velliv Foreningen",
+   "confidence": 0.85,
+   "reason": "Member bonus from Velliv Foreningen"
+  },
+  {
+   "key": "travellink",
+   "class": "merchant",
+   "category": "Transport",
+   "parent": "Travel",
+   "clean_name": "Travellink",
+   "confidence": 0.9,
+   "reason": "Flight booking agency"
+  },
+  {
+   "key": "ripplewave",
+   "class": "merchant",
+   "category": "Bills",
+   "parent": null,
+   "clean_name": "Ripplewave",
+   "confidence": 0.45,
+   "reason": "Software/app subscription (MCC 7372)"
+  },
+  {
+   "key": "sp eu sihoo officials",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": null,
+   "clean_name": "Sihoo",
+   "confidence": 0.85,
+   "reason": "Office chair webshop"
+  },
+  {
+   "key": "princh",
+   "class": "merchant",
+   "category": "Other",
+   "parent": null,
+   "clean_name": "Princh",
+   "confidence": 0.6,
+   "reason": "Library/self-service printing"
+  },
+  {
+   "key": "lavprisel",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": null,
+   "clean_name": "LavprisEL",
+   "confidence": 0.6,
+   "reason": "Electrical supplies webshop"
+  },
+  {
+   "key": "kobmandsgarden",
+   "class": "merchant",
+   "category": "Groceries",
+   "parent": null,
+   "clean_name": "Købmandsgården",
+   "confidence": 0.75,
+   "reason": "Grocery/farm shop"
+  },
+  {
+   "key": "fitnessworld",
+   "class": "merchant",
+   "category": "Sport",
+   "parent": null,
+   "clean_name": "Fitness World",
+   "confidence": 0.95,
+   "reason": "Gym chain"
+  },
+  {
+   "key": "amevista",
+   "class": "merchant",
+   "category": "Health",
+   "parent": null,
+   "clean_name": "Amevista",
+   "confidence": 0.8,
+   "reason": "Contact lenses webshop (MCC 8043)"
+  },
+  {
+   "key": "demyanitsa",
+   "class": "merchant",
+   "category": "Travel",
+   "parent": null,
+   "clean_name": "Demyanitsa (Bansko)",
+   "confidence": 0.5,
+   "reason": "Cash/purchase at Bansko ski area"
+  },
+  {
+   "key": "83 pirin str",
+   "class": "merchant",
+   "category": "Travel",
+   "parent": null,
+   "clean_name": "Cash withdrawal (Bulgaria)",
+   "confidence": 0.75,
+   "reason": "ATM cash on Bulgaria trip"
+  },
+  {
+   "key": "mauntin menidzhmant ood",
+   "class": "merchant",
+   "category": "Stay",
+   "parent": "Travel",
+   "clean_name": "Mountain Management OOD",
+   "confidence": 0.75,
+   "reason": "Bulgarian lodging (MCC 7011)"
+  },
+  {
+   "key": "fib atm afib2771",
+   "class": "merchant",
+   "category": "Travel",
+   "parent": null,
+   "clean_name": "Cash withdrawal (Bulgaria)",
+   "confidence": 0.75,
+   "reason": "ATM cash on Bulgaria trip"
+  },
+  {
+   "key": "parkmart retail ood",
+   "class": "merchant",
+   "category": "Food",
+   "parent": "Travel",
+   "clean_name": "Parkmart",
+   "confidence": 0.85,
+   "reason": "Bulgarian grocery"
+  },
+  {
+   "key": "sopharmacy",
+   "class": "merchant",
+   "category": "Doctor",
+   "parent": null,
+   "clean_name": "SOpharmacy",
+   "confidence": 0.8,
+   "reason": "Bulgarian pharmacy; owner tags pharmacy Doctor"
+  },
+  {
+   "key": "fib atm afib2779",
+   "class": "merchant",
+   "category": "Travel",
+   "parent": null,
+   "clean_name": "Cash withdrawal (Bulgaria)",
+   "confidence": 0.75,
+   "reason": "ATM cash on Bulgaria trip"
+  },
+  {
+   "key": "alpinresorts",
+   "class": "merchant",
+   "category": "Entertainment",
+   "parent": "Travel",
+   "clean_name": "Alpinresorts.com",
+   "confidence": 0.8,
+   "reason": "Ski pass/rental booking"
+  },
+  {
+   "key": "al 3 go maja",
+   "class": "merchant",
+   "category": "Travel",
+   "parent": null,
+   "clean_name": "Cash withdrawal (Poland)",
+   "confidence": 0.75,
+   "reason": "ATM cash on Poland trip"
+  },
+  {
+   "key": "ul strzelcow podhalans",
+   "class": "merchant",
+   "category": "Travel",
+   "parent": null,
+   "clean_name": "Cash withdrawal (Poland)",
+   "confidence": 0.75,
+   "reason": "ATM cash on Poland trip"
+  },
+  {
+   "key": "krakow airport",
+   "class": "merchant",
+   "category": "Transport",
+   "parent": "Travel",
+   "clean_name": "Krakow Airport car rental",
+   "confidence": 0.8,
+   "reason": "Car rental at Krakow airport"
+  },
+  {
+   "key": "pl kfc poronin",
+   "class": "merchant",
+   "category": "Food",
+   "parent": "Travel",
+   "clean_name": "KFC",
+   "confidence": 0.9,
+   "reason": "KFC Poronin Poland"
+  },
+  {
+   "key": "nyx",
+   "class": "merchant",
+   "category": "Food",
+   "parent": "Travel",
+   "clean_name": "Billund Airport shop",
+   "confidence": 0.6,
+   "reason": "Billund airport kiosk"
+  },
+  {
+   "key": "skioutlet",
+   "class": "merchant",
+   "category": "Sport",
+   "parent": null,
+   "clean_name": "Skioutlet",
+   "confidence": 0.75,
+   "reason": "Ski equipment shop"
+  },
+  {
+   "key": "ryanair head office",
+   "class": "merchant",
+   "category": "Transport",
+   "parent": "Travel",
+   "clean_name": "Ryanair",
+   "confidence": 0.95,
+   "reason": "Airline"
+  },
+  {
+   "key": "microsoft",
+   "class": "merchant",
+   "category": "Entertainment",
+   "parent": null,
+   "clean_name": "Microsoft Store",
+   "confidence": 0.55,
+   "reason": "Digital games/apps (MCC 5816)"
+  },
+  {
+   "key": "cars on booking",
+   "class": "merchant",
+   "category": "Transport",
+   "parent": "Travel",
+   "clean_name": "Booking.com Cars",
+   "confidence": 0.9,
+   "reason": "Rental car booking"
+  },
+  {
+   "key": "80900 qr apcoa parking",
+   "class": "merchant",
+   "category": "Transport",
+   "parent": null,
+   "clean_name": "APCOA Parking",
+   "confidence": 0.9,
+   "reason": "QR parking payment"
+  },
+  {
+   "key": "overforsel",
+   "class": "own",
+   "category": "Transfer",
+   "parent": null,
+   "clean_name": "Overførsel",
+   "confidence": 0.4,
+   "reason": "Generic bank transfer in"
+  },
+  {
+   "key": "thansendk",
+   "class": "merchant",
+   "category": "Transport",
+   "parent": null,
+   "clean_name": "Thansen",
+   "confidence": 0.85,
+   "reason": "Car parts chain"
+  },
+  {
+   "key": "fight lion",
+   "class": "merchant",
+   "category": "Sport",
+   "parent": null,
+   "clean_name": "Fight Lion",
+   "confidence": 0.55,
+   "reason": "Muay thai/martial arts gym"
+  },
+  {
+   "key": "steamgames",
+   "class": "merchant",
+   "category": "Entertainment",
+   "parent": null,
+   "clean_name": "Steam",
+   "confidence": 0.95,
+   "reason": "Steam games"
+  },
+  {
+   "key": "tgtg 3hx712etzxm00",
+   "class": "merchant",
+   "category": "Restaurants",
+   "parent": null,
+   "clean_name": "Too Good To Go",
+   "confidence": 0.9,
+   "reason": "Food rescue app"
+  },
+  {
+   "key": "pinterest ads",
+   "class": "merchant",
+   "category": "Other",
+   "parent": null,
+   "clean_name": "Pinterest Ads",
+   "confidence": 0.5,
+   "reason": "partner side-business ads on joint"
+  },
+  {
+   "key": "tgtg ckway9462w2g0",
+   "class": "merchant",
+   "category": "Restaurants",
+   "parent": null,
+   "clean_name": "Too Good To Go",
+   "confidence": 0.9,
+   "reason": "Food rescue app"
+  },
+  {
+   "key": "etsy",
+   "class": "merchant",
+   "category": "Other",
+   "parent": null,
+   "clean_name": "Etsy shop fee",
+   "confidence": 0.5,
+   "reason": "Etsy seller onboarding fee (partner)"
+  },
+  {
+   "key": "tgtg 5v3j2966b3qr0",
+   "class": "merchant",
+   "category": "Restaurants",
+   "parent": null,
+   "clean_name": "Too Good To Go",
+   "confidence": 0.9,
+   "reason": "Food rescue app"
+  },
+  {
+   "key": "nordisk film biografer",
+   "class": "merchant",
+   "category": "Entertainment",
+   "parent": null,
+   "clean_name": "Nordisk Film Biografer",
+   "confidence": 0.95,
+   "reason": "Cinema chain"
+  },
+  {
+   "key": "grappa piccolo",
+   "class": "merchant",
+   "category": "Restaurants",
+   "parent": null,
+   "clean_name": "Grappa Piccolo",
+   "confidence": 0.9,
+   "reason": "Italian restaurant Aarhus"
+  },
+  {
+   "key": "uber",
+   "class": "merchant",
+   "category": "Restaurants",
+   "parent": null,
+   "clean_name": "Uber Eats",
+   "confidence": 0.75,
+   "reason": "Uber Eats order (pending)"
+  },
+  {
+   "key": "ikea aarhus hfb eco",
+   "class": "merchant",
+   "category": "Shopping",
+   "parent": null,
+   "clean_name": "IKEA",
+   "confidence": 0.95,
+   "reason": "IKEA Aarhus"
+  },
+  {
+   "key": "nt kundetoilet",
+   "class": "merchant",
+   "category": "Other",
+   "parent": null,
+   "clean_name": "Pay toilet",
+   "confidence": 0.8,
+   "reason": "Customer toilet fee"
+  },
+  {
+   "key": "referral reward",
+   "class": "merchant",
+   "category": "Other income",
+   "parent": null,
+   "clean_name": "Revolut referral reward",
+   "confidence": 0.9,
+   "reason": "Revolut referral bonus"
+  },
+  {
+   "key": "cloudflare",
+   "class": "merchant",
+   "category": "Bills",
+   "parent": null,
+   "clean_name": "Cloudflare",
+   "confidence": 0.8,
+   "reason": "Developer/domain subscription"
+  },
+  {
+   "key": "meny risskov brynet",
+   "class": "merchant",
+   "category": "Groceries",
+   "parent": null,
+   "clean_name": "Meny",
+   "confidence": 0.97,
+   "reason": "Meny supermarket Risskov"
+  },
+  {
+   "key": "circle k risskov",
+   "class": "merchant",
+   "category": "Transport",
+   "parent": null,
+   "clean_name": "Circle K",
+   "confidence": 0.95,
+   "reason": "Fuel station Risskov"
+  }
+ ],
+ "patterns": [
+  {
+   "regex": "\\b(afgift|kontrolafgift|parking fine)\\b",
+   "category": "Other",
+   "parent": null,
+   "clean_name": "Parking control fee",
+   "reason": "Parking fines; owner logs as Other"
+  },
+  {
+   "regex": "^to dkk\\b",
+   "category": "Transfer",
+   "parent": null,
+   "clean_name": "Currency exchange",
+   "reason": "Revolut exchange between own pockets (class own)"
+  },
+  {
+   "regex": "^(revolut|from personal revolut|top up by|apple pay top up)",
+   "category": "Transfer",
+   "parent": null,
+   "clean_name": "Revolut top-up",
+   "reason": "Own money into Revolut (class own)"
+  },
+  {
+   "regex": "^overforsel [a-z]+ [a-z]+",
+   "category": "MobilePay",
+   "parent": null,
+   "clean_name": "MobilePay transfer",
+   "reason": "Lunar \"Overførsel MobilePay <name>\" person transfer"
+  },
+  {
+   "regex": "^(lonoverforsel|salary)\\b",
+   "category": "Salary",
+   "parent": null,
+   "clean_name": "Salary",
+   "reason": "Danish salary transfer"
+  },
+  {
+   "regex": "^su$",
+   "category": "Benefits",
+   "parent": null,
+   "clean_name": "SU",
+   "reason": "Student grant"
+  },
+  {
+   "regex": "(^|\\b)(fk )?feriepenge|feriekonto",
+   "category": "Holidaypay",
+   "parent": null,
+   "clean_name": "Feriepenge",
+   "reason": "Holiday pay payout"
+  },
+  {
+   "regex": "^fodevarecheck",
+   "category": "Other income",
+   "parent": null,
+   "clean_name": "Fødevarecheck",
+   "reason": "ATP food cheque; owner uses Other income"
+  },
+  {
+   "regex": "^velliv",
+   "category": "Other income",
+   "parent": null,
+   "clean_name": "Velliv",
+   "reason": "Pension company payout/bonus"
+  },
+  {
+   "regex": "^tomra\\b",
+   "category": "Other income",
+   "parent": null,
+   "clean_name": "Tomra pant",
+   "reason": "Bottle deposit refund"
+  },
+  {
+   "regex": "^nabogo\\b",
+   "category": "Other income",
+   "parent": null,
+   "clean_name": "Nabogo",
+   "reason": "Peer rental payout"
+  },
+  {
+   "regex": "^(lidl|\\d{3}(arhus|horsens|hobro|vejle|tilst|skejby|randers))",
+   "category": "Groceries",
+   "parent": null,
+   "clean_name": "Lidl",
+   "reason": "Lidl store numbers glued to town"
+  },
+  {
+   "regex": "^(salling )?netto\\b",
+   "category": "Groceries",
+   "parent": null,
+   "clean_name": "Netto",
+   "reason": "Netto"
+  },
+  {
+   "regex": "^(fotex|foetex)",
+   "category": "Groceries",
+   "parent": null,
+   "clean_name": "Føtex",
+   "reason": "Føtex"
+  },
+  {
+   "regex": "^bilka\\b",
+   "category": "Groceries",
+   "parent": null,
+   "clean_name": "Bilka",
+   "reason": "Bilka"
+  },
+  {
+   "regex": "^rema( ?1000)?\\b",
+   "category": "Groceries",
+   "parent": null,
+   "clean_name": "Rema 1000",
+   "reason": "Rema 1000"
+  },
+  {
+   "regex": "^meny\\b",
+   "category": "Groceries",
+   "parent": null,
+   "clean_name": "Meny",
+   "reason": "Meny"
+  },
+  {
+   "regex": "^spar\\b",
+   "category": "Groceries",
+   "parent": null,
+   "clean_name": "Spar",
+   "reason": "Spar (abroad: Travel>Food)"
+  },
+  {
+   "regex": "^kvickly\\b",
+   "category": "Groceries",
+   "parent": null,
+   "clean_name": "Kvickly",
+   "reason": "Coop Kvickly"
+  },
+  {
+   "regex": "^(super ?brugsen|dagli ?brugsen|lokal ?brugsen|brugsen|brf )",
+   "category": "Groceries",
+   "parent": null,
+   "clean_name": "Brugsen",
+   "reason": "Coop Brugsen / brugsforening"
+  },
+  {
+   "regex": "^coop( ?365)?\\b|^365 ?discount",
+   "category": "Groceries",
+   "parent": null,
+   "clean_name": "Coop",
+   "reason": "Coop / 365discount"
+  },
+  {
+   "regex": "^fakta\\b",
+   "category": "Groceries",
+   "parent": null,
+   "clean_name": "Fakta",
+   "reason": "Fakta"
+  },
+  {
+   "regex": "^(lovbjerg|loevbjerg)",
+   "category": "Groceries",
+   "parent": null,
+   "clean_name": "Løvbjerg",
+   "reason": "Løvbjerg"
+  },
+  {
+   "regex": "^aldi\\b",
+   "category": "Groceries",
+   "parent": null,
+   "clean_name": "Aldi",
+   "reason": "Aldi"
+  },
+  {
+   "regex": "^(min ?kobmand|let ?kob|abc lavpris|irma|nemlig|kobmandsgarden)",
+   "category": "Groceries",
+   "parent": null,
+   "clean_name": "Danish grocer",
+   "reason": "Danish grocery chains"
+  },
+  {
+   "regex": "^7 eleven\\b",
+   "category": "Groceries",
+   "parent": null,
+   "clean_name": "7-Eleven",
+   "reason": "Owner tags 7-Eleven Groceries"
+  },
+  {
+   "regex": "^(tgtg|too good to go|to good to go)\\b",
+   "category": "Restaurants",
+   "parent": null,
+   "clean_name": "Too Good To Go",
+   "reason": "Food rescue app"
+  },
+  {
+   "regex": "^(tbc|the burger concept)\\b",
+   "category": "Restaurants",
+   "parent": null,
+   "clean_name": "The Burger Concept",
+   "reason": "TBC store codes"
+  },
+  {
+   "regex": "^(mcd|mcdonald)",
+   "category": "Restaurants",
+   "parent": null,
+   "clean_name": "McDonald's",
+   "reason": "McDonald's store codes"
+  },
+  {
+   "regex": "^(burger king|kfc|sunset (blvd|boulevard)|max burgers|jagger)\\b",
+   "category": "Restaurants",
+   "parent": null,
+   "clean_name": "Fast food",
+   "reason": "Fast-food chains"
+  },
+  {
+   "regex": "^(wolt|just ?eat|uber eats|hungry)",
+   "category": "Restaurants",
+   "parent": null,
+   "clean_name": "Food delivery",
+   "reason": "Delivery apps"
+  },
+  {
+   "regex": "^(starbucks|espresso house|baresso|joe and the juice|emmerys)",
+   "category": "Coffee",
+   "parent": null,
+   "clean_name": "Coffee chain",
+   "reason": "Coffee chains"
+  },
+  {
+   "regex": "^(circle k|okq8|ok\\b|q8|shell|ingo|f24|uno ?x|oil tank|go ?on\\b|goon|din ?x|preem|st1\\b)",
+   "category": "Transport",
+   "parent": null,
+   "clean_name": "Fuel station",
+   "reason": "Danish fuel chains"
+  },
+  {
+   "regex": "^(q ?park|apcoa|easy ?park|europark|parkzone|onepark|parkman|\\d+ qr apcoa)",
+   "category": "Transport",
+   "parent": null,
+   "clean_name": "Parking",
+   "reason": "Parking operators (fines matched earlier)"
+  },
+  {
+   "regex": "\\bparkering\\b",
+   "category": "Transport",
+   "parent": null,
+   "clean_name": "Parking",
+   "reason": "\"parkering\" = parking"
+  },
+  {
+   "regex": "^(dsb|rejsekort|midttrafik|movia|fynbus|letbane|aarhus letbane)\\b",
+   "category": "Transport",
+   "parent": null,
+   "clean_name": "Public transport",
+   "reason": "Danish public transport"
+  },
+  {
+   "regex": "^(lime|voi|tier|greenmobility|gomore|donkey republic)\\b",
+   "category": "Transport",
+   "parent": null,
+   "clean_name": "Shared mobility",
+   "reason": "Scooters/car sharing in DK"
+  },
+  {
+   "regex": "^(citybee|bolt)\\b",
+   "category": "Transport",
+   "parent": "Travel",
+   "clean_name": "Car sharing abroad",
+   "reason": "Baltic car sharing/rides"
+  },
+  {
+   "regex": "^(thansen|cleverlog|autodoc|marias auto|carservice|car service)",
+   "category": "Transport",
+   "parent": null,
+   "clean_name": "Car parts/service",
+   "reason": "Car parts and repair"
+  },
+  {
+   "regex": "^cars on booking",
+   "category": "Transport",
+   "parent": "Travel",
+   "clean_name": "Booking.com Cars",
+   "reason": "Rental car booking"
+  },
+  {
+   "regex": "^(ryanair|airbaltic|norwegian|sas\\b|wizz|easyjet|lufthansa|kiwi|travellink|trainline|trenitalia|oebb|flixbus)",
+   "category": "Transport",
+   "parent": "Travel",
+   "clean_name": "Travel tickets",
+   "reason": "Flights and long-distance rail"
+  },
+  {
+   "regex": "^(hotel at booking|booking|airbnb|hotels com|expedia)",
+   "category": "Stay",
+   "parent": "Travel",
+   "clean_name": "Accommodation",
+   "reason": "Lodging platforms"
+  },
+  {
+   "regex": "apote[kc]|pharmac|farmac|apotheke",
+   "category": "Doctor",
+   "parent": null,
+   "clean_name": "Pharmacy",
+   "reason": "Owner tags pharmacies Doctor"
+  },
+  {
+   "regex": "\\ba ?kasse\\b",
+   "category": "Bills",
+   "parent": null,
+   "clean_name": "A-kasse",
+   "reason": "Unemployment insurance fund"
+  },
+  {
+   "regex": "^(tryg|alm brand|topdanmark|codan|gjensidige)",
+   "category": "Bills",
+   "parent": null,
+   "clean_name": "Insurance",
+   "reason": "Insurance; owner uses Bills"
+  },
+  {
+   "regex": "^(oister|lebara|lyca|telenor|telia|yousee|cbb|hiper|norlys|nrgi|andel energi|ewii|orsted|nortec)",
+   "category": "Bills",
+   "parent": null,
+   "clean_name": "Utilities/telecom",
+   "reason": "Telecom, power, laundry"
+  },
+  {
+   "regex": "^(apple|icloud|spotify|netflix|hbo|viaplay|tv ?2 play|disney|dazn|youtube|openai|chatgpt|claude|anthropic|cloudflare|canva|google one)",
+   "category": "Bills",
+   "parent": null,
+   "clean_name": "Subscription",
+   "reason": "Owner tags subscriptions Bills"
+  },
+  {
+   "regex": "^(fitness ?world|puregym|fitnessx|sats|tst svomme)",
+   "category": "Sport",
+   "parent": null,
+   "clean_name": "Gym/swimming",
+   "reason": "Gyms and swimming"
+  },
+  {
+   "regex": "^(steam|nordisk film|ebillet|megascope|cinemaxx|kino)",
+   "category": "Entertainment",
+   "parent": null,
+   "clean_name": "Games/cinema",
+   "reason": "Games and cinemas"
+  },
+  {
+   "regex": "^(hm dk\\d|h and m|hennes)",
+   "category": "Shopping",
+   "parent": null,
+   "clean_name": "H&M",
+   "reason": "H&M store codes"
+  },
+  {
+   "regex": "^(imerco|sostrene grene|flying tiger|normal\\b|matas|jysk|ikea|elgiganten|power\\b|proshop|cdon|komplett|jem and fix|bauhaus|silvan|harald nyborg|xl byg|biltema|panduro|deichmann|punkt1|avxperten|compumail)",
+   "category": "Shopping",
+   "parent": null,
+   "clean_name": "Retail chain",
+   "reason": "Danish retail chains"
+  },
+  {
+   "regex": "^(rode kors|r de kors|bl kors|bla kors|kirkens korshaer)",
+   "category": "Shopping",
+   "parent": null,
+   "clean_name": "Charity shop",
+   "reason": "Second-hand charity shops"
+  },
+  {
+   "regex": "^(amz|amzn|amazon)\\b",
+   "category": "Shopping",
+   "parent": null,
+   "clean_name": "Amazon",
+   "reason": "Amazon marketplaces"
+  },
+  {
+   "regex": "^(maxi ?zoo|zooplus|petworld)",
+   "category": "Pets",
+   "parent": null,
+   "clean_name": "Pet shop",
+   "reason": "Pet supplies"
+  },
+  {
+   "regex": "klarna",
+   "category": "Shopping",
+   "parent": null,
+   "clean_name": "Klarna",
+   "reason": "Klarna pay-later, usually an online shop",
+   "confidence": 0.6
+  }
+ ],
+ "mcc": {
+  "5411": "Groceries",
+  "5422": "Groceries",
+  "5441": "Groceries",
+  "5451": "Groceries",
+  "5462": "Coffee",
+  "5499": "Groceries",
+  "5300": "Groceries",
+  "5311": "Shopping",
+  "5331": "Shopping",
+  "5399": "Shopping",
+  "5812": "Restaurants",
+  "5813": "Restaurants",
+  "5814": "Restaurants",
+  "5811": "Restaurants",
+  "5541": "Transport",
+  "5542": "Transport",
+  "5172": "Transport",
+  "7523": "Transport",
+  "7512": "Transport",
+  "7513": "Transport",
+  "7519": "Transport",
+  "7531": "Transport",
+  "7538": "Transport",
+  "7542": "Transport",
+  "7549": "Transport",
+  "5013": "Transport",
+  "5532": "Transport",
+  "5533": "Transport",
+  "4111": "Transport",
+  "4112": "Transport",
+  "4121": "Transport",
+  "4131": "Transport",
+  "4789": "Transport",
+  "4784": "Transport",
+  "4468": "Transport",
+  "4511": "Travel",
+  "3246": "Travel",
+  "4411": "Travel",
+  "4722": "Travel",
+  "4582": "Travel",
+  "7011": "Stay",
+  "3501": "Stay",
+  "7012": "Stay",
+  "5309": "Shopping",
+  "4814": "Bills",
+  "4899": "Bills",
+  "4900": "Bills",
+  "4816": "Bills",
+  "5815": "Bills",
+  "5818": "Bills",
+  "7372": "Bills",
+  "7333": "Bills",
+  "6300": "Bills",
+  "5960": "Bills",
+  "6513": "Rent",
+  "7211": "Bills",
+  "7399": "Bills",
+  "8641": "Bills",
+  "5816": "Entertainment",
+  "7832": "Entertainment",
+  "7922": "Entertainment",
+  "7929": "Entertainment",
+  "7991": "Entertainment",
+  "7996": "Entertainment",
+  "7999": "Entertainment",
+  "7994": "Entertainment",
+  "7993": "Entertainment",
+  "5945": "Entertainment",
+  "5735": "Entertainment",
+  "7841": "Entertainment",
+  "7997": "Sport",
+  "7941": "Sport",
+  "5941": "Shopping",
+  "5912": "Doctor",
+  "8011": "Doctor",
+  "8021": "Doctor",
+  "8062": "Doctor",
+  "8099": "Doctor",
+  "8043": "Health",
+  "8042": "Health",
+  "5122": "Health",
+  "7298": "Health",
+  "5977": "Shopping",
+  "5651": "Shopping",
+  "5621": "Shopping",
+  "5631": "Shopping",
+  "5641": "Shopping",
+  "5661": "Shopping",
+  "5691": "Shopping",
+  "5699": "Shopping",
+  "5611": "Shopping",
+  "5732": "Shopping",
+  "5734": "Shopping",
+  "5045": "Shopping",
+  "5065": "Shopping",
+  "5039": "Shopping",
+  "5200": "Shopping",
+  "5211": "Shopping",
+  "5251": "Shopping",
+  "5261": "Shopping",
+  "5262": "Shopping",
+  "5712": "Shopping",
+  "5719": "Shopping",
+  "5722": "Shopping",
+  "5942": "Shopping",
+  "5943": "Shopping",
+  "5944": "Shopping",
+  "5949": "Shopping",
+  "5950": "Shopping",
+  "5931": "Shopping",
+  "5971": "Shopping",
+  "5999": "Shopping",
+  "2741": "Shopping",
+  "7338": "Shopping",
+  "5964": "Shopping",
+  "5965": "Shopping",
+  "5969": "Shopping",
+  "5947": "Gifts",
+  "5992": "Gifts",
+  "5995": "Pets",
+  "0742": "Pets",
+  "7230": "Other",
+  "7251": "Other",
+  "7379": "Other",
+  "9402": "Other",
+  "7299": "Other",
+  "8999": "Other",
+  "9311": "Other",
+  "9399": "Other",
+  "8220": "Other",
+  "8299": "Other",
+  "8398": "Other",
+  "4829": null,
+  "6011": null,
+  "6010": null,
+  "6012": null,
+  "6051": null,
+  "6540": null,
+  "6211": null
+ },
+ "rule_audit": [
+  {
+   "pattern": "apple",
+   "current": "Girlfriend (rule)",
+   "suggested": "Bills",
+   "why": "Apple.com/bill subscriptions; memory has 198 obs as Bills"
+  },
+  {
+   "pattern": "revolut",
+   "current": "Bills (rule)",
+   "suggested": "Transfer",
+   "why": "Revolut**xxxx are own top-ups; memory Transfer 63 obs"
+  },
+  {
+   "pattern": "ok",
+   "current": "Food (rule)",
+   "suggested": "Transport",
+   "why": "OK is a fuel chain; memory Transport 19 obs"
+  },
+  {
+   "pattern": "dsb",
+   "current": "Travel (rule)",
+   "suggested": "Transport",
+   "why": "Domestic commuting trains; memory Transport 76 obs"
+  },
+  {
+   "pattern": "rejsekort",
+   "current": "Travel (rule)",
+   "suggested": "Transport",
+   "why": "Danish travel card; memory Transport"
+  },
+  {
+   "pattern": "zalando",
+   "current": "Other (expense rule)",
+   "suggested": "Shopping",
+   "why": "Clothing webshop; other rule and memory say Shopping"
+  },
+  {
+   "pattern": "condoms",
+   "current": "Shopping (rule)",
+   "suggested": "Health",
+   "why": "Memory and manual use Health"
+  },
+  {
+   "pattern": "mcdonald",
+   "current": "Food (rule)",
+   "suggested": "Restaurants",
+   "why": "Domestic fast food; mcdonalds rule is Restaurants"
+  },
+  {
+   "pattern": "kfc",
+   "current": "Food (rule)",
+   "suggested": "Restaurants",
+   "why": "kfc danmark memory is Restaurants"
+  },
+  {
+   "pattern": "bowl n fun hobro",
+   "current": "Groceries (memory) / Restaurants (rule)",
+   "suggested": "Entertainment",
+   "why": "Bowling centre"
+  },
+  {
+   "pattern": "lime hvorfor",
+   "current": "Food (memory)",
+   "suggested": "Transport",
+   "why": "Lime scooters"
+  },
+  {
+   "pattern": "top up by",
+   "current": "Other income (memory)",
+   "suggested": "Transfer",
+   "why": "Apple Pay top-up into Revolut is own money"
+  },
+  {
+   "pattern": "tst svommeaf",
+   "current": "Health (memory)",
+   "suggested": "Sport",
+   "why": "Swimming pool entry; manual \"Swimming\" is Sport"
+  },
+  {
+   "pattern": "zettle",
+   "current": "Restaurants (memory)",
+   "suggested": "null / block",
+   "why": "Zettle is a payment processor, not a merchant"
+  },
+  {
+   "pattern": "sumup",
+   "current": "Groceries (memory)",
+   "suggested": "null / block",
+   "why": "SumUp is a payment processor, not a merchant"
+  },
+  {
+   "pattern": "klarna",
+   "current": "Shopping (memory)",
+   "suggested": "null / block",
+   "why": "BNPL rail; use the merchant after Klarna*"
+  },
+  {
+   "pattern": "bolt eur2507301417",
+   "current": "Restaurants (memory)",
+   "suggested": "Travel>Food via pattern",
+   "why": "Key holds a unique order id, never matches again"
+  },
+  {
+   "pattern": "amorino",
+   "current": "Shopping (memory)",
+   "suggested": "Travel>Food",
+   "why": "Gelato chain"
+  }
+ ]
+}
