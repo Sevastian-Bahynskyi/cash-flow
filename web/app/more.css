@@ -1,1 +1,33 @@
 /* Styles for the settings-side screens (bank, categories, rules, alerts, profile, consent). Tokens only. */
+.linkrow .nm{display:block;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.linkrow .end .bankamt{color:var(--ink);font-weight:500}
+.askdel{grid-template-columns:1fr auto auto;margin-top:8px;background:var(--surface);border-radius:14px}
+.askdel .btn{min-height:44px}
+.dgoal{display:block;max-width:240px;margin:12px auto 0}
+.linkrow .goal{display:block}
+.bankstats .big2{font-size:22px;overflow-wrap:anywhere}
+@media (min-width:960px){.bankstats .big2{font-size:28px}}
+.avatar.person{width:26px;height:26px;font-size:12px;background:var(--surface-2);color:var(--ink-2)}
+.syshero{margin:0 auto 6px;width:56px;height:56px;color:var(--ink-2)}
+.syshero svg.i{width:32px;height:32px}
+/* a .panel clips (overflow:hidden), so in the sheet's flex column it would shrink to nothing when the content is long */
+.row .meta.wrap{white-space:normal}
+.me{display:flex;gap:16px;align-items:center;margin:4px 0 18px}
+.mepic{border-radius:50%;flex:none}
+.mepic img{display:block;width:84px;height:84px;border-radius:50%;object-fit:cover}
+.dates2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.dates2 input{min-width:0}
+.printout{display:none}
+@media print{
+  :root{color-scheme:light}
+  body *{visibility:hidden}
+  .printout,.printout *{visibility:visible;color:CanvasText}
+  .printout{display:block;position:absolute;left:0;top:0;width:100%;font-size:11px}
+  .printout h1{font-size:18px;margin:0 0 4px}
+  .printout table{width:100%;border-collapse:collapse;margin-top:12px}
+  .printout th,.printout td{text-align:left;padding:4px 6px;border-bottom:1px solid var(--line-2)}
+  .printout .r{text-align:right;font-variant-numeric:tabular-nums}
+}
+.auth .authbrand{font-family:var(--font-newsreader),'Newsreader',Georgia,serif;font-size:22px;color:var(--ink);margin:0 0 28px}
+.auth h1.consenth{font-size:34px}
+.auth .uri{font-size:13px;color:var(--ink-3);margin-top:6px}

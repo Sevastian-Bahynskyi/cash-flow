@@ -183,6 +183,12 @@ export function DataProvider({ children }: { children: React.ReactNode }): React
 export async function write(store: Store, tables: TableName[], run: () => PromiseLike<{ error: { message: string; code?: string } | null }>): Promise<void> {
   if (!navigator.onLine) throw new Error('You’re offline. This change needs a connection.')
   const { error } = await run()
-  if (error) throw new Error(error.code === '23503' ? 'It’s still in use, so it can’t be deleted.' : error.code === '23505' ? 'That already exists.' : error.message)
+  if (error) {
+    if (error.code === '23503') throw new Error('It’s still in use, so it can’t be deleted.')
+    if (error.code === '23505') throw new Error('That already exists.')
+    if (error.code === '42501' || /JWT|auth/i.test(error.message)) throw new Error('Your session ended. Sign in again.')
+    console.error('[write]', error)
+    throw new Error('Not saved. Try again in a moment.')
+  }
   await store.reload(tables)
 }

@@ -14,3 +14,11 @@ test('parseAmount reads typed amounts as integer minor units', () => {
   assert.equal(parseAmount('-5'), null)
   assert.equal(parseAmount('9999999999'), null)
 })
+
+test('typedAmount keeps what was typed, in the locale format', async () => {
+  const { typedAmount } = await import('./fmt.ts')
+  const dec = new Intl.NumberFormat(undefined).formatToParts(1.5).find((p) => p.type === 'decimal')?.value
+  assert.ok(typedAmount('12,', 'DKK').includes(`12${dec}`))
+  assert.ok(typedAmount('12,5', 'DKK').includes(`12${dec}5`))
+  assert.ok(!typedAmount('', 'DKK').includes(`${dec}`) || typedAmount('', 'DKK').includes('0'))
+})

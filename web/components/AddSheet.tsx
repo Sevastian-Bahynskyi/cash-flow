@@ -9,7 +9,7 @@ import { useStore } from '@/lib/data/store'
 import { useModel } from '@/lib/data/model'
 import { supabase } from '@/lib/supabase/client'
 import { PARTNER } from '@/lib/partner'
-import { addDays, dayLabel, kr, minorToInput, parseAmount, todayYmd } from '@/lib/fmt'
+import { addDays, dayLabel, kr, minorToInput, parseAmount, todayYmd, typedAmount } from '@/lib/fmt'
 import { convertToDkk, currencyOptions } from '@/lib/domain/currency'
 import { findSharedTopupCategoryOption, isAllowedIncomeCategoryOption, isSalaryCategoryOption, normalizeIncomeCategoryOption } from '@/lib/domain/category-rules'
 import { normalizeMerchantLookupKey } from '@/lib/domain/merchant'
@@ -192,7 +192,7 @@ function Composer({ draft, onClose, onAgain }: { draft: Draft; onClose: () => vo
             <div ref={amtRef} id="amt" className={`big serif num ${amt ? '' : 'zero'}`} role="textbox" aria-label="Amount" tabIndex={0} inputMode="decimal"
               onKeyDown={(e) => {
                 if (/^[0-9]$/.test(e.key)) { key(e.key); e.preventDefault() } else if (e.key === ',' || e.key === '.') { key(','); e.preventDefault() } else if (e.key === 'Backspace') { key('del'); e.preventDefault() } else if (e.key === 'Enter') next()
-              }}>{amt ? `${amt} ${ccy === 'DKK' ? 'kr.' : ccy}` : kr(0, false, ccy)}</div>
+              }}>{typedAmount(amt, ccy)}</div>
             <p>{mode === 'income' ? 'Coming in' : mode === 'topup' ? `Into the pot with ${partner}. Not spending.` : shared ? `Shared with ${partner}, from the pot` : 'Yours'}</p>
             {err && <p style={{ color: 'var(--over-text)' }} role="alert">{err}</p>}
           </div>
