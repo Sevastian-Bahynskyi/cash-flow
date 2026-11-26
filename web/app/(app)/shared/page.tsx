@@ -37,8 +37,8 @@ function Shared({ m }: { m: Model }): React.JSX.Element {
       ) : (
         <div className="cols"><div>
           <section className="hero" aria-label={`The pot with ${PARTNER}`}>
-            <div className="top"><span>The pot you share</span><span className="pair" aria-hidden="true" style={{ transform: 'scale(.7)', transformOrigin: 'right center', width: 80 }}><span className="a">{PARTNER[0]}</span><span className="y">You</span></span></div>
-            <div className="big num" style={{ fontSize: 56, marginTop: 6 }}>{kr(p.sharedBalance, true)}</div>
+            <div className="top"><span>The pot you share</span><span className="pair" aria-hidden="true"><span className="a">{PARTNER[0]}</span><span className="y">You</span></span></div>
+            <div className="big num" style={{ fontSize: 'min(48px, 11vw)', marginTop: 6 }}>{kr(p.sharedBalance)}</div>
             <div className="sub">{p.sharedBalance < 0 ? 'more spent than put in' : 'left in the pot'}</div>
             <div className="sharebar" aria-hidden="true"><i style={{ flex: p.meTopupTotal || 0.0001, background: 'var(--on-you)' }} /><i style={{ flex: p.gfTopupTotal || 0.0001, background: 'var(--anna)' }} /></div>
             <div className="pace" style={{ border: 0, margin: 0, padding: 0 }}><span>You put in <b className="num">{kr(p.meTopupTotal, true)}</b></span><span>{PARTNER} put in <b className="num">{kr(p.gfTopupTotal, true)}</b></span></div>

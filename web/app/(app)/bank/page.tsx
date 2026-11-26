@@ -68,7 +68,7 @@ function Accounts({ t }: { t: Tables }): React.JSX.Element {
             <div className="panel">{accs.map((a) => (
               <div className="row" key={a.id}><span className="who"><Icon name={a.role === 'joint' ? 'shared' : a.role === 'savings' ? 'savings' : 'bank'} /></span>
                 <span style={{ minWidth: 0 }}><div className="nm">{a.name ?? ROLE[a.role]} <span className="meta">{a.currency}</span></div><div className="meta">{ROLE[a.role]}{a.last_error ? ', last sync failed' : a.last_synced_at ? `, synced ${dayLabel(a.last_synced_at.slice(0, 10)).toLowerCase()}` : ''}</div></span>
-                <span className="amt num">{a.balance_minor === null ? '–' : kr(a.balance_minor, true, a.currency)}</span></div>
+                <span className="amt num">{a.balance_minor === null ? '–' : kr(a.balance_minor, false, a.currency)}</span></div>
             ))}</div>
             <p className="note">Read-only access {days < 0 ? 'ended' : `until ${shortDate(c.valid_until.slice(0, 10))}`}{days >= 0 && days < 14 ? `, ${days} ${days === 1 ? 'day' : 'days'} left` : ''}.</p>
           </section>

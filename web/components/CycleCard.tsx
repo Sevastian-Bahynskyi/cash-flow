@@ -67,9 +67,10 @@ export function CycleCard({ m }: { m: Model }): React.JSX.Element | null {
           <span className="todaydot" style={{ left: pct(todayX), top: pct(Y(spentSoFar)) }} />
         </div>
         <div className="axis">
-          {todayX > 0.22 && <span style={{ left: 0 }}>{shortDate(c.startOn)}</span>}
-          <span style={{ left: pct(todayX), transform: `translateX(${todayX > 0.9 ? '-100%' : todayX < 0.1 ? '0' : '-50%'})` }}>Today</span>
-          {todayX < 0.72 && <span style={{ right: 0 }}>{shortDate(c.endInclusive)}</span>}
+          {/* start and end always show; "Today" only where it has room (the dot already marks today) */}
+          <span style={{ left: 0 }}>{shortDate(c.startOn)}</span>
+          {todayX > 0.25 && todayX < 0.72 && <span style={{ left: pct(todayX), transform: 'translateX(-50%)' }}>Today</span>}
+          <span style={{ right: 0 }}>{shortDate(c.endInclusive)}</span>
         </div>
       </div>
       {hasBudgets && <div className="pace"><span>{pace}</span><span className="num"><b>{usedPct}%</b> of budgets used, <b>{gonePct}%</b> of days gone</span></div>}

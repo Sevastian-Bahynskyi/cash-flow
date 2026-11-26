@@ -9,7 +9,7 @@
   .brow .pill{justify-self:end}
 }
 .mka-lines .row{min-height:64px}
-.mka-lines .row .mk-meter{margin:7px 0 3px;max-width:240px}
+.mka-lines .row .mk-meter{margin:8px 0 6px}
 
 /* Budget hero: ahead keeps the indigo card, said in words. Past cycles: kept, checked. */
 .mka-aheadline,.mka-kept{display:inline-flex;align-items:center;gap:4px 8px;flex-wrap:wrap}
@@ -28,3 +28,4 @@
 .herometer .mk-meter.over .mk-fill{background:rgba(255,255,255,.55)}
 .herometer .mk-meter .mk-today{background:var(--on-you-2)}
 .herometer .mk-meter .mk-end{background:var(--you)}
+.herometer .mk-meter .mk-more{background:var(--on-you)}

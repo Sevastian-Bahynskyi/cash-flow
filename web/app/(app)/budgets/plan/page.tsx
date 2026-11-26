@@ -36,7 +36,7 @@ function Plan({ m }: { m: Model }): React.JSX.Element {
         <div className="panel">
           <div className="flowrow"><span>Money in</span><b style={{ color: 'var(--in)' }}>{plus(b.income, true)}</b></div>
           <div className="flowrow"><span>If every budget is fully spent</span><b>{ifAll < 0 ? kr(ifAll, true) : `${kr(ifAll, true)} to save`}</b></div>
-          <div className="flowrow"><span>Real available to save, after what you spent</span><b style={{ color: real >= 0 ? 'var(--in)' : 'var(--over-text)' }}>{kr(real, true)}</b></div>
+          <div className="flowrow"><span>Real available to save, after what you spent</span><b style={{ color: real >= 0 ? undefined : 'var(--over-text)', fontWeight: 600 }}>{kr(real, true)}</b></div>
         </div>
         <p className="note">Your spending counts your part of shared expenses. Money moved to the pot doesn’t count.</p>
       </div><div>

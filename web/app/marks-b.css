@@ -2,7 +2,7 @@
 
 /* Lists: each day header carries a thin spend bar scaled to a heavy day in the list
    (indigo yours, saffron your part of shared), so heavy days stand out. */
-.mkb-dayh{position:relative;padding-bottom:12px}
+.mkb-dayh{position:relative;padding-bottom:16px}
 .mkb-today{color:var(--ink)}
 .mkb-daybar{position:absolute;left:4px;right:4px;bottom:4px;height:4px;display:flex;gap:2px;border-radius:99px;background:var(--line)}
 .mkb-daybar i{display:block;height:100%;border-radius:99px;background:var(--you-mark);min-width:3px}

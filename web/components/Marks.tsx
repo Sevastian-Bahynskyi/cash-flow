@@ -22,7 +22,7 @@ export function budgetState(spent: number, amount: number, daysGoneShare: number
 
 /**
  * A budget meter: a round bar filled to what is spent. Within the budget it is indigo, with a short line at today;
- * over the budget the whole bar turns a calm grey, with a gap where the budget ended. The words beside it say the rest.
+ * over the budget the bar turns a calm grey up to where the budget ended, then a darker grey for the part over. The words beside it say the rest.
  */
 export function Meter({ spent, amount, daysGoneShare }: { spent: number; amount: number; daysGoneShare: number }): React.JSX.Element | null {
   if (!amount) return null
@@ -31,7 +31,7 @@ export function Meter({ spent, amount, daysGoneShare }: { spent: number; amount:
   return (
     <span className={`mk-meter ${st}`} aria-hidden="true">
       <i className="mk-fill" style={{ width: pct(spent / amount) }} />
-      {st === 'over' ? <i className="mk-end" style={{ left: pct(amount / spent) }} /> : <i className="mk-today" style={{ left: pct(daysGoneShare) }} />}
+      {st === 'over' ? <><i className="mk-more" style={{ left: pct(amount / spent) }} /><i className="mk-end" style={{ left: pct(amount / spent) }} /></> : <i className="mk-today" style={{ left: pct(daysGoneShare) }} />}
     </span>
   )
 }

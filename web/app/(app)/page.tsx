@@ -63,14 +63,14 @@ function Home({ m }: { m: Model }): React.JSX.Element {
         {(over.length > 0 || ahead.length > 0) && <>
           <h2 className="sec">Needs a look</h2>
           <div className="panel mka-lines">{[...over, ...ahead].map((x) => (
-            <Link className="row" key={x.id} href={`/budgets?cat=${x.id}`}><span className="who cat"><Icon name={x.cat!.icon} /></span><span style={{ minWidth: 0 }}><div className="nm">{x.cat!.name}</div><div className="meta num">{kr(x.spent, true)} of {kr(x.amount, true)}</div><Meter spent={x.spent} amount={x.amount} daysGoneShare={share} /></span><StatePill left={x.left} st={stateOf(x.spent, x.amount, share)} /></Link>
+            <Link className="row" key={x.id} href={`/budgets?cat=${x.id}`}><span className="who cat"><Icon name={x.cat!.icon} /></span><span style={{ minWidth: 0 }}><div className="nm">{x.cat!.name}</div><Meter spent={x.spent} amount={x.amount} daysGoneShare={share} /><div className="meta num">{kr(x.spent, true)} of {kr(x.amount, true)}</div></span><StatePill left={x.left} st={stateOf(x.spent, x.amount, share)} /></Link>
           ))}</div>
         </>}
         <h2 className="sec">Balance</h2>
         <div className="panel" style={{ padding: 16 }}>
           <div className="hrow"><div className="seg" role="group" aria-label="Period">{(['cycle', 'year', 'all'] as const).map((k) => <button key={k} aria-pressed={per === k} onClick={() => setPer(k)}>{k === 'cycle' ? 'Cycle' : k === 'year' ? 'Year' : 'All time'}</button>)}</div>
             <b className="num" style={{ fontSize: 20, fontWeight: 500, color: bal > 0 ? 'var(--in)' : undefined }}>{bal > 0 ? plus(bal, true) : kr(bal, true)}</b></div>
-          <p className="note" style={{ padding: '8px 0 0' }}>Money in minus your spending and what you moved to the pot.</p>
+          <p className="note" style={{ padding: '10px 0 0', margin: 0 }}>Money in minus your spending and what you moved to the pot.</p>
         </div>
       </div>
       <div>

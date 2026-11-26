@@ -37,6 +37,7 @@ function Pace({ m, c, cat, budget }: { m: Model; c: Cycle; cat: CategoryRow; bud
       <svg viewBox={`0 0 ${W} ${H + 22}`} role="img" aria-label={`${cat.name}: spent by day this cycle against the cycle before and the budget`}>
         <line x1={0} x2={W - 4} y1={H} y2={H} stroke="var(--line-2)" />
         {budget > 0 && <line x1={0} x2={W - 4} y1={Y(budget)} y2={Y(budget)} stroke="var(--ink-2)" strokeWidth={1.4} strokeDasharray="5 5" />}
+        {budget > 0 && <text x={W - 4} y={Y(budget) - 6} fontSize={11} fill="var(--ink-2)" textAnchor="end">Budget {kr(budget, true)}</text>}
         {last.length > 0 && <path d={path(last)} fill="none" stroke="var(--ink-3)" strokeWidth={2} strokeLinejoin="round" opacity={0.55} />}
         {now.length > 0 && <path d={`${path(now)}L${X(now.length - 1).toFixed(1)} ${H}L${X(0).toFixed(1)} ${H}Z`} fill="var(--you-mark)" opacity={0.14} />}
         {now.length > 0 && <path d={path(now)} fill="none" stroke="var(--you-mark)" strokeWidth={3} strokeLinejoin="round" strokeLinecap="round" />}
