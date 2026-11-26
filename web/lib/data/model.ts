@@ -5,7 +5,7 @@ import { applyCategoryOverrides, buildCategoryMeta, getDisplayCategoryName, type
 import type { CategoryOption } from '@/lib/domain/categories-types'
 import { findIncomeParentIds } from '@/lib/domain/category-rules'
 import { buildNavigableCycles, findCycleFor, type SalaryCycle } from '@/lib/domain/cycles'
-import { computePersonalExpenseMinorByTransactionId } from '@/lib/domain/shared'
+import { computeMyCostByTransactionId } from '@/lib/domain/shared'
 import { addDays, daysBetween, parseYmd, todayYmd, ymd } from '@/lib/fmt'
 import { useStore } from './store'
 import type { BudgetRow, CategoryRow, Tables, TransactionRow } from './types'
@@ -26,7 +26,8 @@ function derive(t: Tables) {
   const incomeParents = findIncomeParentIds(cats)
   const isTransfer = (id: string | null): boolean => (parentOf(id)?.name.toLowerCase() ?? '') === TRANSFER
   const tx = t.transactions
-  const share = computePersonalExpenseMinorByTransactionId(tx.map((r) => ({ ...r, shared_participant: r.shared_participant ?? null })))
+  // My cost of each expense: joint spending at my share of the cycle's top-ups (trailing 90 days, then half, when a cycle has none).
+  const share = computeMyCostByTransactionId(tx, buildNavigableCycles(tx), today)
   const paidBack = new Map<string, number>()
   for (const p of t.paybacks) paidBack.set(p.expense_transaction_id, (paidBack.get(p.expense_transaction_id) ?? 0) + p.amount_minor)
   const splitsOf = new Map<string, typeof t.transaction_splits>()

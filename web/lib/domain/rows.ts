@@ -8,7 +8,7 @@ export type MerchantRuleRow = {
   is_shared_topup: boolean; is_blocked: boolean; priority: number; source: 'manual' | 'bootstrap_curated' | 'bootstrap_history'; notes: string | null; updated_at: string
 }
 export type PersonKind = 'self' | 'partner' | 'settle_up' | 'family' | 'ignore'
-export type TransferPersonRow = { id: string; user_id: string; name: string; normalized_name: string; kind?: PersonKind; opening_balance_minor?: number; created_at: string; updated_at: string }
+export type TransferPersonRow = { id: string; user_id: string; name: string; normalized_name: string; kind?: PersonKind; opening_balance_minor?: number; alias_of?: string | null; created_at: string; updated_at: string }
 // Bank sync (v2). Clients only read these; the bank-sync function writes them.
 export type BankConnectionRow = { id: string; aspsp_name: string; valid_until: string; status: string }
 export type BankAccountRow = { id: string; connection_id: string; name: string | null; currency: string; role: 'personal' | 'joint' | 'savings'; balance_minor: number | null; balance_at: string | null; last_synced_at: string | null; last_error: string | null }

@@ -64,7 +64,7 @@ const LOAD: { [K in TableName]: (uid: string) => Promise<Tables[K]> } = {
   receivables: () => all((a, b) => sb().from('receivables').select('id,user_id,name,principal_minor,remaining_minor,status,created_at').order('created_at', { ascending: false }).order('id').range(a, b)),
   receivable_events: () => all((a, b) => sb().from('receivable_events').select('*').order('occurred_on', { ascending: false }).order('created_at', { ascending: false }).order('id').range(a, b)),
   merchant_category_rules: () => all((a, b) => sb().from('merchant_category_rules').select('*').order('priority', { ascending: false }).order('updated_at', { ascending: false }).order('id').range(a, b)),
-  transfer_people: () => all((a, b) => sb().from('transfer_people').select('id,user_id,name,normalized_name,kind,opening_balance_minor,created_at,updated_at').order('name').order('id').range(a, b)),
+  transfer_people: () => all((a, b) => sb().from('transfer_people').select('id,user_id,name,normalized_name,kind,opening_balance_minor,alias_of,created_at,updated_at').order('name').order('id').range(a, b)),
   profile: async (uid) => {
     const { data, error } = await sb().from('profiles').select('display_name,avatar_url').eq('user_id', uid).maybeSingle()
     if (error) throw new Error(error.message)
