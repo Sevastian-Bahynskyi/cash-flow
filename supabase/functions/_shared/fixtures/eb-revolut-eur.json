@@ -1,0 +1,133 @@
+{
+ "account": {
+  "uid": "aaaa0003-0000-4000-8000-000000000003",
+  "session_id": "00000000-5e55-4000-8000-000000000001",
+  "name": "Ivan Testov",
+  "product": null,
+  "iban": "LT000000000000000005",
+  "currency": "EUR",
+  "cash_account_type": "CACC",
+  "identification_hash": "FAKEHASH.aaaa0003"
+ },
+ "balances": [
+  {
+   "name": "Fake balance",
+   "balance_amount": {
+    "currency": "EUR",
+    "amount": "40.00"
+   },
+   "balance_type": "ITAV",
+   "last_change_date_time": null,
+   "reference_date": null,
+   "last_committed_transaction": null
+  }
+ ],
+ "raw": [
+  {
+   "entry_reference": "30000000-0000-4000-8000-000000000022",
+   "merchant_category_code": null,
+   "transaction_amount": {
+    "currency": "EUR",
+    "amount": "0.00"
+   },
+   "creditor": {
+    "name": "Parking Phantom",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "creditor_account": null,
+   "creditor_agent": null,
+   "debtor": {
+    "name": "IVAN TESTOV",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "debtor_account": null,
+   "debtor_agent": null,
+   "bank_transaction_code": {
+    "description": null,
+    "code": "CARD_PAYMENT",
+    "sub_code": null
+   },
+   "credit_debit_indicator": "DBIT",
+   "status": "BOOK",
+   "booking_date": "2026-10-19",
+   "value_date": "2026-10-19",
+   "transaction_date": null,
+   "balance_after_transaction": null,
+   "reference_number": null,
+   "reference_number_schema": null,
+   "remittance_information": [
+    "Parking Phantom"
+   ],
+   "debtor_account_additional_identification": [
+    {
+     "identification": "1111",
+     "scheme_name": "CPAN",
+     "issuer": "MASTERCARD"
+    }
+   ],
+   "creditor_account_additional_identification": null,
+   "exchange_rate": null,
+   "note": null,
+   "transaction_id": null
+  },
+  {
+   "entry_reference": "30000000-0000-4000-8000-000000000023",
+   "merchant_category_code": null,
+   "transaction_amount": {
+    "currency": "EUR",
+    "amount": "12.00"
+   },
+   "creditor": {
+    "name": "Gelato Fictivo",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "creditor_account": null,
+   "creditor_agent": null,
+   "debtor": {
+    "name": "IVAN TESTOV",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "debtor_account": null,
+   "debtor_agent": null,
+   "bank_transaction_code": {
+    "description": null,
+    "code": "CARD_PAYMENT",
+    "sub_code": null
+   },
+   "credit_debit_indicator": "DBIT",
+   "status": "BOOK",
+   "booking_date": "2026-10-20",
+   "value_date": "2026-10-20",
+   "transaction_date": null,
+   "balance_after_transaction": null,
+   "reference_number": null,
+   "reference_number_schema": null,
+   "remittance_information": [
+    "Gelato Fictivo"
+   ],
+   "debtor_account_additional_identification": [
+    {
+     "identification": "1111",
+     "scheme_name": "CPAN",
+     "issuer": "MASTERCARD"
+    }
+   ],
+   "creditor_account_additional_identification": null,
+   "exchange_rate": null,
+   "note": null,
+   "transaction_id": null
+  }
+ ]
+}

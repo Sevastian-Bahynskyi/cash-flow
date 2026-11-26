@@ -1,4 +1,4 @@
-<title>Cashflow Directions</title>
+<title>__TITLE__</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap">
 <style>
@@ -58,15 +58,16 @@ textarea{width:100%;min-height:96px;border-radius:14px;border:1px solid var(--li
 <main>
   <div class="stage" id="stage"></div>
   <div class="side">
-    <h1>Five directions</h1>
-    <p class="lede">Try each one like the app, or compare them on one screen. Pick a direction per screen, or mix, and leave a note. Everything saves by itself.</p>
+    <h1 id="ttl"></h1>
+    <p class="lede" id="lede"></p>
     <div><p class="label">View</p><div class="row"><div class="seg" id="mode"><button data-v="try">Try one</button><button data-v="compare">Compare all</button></div><div class="seg" id="width"><button data-v="phone">Phone</button><button data-v="desk">Desktop</button></div><div class="seg" id="theme"><button data-v="light">Light</button><button data-v="dark">Dark</button></div></div></div>
-    <div id="dirsWrap"><p class="label">Direction</p><div class="row" id="dirs"></div></div>
+    <div id="dirsWrap"><p class="label" id="dirlabel"></p><div class="row" id="dirs"></div></div>
     <div><p class="label">Screen</p><div class="strip" id="strip"></div></div>
     <div class="box"><header><b id="sname"></b><span id="where"></span></header><p class="said" id="said"></p><div><p class="label" id="pickq"></p><div class="picks" id="picks"></div></div><textarea id="note" aria-label="Your note for this screen" placeholder="Your note for this screen"></textarea><div class="state" id="state" role="status"></div></div>
   </div>
 </main>
 <script>
+window.CFG = __CFG__;
 window.DIRS = __DIRS__;
 window.APPS = __APPS__;
 window.DATA_JS = __DATA__;
@@ -74,14 +75,8 @@ window.DATA_JS = __DATA__;
 <script>
 (() => {
   const DIRS = window.DIRS, APPS = window.APPS, el = id => document.getElementById(id);
-  const SCREENS = [
-    { id: 'home', name: 'Home', said: 'The cycle: what is left, days to payday, what needs attention.' },
-    { id: 'add', name: 'Add', said: 'The fast path: amount, category, name, save. Try it.' },
-    { id: 'transactions', name: 'Transactions', said: 'This cycle, by day, in and out.' },
-    { id: 'budget', name: 'Budget', said: 'Eating out is over. All budgets at a glance.' },
-    { id: 'analytics', name: 'Analytics', said: 'Where did the money go, and is it different from last cycle?' },
-    { id: 'overall', name: 'Overall', said: 'Which direction, or which mix? Anything else.' },
-  ];
+  const CFG = window.CFG, SCREENS = CFG.screens;
+  el('ttl').textContent = CFG.h1; el('lede').textContent = CFG.lede; el('dirlabel').textContent = CFG.dirLabel;
   const st = { mode: 'try', width: 'phone', theme: 'light', dir: DIRS[0].id, at: 0 };
   const picks = {}, notes = {}; let col = null, timer;
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -121,13 +116,13 @@ window.DATA_JS = __DATA__;
     const s = SCREENS[st.at];
     el('strip').innerHTML = SCREENS.map((x, i) => `<button data-at="${i}" aria-current="${i === st.at}" class="${picks[x.id] || notes[x.id] ? 'has' : ''}"><em>${i + 1}</em>${x.name}</button>`).join('');
     el('sname').textContent = s.name; el('where').textContent = `${st.at + 1} of ${SCREENS.length}`; el('said').textContent = s.said;
-    el('pickq').textContent = s.id === 'overall' ? 'Your direction overall' : `Best ${s.name} screen`;
+    el('pickq').textContent = s.id === 'overall' ? CFG.overallQ : CFG.pickQ.replace('{name}', s.name);
     el('picks').innerHTML = DIRS.map(d => `<button data-p="${d.id}" aria-pressed="${picks[s.id] === d.id}">${esc(d.letter)}. ${esc(d.name)}</button>`).join('') + (s.id === 'overall' ? `<button data-p="mix" aria-pressed="${picks[s.id] === 'mix'}">A mix</button>` : '');
     if (document.activeElement !== el('note')) el('note').value = notes[s.id] ?? '';
   }
   function render() { side(); stage(); }
   const go = i => { st.at = i; side(); for (const f of frames.keys()) f.contentWindow?.postMessage({ type: 'go', screen: screenId() }, '*'); };
-  window.addEventListener('message', e => { if (e.data?.type !== 'at') return; for (const f of frames.keys()) if (f.contentWindow === e.source && st.mode === 'try') { const i = SCREENS.findIndex(x => x.id === e.data.screen); if (i >= 0 && i !== st.at) { st.at = i; side(); } } });
+  window.addEventListener('message', e => { if (e.data?.type !== 'at') return; for (const f of frames.keys()) if (f.contentWindow === e.source && st.mode === 'try') { const base = x => x.id.split('~')[0]; if (base(SCREENS[st.at]) === e.data.screen) return; const i = SCREENS.findIndex(x => base(x) === e.data.screen); if (i >= 0 && i !== st.at) { st.at = i; side(); } } });
   const keep = async id => { if (!col) { el('state').textContent = 'Not saved here. Tell Claude in the chat.'; return; } try { await col.doc(id).set({ pick: picks[id] ?? null, note: notes[id] ?? '' }); el('state').textContent = 'Saved'; } catch { el('state').textContent = 'Not saved. Tell Claude in the chat.'; } };
   const save = () => { const id = SCREENS[st.at].id; el('state').textContent = 'Saving…'; clearTimeout(timer); timer = setTimeout(() => keep(id), 600); };
   for (const k of ['mode', 'width', 'theme']) el(k).onclick = e => { const b = e.target.closest('button'); if (!b) return; st[k] = b.dataset.v; if (k === 'theme') { side(); for (const f of frames.keys()) f.contentWindow?.postMessage({ type: 'theme', theme: st.theme }, '*'); } else render(); };

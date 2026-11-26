@@ -1,0 +1,484 @@
+{
+ "account": {
+  "uid": "aaaa0001-0000-4000-8000-000000000001",
+  "session_id": "00000000-5e55-4000-8000-000000000001",
+  "name": "Ivan Testov",
+  "product": null,
+  "iban": "DK0000000000000001",
+  "currency": "DKK",
+  "cash_account_type": "CACC",
+  "identification_hash": "FAKEHASH.aaaa0001"
+ },
+ "balances": [
+  {
+   "name": "Fake balance",
+   "balance_amount": {
+    "currency": "DKK",
+    "amount": "8123.45"
+   },
+   "balance_type": "ITBD",
+   "last_change_date_time": null,
+   "reference_date": null,
+   "last_committed_transaction": null
+  },
+  {
+   "name": "Fake balance",
+   "balance_amount": {
+    "currency": "DKK",
+    "amount": "8123.45"
+   },
+   "balance_type": "ITAV",
+   "last_change_date_time": null,
+   "reference_date": null,
+   "last_committed_transaction": null
+  }
+ ],
+ "raw": [
+  {
+   "entry_reference": "10000000-0000-4000-8000-000000000001",
+   "merchant_category_code": null,
+   "transaction_amount": {
+    "currency": "DKK",
+    "amount": "25000.00"
+   },
+   "creditor": {},
+   "creditor_account": null,
+   "creditor_agent": null,
+   "debtor": null,
+   "debtor_account": null,
+   "debtor_agent": null,
+   "bank_transaction_code": null,
+   "credit_debit_indicator": "CRDT",
+   "status": "BOOK",
+   "booking_date": "2026-10-30",
+   "value_date": null,
+   "transaction_date": "2026-10-30",
+   "balance_after_transaction": null,
+   "reference_number": null,
+   "reference_number_schema": null,
+   "remittance_information": [
+    "LØNOVERFØRSEL"
+   ],
+   "debtor_account_additional_identification": null,
+   "creditor_account_additional_identification": null,
+   "exchange_rate": null,
+   "note": null,
+   "transaction_id": null
+  },
+  {
+   "entry_reference": "10000000-0000-4000-8000-000000000002",
+   "merchant_category_code": null,
+   "transaction_amount": {
+    "currency": "DKK",
+    "amount": "25000.00"
+   },
+   "creditor": {},
+   "creditor_account": null,
+   "creditor_agent": null,
+   "debtor": null,
+   "debtor_account": null,
+   "debtor_agent": null,
+   "bank_transaction_code": null,
+   "credit_debit_indicator": "CRDT",
+   "status": "BOOK",
+   "booking_date": "2026-11-25",
+   "value_date": null,
+   "transaction_date": "2026-11-25",
+   "balance_after_transaction": null,
+   "reference_number": null,
+   "reference_number_schema": null,
+   "remittance_information": [
+    "LØNOVERFØRSEL"
+   ],
+   "debtor_account_additional_identification": null,
+   "creditor_account_additional_identification": null,
+   "exchange_rate": null,
+   "note": null,
+   "transaction_id": null
+  },
+  {
+   "entry_reference": "10000000-0000-4000-8000-000000000003",
+   "merchant_category_code": null,
+   "transaction_amount": {
+    "currency": "DKK",
+    "amount": "900.00"
+   },
+   "creditor": {},
+   "creditor_account": null,
+   "creditor_agent": null,
+   "debtor": null,
+   "debtor_account": null,
+   "debtor_agent": null,
+   "bank_transaction_code": null,
+   "credit_debit_indicator": "CRDT",
+   "status": "BOOK",
+   "booking_date": "2026-11-01",
+   "value_date": null,
+   "transaction_date": "2026-11-01",
+   "balance_after_transaction": null,
+   "reference_number": null,
+   "reference_number_schema": null,
+   "remittance_information": [
+    "SU"
+   ],
+   "debtor_account_additional_identification": null,
+   "creditor_account_additional_identification": null,
+   "exchange_rate": null,
+   "note": null,
+   "transaction_id": null
+  },
+  {
+   "entry_reference": "10000000-0000-4000-8000-000000000004",
+   "merchant_category_code": "5411",
+   "transaction_amount": {
+    "currency": "DKK",
+    "amount": "184.50"
+   },
+   "creditor": {
+    "name": "GROCER 42 TESTBY*8812",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "creditor_account": null,
+   "creditor_agent": null,
+   "debtor": null,
+   "debtor_account": null,
+   "debtor_agent": null,
+   "bank_transaction_code": null,
+   "credit_debit_indicator": "DBIT",
+   "status": "BOOK",
+   "booking_date": "2026-11-03",
+   "value_date": null,
+   "transaction_date": "2026-11-02",
+   "balance_after_transaction": null,
+   "reference_number": null,
+   "reference_number_schema": null,
+   "remittance_information": [
+    "Grocer 42 Testby"
+   ],
+   "debtor_account_additional_identification": null,
+   "creditor_account_additional_identification": null,
+   "exchange_rate": null,
+   "note": null,
+   "transaction_id": null
+  },
+  {
+   "entry_reference": "10000000-0000-4000-8000-000000000005",
+   "merchant_category_code": "5814",
+   "transaction_amount": {
+    "currency": "DKK",
+    "amount": "62.00"
+   },
+   "creditor": {
+    "name": "Zet*Cafe Mockup",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "creditor_account": null,
+   "creditor_agent": null,
+   "debtor": null,
+   "debtor_account": null,
+   "debtor_agent": null,
+   "bank_transaction_code": null,
+   "credit_debit_indicator": "DBIT",
+   "status": "BOOK",
+   "booking_date": "2026-11-04",
+   "value_date": null,
+   "transaction_date": "2026-11-04",
+   "balance_after_transaction": null,
+   "reference_number": null,
+   "reference_number_schema": null,
+   "remittance_information": [
+    "Cafe Mockup"
+   ],
+   "debtor_account_additional_identification": null,
+   "creditor_account_additional_identification": null,
+   "exchange_rate": null,
+   "note": null,
+   "transaction_id": null
+  },
+  {
+   "entry_reference": "10000000-0000-4000-8000-000000000006",
+   "merchant_category_code": "6012",
+   "transaction_amount": {
+    "currency": "DKK",
+    "amount": "1500.00"
+   },
+   "creditor": {
+    "name": "Revolut**1111*",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "creditor_account": null,
+   "creditor_agent": null,
+   "debtor": null,
+   "debtor_account": null,
+   "debtor_agent": null,
+   "bank_transaction_code": null,
+   "credit_debit_indicator": "DBIT",
+   "status": "BOOK",
+   "booking_date": "2026-11-05",
+   "value_date": null,
+   "transaction_date": "2026-11-05",
+   "balance_after_transaction": null,
+   "reference_number": null,
+   "reference_number_schema": null,
+   "remittance_information": [
+    "Revolut"
+   ],
+   "debtor_account_additional_identification": null,
+   "creditor_account_additional_identification": null,
+   "exchange_rate": null,
+   "note": null,
+   "transaction_id": null
+  },
+  {
+   "entry_reference": "10000000-0000-4000-8000-000000000007",
+   "merchant_category_code": null,
+   "transaction_amount": {
+    "currency": "DKK",
+    "amount": "250.00"
+   },
+   "creditor": {},
+   "creditor_account": null,
+   "creditor_agent": null,
+   "debtor": null,
+   "debtor_account": null,
+   "debtor_agent": null,
+   "bank_transaction_code": null,
+   "credit_debit_indicator": "CRDT",
+   "status": "BOOK",
+   "booking_date": "2026-11-06",
+   "value_date": null,
+   "transaction_date": "2026-11-06",
+   "balance_after_transaction": null,
+   "reference_number": null,
+   "reference_number_schema": null,
+   "remittance_information": [
+    "MobilePay Peter Example",
+    "MobilePay Peter Example"
+   ],
+   "debtor_account_additional_identification": null,
+   "creditor_account_additional_identification": null,
+   "exchange_rate": null,
+   "note": null,
+   "transaction_id": null
+  },
+  {
+   "entry_reference": "10000000-0000-4000-8000-000000000008",
+   "merchant_category_code": "4829",
+   "transaction_amount": {
+    "currency": "DKK",
+    "amount": "300.00"
+   },
+   "creditor": {
+    "name": "MobilePay Olena Fakeenko",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "creditor_account": null,
+   "creditor_agent": null,
+   "debtor": null,
+   "debtor_account": null,
+   "debtor_agent": null,
+   "bank_transaction_code": null,
+   "credit_debit_indicator": "DBIT",
+   "status": "BOOK",
+   "booking_date": "2026-11-07",
+   "value_date": null,
+   "transaction_date": "2026-11-07",
+   "balance_after_transaction": null,
+   "reference_number": null,
+   "reference_number_schema": null,
+   "remittance_information": [
+    "MobilePay Olena Fakeenko"
+   ],
+   "debtor_account_additional_identification": null,
+   "creditor_account_additional_identification": null,
+   "exchange_rate": null,
+   "note": null,
+   "transaction_id": null
+  },
+  {
+   "entry_reference": "10000000-0000-4000-8000-000000000009",
+   "merchant_category_code": null,
+   "transaction_amount": {
+    "currency": "DKK",
+    "amount": "5.00"
+   },
+   "creditor": {},
+   "creditor_account": null,
+   "creditor_agent": null,
+   "debtor": null,
+   "debtor_account": null,
+   "debtor_agent": null,
+   "bank_transaction_code": null,
+   "credit_debit_indicator": "DBIT",
+   "status": "BOOK",
+   "booking_date": "2026-11-08",
+   "value_date": null,
+   "transaction_date": "2026-11-08",
+   "balance_after_transaction": null,
+   "reference_number": null,
+   "reference_number_schema": null,
+   "remittance_information": [
+    "Payment fee"
+   ],
+   "debtor_account_additional_identification": null,
+   "creditor_account_additional_identification": null,
+   "exchange_rate": null,
+   "note": null,
+   "transaction_id": null
+  },
+  {
+   "entry_reference": "10000000-0000-4000-8000-000000000010",
+   "merchant_category_code": null,
+   "transaction_amount": {
+    "currency": "DKK",
+    "amount": "412.00"
+   },
+   "creditor": {},
+   "creditor_account": null,
+   "creditor_agent": null,
+   "debtor": null,
+   "debtor_account": null,
+   "debtor_agent": null,
+   "bank_transaction_code": null,
+   "credit_debit_indicator": "DBIT",
+   "status": "BOOK",
+   "booking_date": "2026-11-09",
+   "value_date": null,
+   "transaction_date": "2026-11-09",
+   "balance_after_transaction": null,
+   "reference_number": null,
+   "reference_number_schema": null,
+   "remittance_information": [
+    "BS FAKE FORSIKRING A/S-AFTALE123"
+   ],
+   "debtor_account_additional_identification": null,
+   "creditor_account_additional_identification": null,
+   "exchange_rate": null,
+   "note": null,
+   "transaction_id": null
+  },
+  {
+   "entry_reference": "10000000-0000-4000-8000-000000000011",
+   "merchant_category_code": "5814",
+   "transaction_amount": {
+    "currency": "DKK",
+    "amount": "62.00"
+   },
+   "creditor": {
+    "name": "Zet*Cafe Mockup",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "creditor_account": null,
+   "creditor_agent": null,
+   "debtor": null,
+   "debtor_account": null,
+   "debtor_agent": null,
+   "bank_transaction_code": null,
+   "credit_debit_indicator": "CRDT",
+   "status": "BOOK",
+   "booking_date": "2026-11-10",
+   "value_date": null,
+   "transaction_date": "2026-11-10",
+   "balance_after_transaction": null,
+   "reference_number": null,
+   "reference_number_schema": null,
+   "remittance_information": [
+    "Cafe Mockup"
+   ],
+   "debtor_account_additional_identification": null,
+   "creditor_account_additional_identification": null,
+   "exchange_rate": null,
+   "note": null,
+   "transaction_id": null
+  },
+  {
+   "entry_reference": null,
+   "merchant_category_code": "5499",
+   "transaction_amount": {
+    "currency": "DKK",
+    "amount": "77.77"
+   },
+   "creditor": {
+    "name": "KIOSK NOWHERE",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "creditor_account": null,
+   "creditor_agent": null,
+   "debtor": null,
+   "debtor_account": null,
+   "debtor_agent": null,
+   "bank_transaction_code": null,
+   "credit_debit_indicator": "DBIT",
+   "status": "BOOK",
+   "booking_date": "2026-11-11",
+   "value_date": null,
+   "transaction_date": "2026-11-11",
+   "balance_after_transaction": null,
+   "reference_number": null,
+   "reference_number_schema": null,
+   "remittance_information": [
+    "Kiosk Nowhere"
+   ],
+   "debtor_account_additional_identification": null,
+   "creditor_account_additional_identification": null,
+   "exchange_rate": null,
+   "note": null,
+   "transaction_id": null
+  },
+  {
+   "entry_reference": "10000000-0000-4000-8000-000000000012",
+   "merchant_category_code": "5812",
+   "transaction_amount": {
+    "currency": "DKK",
+    "amount": "129.00"
+   },
+   "creditor": {
+    "name": "Zet*Bistro Fiction",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "creditor_account": null,
+   "creditor_agent": null,
+   "debtor": null,
+   "debtor_account": null,
+   "debtor_agent": null,
+   "bank_transaction_code": null,
+   "credit_debit_indicator": "DBIT",
+   "status": "PDNG",
+   "booking_date": null,
+   "value_date": null,
+   "transaction_date": "2026-11-25",
+   "balance_after_transaction": null,
+   "reference_number": null,
+   "reference_number_schema": null,
+   "remittance_information": [
+    "Bistro Fiction"
+   ],
+   "debtor_account_additional_identification": null,
+   "creditor_account_additional_identification": null,
+   "exchange_rate": null,
+   "note": null,
+   "transaction_id": null
+  }
+ ]
+}

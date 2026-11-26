@@ -7,6 +7,13 @@ on:
   pull_request:
     branches:
       - main
+    # The redesign's prototype and web/ app never need an Expo preview.
+    paths-ignore:
+      - 'web/**'
+      - 'docs/**'
+      - '.agents/**'
+      - '.claude/**'
+      - '.github/**'
   workflow_dispatch:
 
 concurrency:

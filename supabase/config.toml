@@ -6,3 +6,11 @@ verify_jwt = false
 
 [functions.suggest-category]
 verify_jwt = false
+
+[functions.bank-sync]
+# Off: the gateway check rejects this project's ES256 user tokens. The handler authenticates every call itself.
+verify_jwt = false
+
+[functions.bank-consent]
+# Off: the gateway check rejects this project's ES256 user tokens. The handler authenticates every call itself.
+verify_jwt = false

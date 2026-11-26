@@ -12,7 +12,13 @@ for n, i in enumerate(ids):
     dirs.append({'id': i, 'letter': 'ABCDE'[n], 'name': meta.get('name', i), 'idea': meta.get('idea', '')})
 data = open(os.path.join(R, 'data', 'cashflow-fake.js')).read()
 shell = open(os.path.join(os.path.dirname(__file__), 'shell.html')).read()
-page = shell.replace('__DIRS__', js(dirs)).replace('__APPS__', js(apps)).replace('__DATA__', js(data))
-assert '__' not in re.sub(r'[^_]__[^_]', '', page[:0]) or True
+CFG = {'h1': 'Five directions', 'lede': 'Try each one like the app, or compare them on one screen. Pick a direction per screen, or mix, and leave a note. Everything saves by itself.', 'dirLabel': 'Direction', 'pickQ': 'Best {name} screen', 'overallQ': 'Your direction overall', 'screens': [
+    {'id': 'home', 'name': 'Home', 'said': 'The cycle: what is left, days to payday, what needs attention.'},
+    {'id': 'add', 'name': 'Add', 'said': 'The fast path: amount, category, name, save. Try it.'},
+    {'id': 'transactions', 'name': 'Transactions', 'said': 'This cycle, by day, in and out.'},
+    {'id': 'budget', 'name': 'Budget', 'said': 'Eating out is over. All budgets at a glance.'},
+    {'id': 'analytics', 'name': 'Analytics', 'said': 'Where did the money go, and is it different from last cycle?'},
+    {'id': 'overall', 'name': 'Overall', 'said': 'Which direction, or which mix? Anything else.'}]}
+page = shell.replace('__TITLE__', 'Cashflow Directions').replace('__CFG__', js(CFG)).replace('__DIRS__', js(dirs)).replace('__APPS__', js(apps)).replace('__DATA__', js(data))
 open(out, 'w').write(page)
 print(out, round(len(page) / 1024), 'KB', [d['name'] for d in dirs])
