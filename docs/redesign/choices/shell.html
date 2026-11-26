@@ -1,0 +1,142 @@
+<title>Cashflow Directions</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap">
+<style>
+/* Built on the choices-page template (.agents/skills/ui-ux/choices-page): the device left, choices right. Shell colours stay neutral so they say nothing about Cashflow's look. */
+:root{--bg:#F2F3F5;--paper:#FFFFFF;--ink:#16181D;--soft:#5B616E;--line:#DDE0E6;--sea:#1F4FD1;--sea-soft:#E4EBFC;--ok:#17724F;--frame:#0D0F13}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0F1115;--paper:#191C22;--ink:#ECEEF2;--soft:#A2A8B4;--line:#2B2F38;--sea:#9DB6FF;--sea-soft:#1D2742;--ok:#7FD9AE;--frame:#000;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0F1115;--paper:#191C22;--ink:#ECEEF2;--soft:#A2A8B4;--line:#2B2F38;--sea:#9DB6FF;--sea-soft:#1D2742;--ok:#7FD9AE;--frame:#000;color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:400 16px/1.45 Figtree,system-ui,sans-serif;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 60px}
+button,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none;padding:0;text-align:inherit}
+:focus-visible{outline:3px solid var(--sea);outline-offset:2px}
+main{max-width:1320px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:32px;align-items:start}
+main>*{min-width:0}
+@media (max-width:960px){main{grid-template-columns:minmax(0,1fr)}}
+.side{display:grid;gap:16px;position:sticky;top:max(16px,env(safe-area-inset-top,0px))}
+@media (max-width:960px){.side{position:static}}
+h1{font:700 28px/1.15 Figtree,sans-serif;margin:0}
+.lede{margin:0;color:var(--soft)}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.pill{padding:10px 16px;min-height:44px;border-radius:999px;background:var(--sea-soft);color:var(--sea);font-weight:600;display:inline-flex;align-items:center;gap:8px}
+.pill[aria-pressed="true"]{background:var(--sea);color:var(--paper)}
+.pill em{font-style:normal;font-weight:700;opacity:.75}
+.seg{display:inline-flex;background:var(--paper);border-radius:999px;padding:3px;border:1px solid var(--line)}
+.seg button{padding:8px 14px;min-height:38px;border-radius:999px;font-weight:600;font-size:14px;color:var(--soft)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.label{font-size:13px;font-weight:600;color:var(--soft);margin:0 0 6px}
+.box{background:var(--paper);border-radius:22px;padding:18px;display:grid;gap:12px}
+.box header{display:flex;justify-content:space-between;gap:10px;align-items:baseline}.box header b{font-size:19px}.box header span{color:var(--soft);font-size:14px}
+.said{margin:0;color:var(--soft);font-size:15px}
+.picks{display:flex;gap:6px;flex-wrap:wrap}
+.picks button{padding:8px 12px;min-height:40px;border-radius:12px;border:1.5px solid var(--line);font-weight:600;font-size:14px}
+.picks button[aria-pressed="true"]{border-color:var(--ok);color:var(--ok);background:color-mix(in srgb,var(--ok) 12%,transparent)}
+textarea{width:100%;min-height:96px;border-radius:14px;border:1px solid var(--line);background:var(--bg);padding:12px 14px;resize:vertical}
+.state{min-height:20px;font-size:14px;color:var(--soft)}
+.strip{display:flex;gap:8px;flex-wrap:wrap}
+.strip button{display:flex;gap:8px;align-items:center;padding:7px 14px 7px 7px;min-height:44px;border-radius:999px;background:var(--paper);border:2px solid transparent;font-size:15px}
+.strip em{font-style:normal;font-weight:700;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--sea-soft);color:var(--sea);font-size:13px}
+.strip [aria-current="true"]{border-color:var(--sea)}.strip .has em{background:var(--ok);color:var(--paper)}
+/* the device */
+.stage{display:grid;gap:14px;justify-items:center}
+.dev{position:relative;overflow:hidden;background:var(--frame);border-radius:52px;padding:10px;box-shadow:0 30px 70px -34px rgba(10,20,60,.55)}
+.dev.desk{border-radius:16px;padding:8px}
+.dev .clip{position:relative;overflow:hidden;border-radius:42px;background:#fff}
+.dev.desk .clip{border-radius:9px}
+.dev iframe{position:absolute;left:0;top:0;border:0;transform-origin:0 0;background:#fff}
+.caption{font-weight:700;font-size:15px;display:flex;gap:8px;align-items:baseline;justify-content:center;flex-wrap:wrap}
+.caption span{font-weight:500;color:var(--soft)}
+.compare{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:22px;width:100%}
+.compare.desk{grid-template-columns:repeat(auto-fill,minmax(420px,1fr))}
+@media (max-width:520px){.compare.desk{grid-template-columns:minmax(0,1fr)}}
+.compare .cell{display:grid;gap:8px;justify-items:center;min-width:0}
+.compare .cell button.caption{min-height:44px}
+.idea{margin:0;color:var(--soft);font-size:14px;text-align:center;max-width:36ch}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+<main>
+  <div class="stage" id="stage"></div>
+  <div class="side">
+    <h1>Five directions</h1>
+    <p class="lede">Try each one like the app, or compare them on one screen. Pick a direction per screen, or mix, and leave a note. Everything saves by itself.</p>
+    <div><p class="label">View</p><div class="row"><div class="seg" id="mode"><button data-v="try">Try one</button><button data-v="compare">Compare all</button></div><div class="seg" id="width"><button data-v="phone">Phone</button><button data-v="desk">Desktop</button></div><div class="seg" id="theme"><button data-v="light">Light</button><button data-v="dark">Dark</button></div></div></div>
+    <div id="dirsWrap"><p class="label">Direction</p><div class="row" id="dirs"></div></div>
+    <div><p class="label">Screen</p><div class="strip" id="strip"></div></div>
+    <div class="box"><header><b id="sname"></b><span id="where"></span></header><p class="said" id="said"></p><div><p class="label" id="pickq"></p><div class="picks" id="picks"></div></div><textarea id="note" aria-label="Your note for this screen" placeholder="Your note for this screen"></textarea><div class="state" id="state" role="status"></div></div>
+  </div>
+</main>
+<script>
+window.DIRS = __DIRS__;
+window.APPS = __APPS__;
+window.DATA_JS = __DATA__;
+</script>
+<script>
+(() => {
+  const DIRS = window.DIRS, APPS = window.APPS, el = id => document.getElementById(id);
+  const SCREENS = [
+    { id: 'home', name: 'Home', said: 'The cycle: what is left, days to payday, what needs attention.' },
+    { id: 'add', name: 'Add', said: 'The fast path: amount, category, name, save. Try it.' },
+    { id: 'transactions', name: 'Transactions', said: 'This cycle, by day, in and out.' },
+    { id: 'budget', name: 'Budget', said: 'Eating out is over. All budgets at a glance.' },
+    { id: 'analytics', name: 'Analytics', said: 'Where did the money go, and is it different from last cycle?' },
+    { id: 'overall', name: 'Overall', said: 'Which direction, or which mix? Anything else.' },
+  ];
+  const st = { mode: 'try', width: 'phone', theme: 'light', dir: DIRS[0].id, at: 0 };
+  const picks = {}, notes = {}; let col = null, timer;
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const size = () => st.width === 'phone' ? { w: 390, h: 844 } : { w: 1280, h: 800 };
+  const screenId = () => SCREENS[st.at].id === 'overall' ? 'home' : SCREENS[st.at].id;
+  const doc = (id, screen, theme) => {
+    const proto = `<script>window.PROTO=${JSON.stringify({ screen, theme })};<\/script><script>${window.DATA_JS}<\/script>`;
+    const html = APPS[id].replace(`<script src="../../data/cashflow-fake.js"><\/script>`, "");
+    return /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, m => m + proto) : proto + html;
+  };
+  const frames = new Map();
+  function device(id, maxW) {
+    const { w, h } = size(), pad = st.width === 'phone' ? 20 : 16;
+    const scale = Math.min(1, (maxW - pad) / w);
+    const wrap = document.createElement('div'); wrap.className = 'dev' + (st.width === 'desk' ? ' desk' : '');
+    const clip = document.createElement('div'); clip.className = 'clip'; clip.style.width = w * scale + 'px'; clip.style.height = h * scale + 'px';
+    const f = document.createElement('iframe'); f.title = `${DIRS.find(d => d.id === id).name} prototype`; f.style.width = w + 'px'; f.style.height = h + 'px'; f.style.transform = `scale(${scale})`;
+    f.srcdoc = doc(id, screenId(), st.theme);
+    clip.append(f); wrap.append(clip); frames.set(f, id); return wrap;
+  }
+  function stage() {
+    frames.clear(); const s = el('stage'); s.innerHTML = ''; const avail = s.clientWidth || 800;
+    if (st.mode === 'try') {
+      const d = DIRS.find(x => x.id === st.dir);
+      s.append(device(d.id, Math.min(avail, st.width === 'phone' ? 410 : 1300)));
+      const c = document.createElement('div'); c.className = 'caption'; c.innerHTML = `${esc(d.letter)}. ${esc(d.name)} <span>${esc(d.idea)}</span>`; s.append(c);
+    } else {
+      const g = document.createElement('div'); g.className = 'compare' + (st.width === 'desk' ? ' desk' : ''); s.append(g);
+      const cols = Math.max(1, Math.floor((avail + 22) / ((st.width === 'phone' ? 230 : 420) + 22))), cw = (avail - 22 * (cols - 1)) / cols;
+      DIRS.forEach(d => { const cell = document.createElement('div'); cell.className = 'cell'; cell.append(device(d.id, cw)); const b = document.createElement('button'); b.className = 'caption'; b.innerHTML = `${esc(d.letter)}. ${esc(d.name)}`; b.setAttribute('aria-label', `Try ${d.name}`); b.onclick = () => { st.mode = 'try'; st.dir = d.id; render(); }; cell.append(b); const p = document.createElement('p'); p.className = 'idea'; p.textContent = d.idea; cell.append(p); g.append(cell); });
+    }
+  }
+  function side() {
+    for (const k of ['mode', 'width', 'theme']) el(k).querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(st[k] === b.dataset.v)));
+    el('dirsWrap').hidden = st.mode !== 'try';
+    el('dirs').innerHTML = DIRS.map(d => `<button class="pill" data-d="${d.id}" aria-pressed="${d.id === st.dir}"><em>${esc(d.letter)}</em>${esc(d.name)}</button>`).join('');
+    const s = SCREENS[st.at];
+    el('strip').innerHTML = SCREENS.map((x, i) => `<button data-at="${i}" aria-current="${i === st.at}" class="${picks[x.id] || notes[x.id] ? 'has' : ''}"><em>${i + 1}</em>${x.name}</button>`).join('');
+    el('sname').textContent = s.name; el('where').textContent = `${st.at + 1} of ${SCREENS.length}`; el('said').textContent = s.said;
+    el('pickq').textContent = s.id === 'overall' ? 'Your direction overall' : `Best ${s.name} screen`;
+    el('picks').innerHTML = DIRS.map(d => `<button data-p="${d.id}" aria-pressed="${picks[s.id] === d.id}">${esc(d.letter)}. ${esc(d.name)}</button>`).join('') + (s.id === 'overall' ? `<button data-p="mix" aria-pressed="${picks[s.id] === 'mix'}">A mix</button>` : '');
+    if (document.activeElement !== el('note')) el('note').value = notes[s.id] ?? '';
+  }
+  function render() { side(); stage(); }
+  const go = i => { st.at = i; side(); for (const f of frames.keys()) f.contentWindow?.postMessage({ type: 'go', screen: screenId() }, '*'); };
+  window.addEventListener('message', e => { if (e.data?.type !== 'at') return; for (const f of frames.keys()) if (f.contentWindow === e.source && st.mode === 'try') { const i = SCREENS.findIndex(x => x.id === e.data.screen); if (i >= 0 && i !== st.at) { st.at = i; side(); } } });
+  const keep = async id => { if (!col) { el('state').textContent = 'Not saved here. Tell Claude in the chat.'; return; } try { await col.doc(id).set({ pick: picks[id] ?? null, note: notes[id] ?? '' }); el('state').textContent = 'Saved'; } catch { el('state').textContent = 'Not saved. Tell Claude in the chat.'; } };
+  const save = () => { const id = SCREENS[st.at].id; el('state').textContent = 'Saving…'; clearTimeout(timer); timer = setTimeout(() => keep(id), 600); };
+  for (const k of ['mode', 'width', 'theme']) el(k).onclick = e => { const b = e.target.closest('button'); if (!b) return; st[k] = b.dataset.v; if (k === 'theme') { side(); for (const f of frames.keys()) f.contentWindow?.postMessage({ type: 'theme', theme: st.theme }, '*'); } else render(); };
+  el('dirs').onclick = e => { const b = e.target.closest('[data-d]'); if (b) { st.dir = b.dataset.d; render(); } };
+  el('strip').onclick = e => { const b = e.target.closest('[data-at]'); if (b) go(+b.dataset.at); };
+  el('picks').onclick = e => { const b = e.target.closest('[data-p]'); if (!b) return; const id = SCREENS[st.at].id; picks[id] = picks[id] === b.dataset.p ? null : b.dataset.p; side(); save(); };
+  el('note').oninput = () => { notes[SCREENS[st.at].id] = el('note').value; side(); save(); };
+  let rw; window.addEventListener('resize', () => { clearTimeout(rw); rw = setTimeout(stage, 200); });
+  render();
+  (async () => { const db = await window.claude?.use?.('db'); if (!db) return; col = db.collection('picks'); try { const snap = await col.get(); for (const d of snap.docs) { const v = d.data(); if (!v) continue; if (picks[d.id] === undefined && v.pick) picks[d.id] = v.pick; if (notes[d.id] === undefined && v.note) notes[d.id] = v.note; } side(); } catch { /* nothing saved yet */ } })();
+})();
+</script>
