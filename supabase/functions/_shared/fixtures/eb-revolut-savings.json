@@ -1,0 +1,81 @@
+{
+ "account": {
+  "uid": "aaaa0005-0000-4000-8000-000000000005",
+  "session_id": "00000000-5e55-4000-8000-000000000001",
+  "name": "Ivan Testov",
+  "product": null,
+  "iban": "LT000000000000000004",
+  "currency": "DKK",
+  "cash_account_type": "SVGS",
+  "identification_hash": "FAKEHASH.aaaa0005"
+ },
+ "balances": [
+  {
+   "name": "Fake balance",
+   "balance_amount": {
+    "currency": "DKK",
+    "amount": "500.00"
+   },
+   "balance_type": "ITAV",
+   "last_change_date_time": null,
+   "reference_date": null,
+   "last_committed_transaction": null
+  }
+ ],
+ "raw": [
+  {
+   "entry_reference": "50000000-0000-4000-8000-000000000033",
+   "merchant_category_code": null,
+   "transaction_amount": {
+    "currency": "DKK",
+    "amount": "500.00"
+   },
+   "creditor": {
+    "name": "Ivan Testov",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "creditor_account": {
+    "other": {
+     "identification": "00000000-0000-4000-8000-0000000000aa",
+     "scheme_name": "BANK"
+    }
+   },
+   "creditor_agent": null,
+   "debtor": {
+    "name": "IVAN TESTOV",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "debtor_account": {
+    "iban": "LT000000000000000002"
+   },
+   "debtor_agent": null,
+   "bank_transaction_code": {
+    "description": null,
+    "code": "TRANSFER",
+    "sub_code": null
+   },
+   "credit_debit_indicator": "CRDT",
+   "status": "BOOK",
+   "booking_date": "2026-11-26",
+   "value_date": "2026-11-26",
+   "transaction_date": null,
+   "balance_after_transaction": null,
+   "reference_number": null,
+   "reference_number_schema": null,
+   "remittance_information": [
+    "From IVAN T"
+   ],
+   "debtor_account_additional_identification": null,
+   "creditor_account_additional_identification": null,
+   "exchange_rate": null,
+   "note": null,
+   "transaction_id": null
+  }
+ ]
+}
