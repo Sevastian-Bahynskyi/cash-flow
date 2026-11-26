@@ -14,7 +14,7 @@
   --focus:#4A4ED6; --scrim:rgba(18,20,34,.36); --shadow:0 1px 2px rgba(20,24,48,.04),0 6px 20px rgba(20,24,48,.06); --hero-shadow:0 12px 32px rgba(58,62,190,.22);
   --raised:#FFFFFF; --ahead-soft:#FBF1E4;
   /* categories in the Where-it-went square only: five calm hues, none of them saffron or green */
-  --cat1:#4A4ED6; --cat2:#2F8FCC; --cat3:#2A8FA8; --cat4:#B25CC7; --cat5:#7F869C;
+  --cat1:#4A4ED6; --cat2:#2F8FCC; --cat3:#1F6E80; --cat4:#B25CC7; --cat5:#7F869C;
   --skel:rgba(22,26,48,.07);
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
@@ -27,7 +27,7 @@
   --ahead-text:#F0B27A;
   --focus:#AFB2FF; --scrim:rgba(0,0,0,.6); --shadow:0 1px 2px rgba(0,0,0,.25); --hero-shadow:0 12px 32px rgba(0,0,0,.4);
   --raised:#383B4C; --ahead-soft:#2E271D;
-  --cat1:#7175F0; --cat2:#4FADE6; --cat3:#3AA9C9; --cat4:#C77DDB; --cat5:#8F95AB;
+  --cat1:#7175F0; --cat2:#4FADE6; --cat3:#2F8597; --cat4:#C77DDB; --cat5:#8F95AB;
   --skel:rgba(255,255,255,.07);
   color-scheme:dark}}
 :root[data-theme="dark"]{color-scheme:dark;
@@ -40,7 +40,7 @@
   --ahead-text:#F0B27A;
   --focus:#AFB2FF; --scrim:rgba(0,0,0,.6); --shadow:0 1px 2px rgba(0,0,0,.25); --hero-shadow:0 12px 32px rgba(0,0,0,.4);
   --raised:#383B4C; --ahead-soft:#2E271D;
-  --cat1:#7175F0; --cat2:#4FADE6; --cat3:#3AA9C9; --cat4:#C77DDB; --cat5:#8F95AB;
+  --cat1:#7175F0; --cat2:#4FADE6; --cat3:#2F8597; --cat4:#C77DDB; --cat5:#8F95AB;
   --skel:rgba(255,255,255,.07);
 }
 *{box-sizing:border-box}
@@ -142,7 +142,7 @@ button.row:hover{background:var(--surface-2)}
 .pair .a{left:0;background:var(--anna);color:var(--on-anna)}
 .pair .y{left:34px;background:var(--you);color:var(--on-you);font-size:12px}
 .hero .pair span{border-color:var(--you)}
-.hero .pair .y{background:rgba(255,255,255,.22)}
+.hero .pair .y{background:var(--on-you);color:var(--you-text)}
 .pot .v{font-family:inherit;font-size:28px;font-weight:600;letter-spacing:-.02em;line-height:1.1}
 .pot p{margin:2px 0 0;color:var(--ink-2);font-size:13px}
 .split{display:flex;height:8px;border-radius:4px;overflow:hidden;margin:10px 0 6px;gap:2px}
@@ -318,7 +318,8 @@ button.row:hover{background:var(--surface-2)}
 .linkrow:first-child{border-top:0}
 .linkrow:hover{background:var(--surface-2)}
 .linkrow .who{color:var(--ink-2)}
-.linkrow .end{display:flex;gap:6px;align-items:center;justify-content:flex-end;min-width:96px;color:var(--ink-3);font-size:14px}
+.linkrow .end{display:flex;gap:6px;align-items:center;justify-content:flex-end;color:var(--ink-3);font-size:14px}
+.linkrow .end:has(.bankamt){min-width:96px}
 .linkrow .end svg.i{width:16px;height:16px}
 .linkrow .sub{display:block;font-size:13px;color:var(--ink-3)}
 .big2{font-family:inherit;font-size:36px;font-weight:600;line-height:1.05;letter-spacing:-.03em}
@@ -408,7 +409,7 @@ button.row:hover{background:var(--surface-2)}
   .stat .big2{font-size:36px}
   .selbar{left:232px;padding-bottom:12px}
   .auth{padding-top:120px}
-  .cols3{grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;align-items:start}
+  .cols3{grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:20px;align-items:start}
 }
 
 /* web app additions */
@@ -462,7 +463,7 @@ a{color:inherit;text-decoration:none}
 
 /* bank sync (v2): sync health, unconfirmed rows, the Inbox ask, why a row got its label */
 .syncline{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px;color:var(--ink-3);padding:0 4px;margin:0 0 12px}
-.syncline button{font-weight:600;color:var(--ink-2);min-height:44px;padding:0 10px;margin:-8px -10px -8px 0;border-radius:99px}
+.syncline button{font-weight:600;color:var(--ink-2);min-height:44px;padding:0 6px;margin:-8px -6px -8px 0;border-radius:99px}
 .syncline.amber{background:var(--ahead-soft);color:var(--ahead-text);border-radius:18px;padding:10px 10px 10px 14px}
 .syncline.amber button{color:var(--ahead-text)}
 .renew{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--ahead-soft);color:var(--ink);border-radius:18px;padding:12px 12px 12px 14px;font-size:14px;margin:0 0 12px}

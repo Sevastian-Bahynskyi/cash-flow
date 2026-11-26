@@ -4,7 +4,7 @@
 .brow .mk-meter{grid-column:2/4;margin:6px 0 1px}
 @media (min-width:960px){
   /* Wider last column: "DKK 1,142 left, ahead" must not clip. */
-  .brow,.thead{grid-template-columns:40px minmax(0,1fr) 84px 84px 132px}
+  .brow,.thead{column-gap:10px;grid-template-columns:40px minmax(0,1fr) 72px 72px 112px}
   .brow .mk-meter{grid-column:2/6}
   .brow .pill{justify-self:end}
 }
