@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Two inks: the partner's saffron behind, yours in front; the tile is your indigo. -->
+  <rect width="1024" height="1024" fill="#2D2F8F"/>
+  <circle cx="414" cy="512" r="236" fill="#E7A53C"/>
+  <circle cx="610" cy="512" r="236" fill="#FAFAF8" stroke="#2D2F8F" stroke-width="36"/>
+</svg>

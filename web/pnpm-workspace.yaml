@@ -1,0 +1,3 @@
+# Its own workspace root, so pnpm never mixes it with the Expo app's lockfile.
+onlyBuiltDependencies:
+  - sharp
