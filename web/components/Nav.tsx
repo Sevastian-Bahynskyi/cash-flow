@@ -17,7 +17,7 @@ const PLACES: { href: string; icon: string; label: string; desk?: boolean; sepBe
   { href: '/rules', icon: 'rule', label: 'Merchant rules', desk: true },
   { href: '/profile', icon: 'profile', label: 'Settings' },
 ]
-// On a phone, budgets and analytics light up Cycle; Anna's pot lights up People; settings pages light up Settings.
+// On a phone, budgets and analytics light up Cycle; the partner's pot lights up People; settings pages light up Settings.
 const PHONE_PARENT: Record<string, string> = { '/budgets': '/', '/budgets/plan': '/', '/where': '/', '/shared': '/people', '/bank': '/profile', '/categories': '/profile', '/rules': '/profile' }
 
 export function Nav(): React.JSX.Element {

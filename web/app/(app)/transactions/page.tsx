@@ -11,7 +11,6 @@ import { useStore, write } from '@/lib/data/store'
 import type { Model } from '@/lib/data/model'
 import { supabase } from '@/lib/supabase/client'
 import { addDays, kr, shortDate } from '@/lib/fmt'
-import { isSalaryCategoryOption } from '@/lib/domain/category-rules'
 import { useWide } from '@/lib/useWide'
 import type { TransactionRow } from '@/lib/data/types'
 
@@ -161,7 +160,7 @@ function Transactions({ m }: { m: Model }): React.JSX.Element {
       {bulk === 'cat' && sel && (
         <Sheet open onClose={() => setBulk(null)} title={`Category for ${sel.size}`}>
           <div className="panel">{m.options.filter((o) => kinds.has('income') ? o.parentName.toLowerCase() === 'income' && o.parentId !== o.id : o.parentName.toLowerCase() !== 'income').map((o) => (
-            <button key={o.id} className="row" disabled={busy} onClick={() => void bulkRun(`Moved ${sel.size} to ${o.name}`, (ids) => supabase().from('transactions').update(kinds.has('income') ? { category_id: o.id, is_salary: isSalaryCategoryOption(o), needs_review: false, reason_source: 'you', reason: `You chose ${o.name}` } : { category_id: o.id, needs_review: false, reason_source: 'you', reason: `You chose ${o.name}` }).in('id', ids))}><span className="who cat"><Icon name={o.icon} /></span><span className="nm">{o.name}<span className="meta" style={{ display: 'block' }}>{o.parentId !== o.id ? o.parentName : ''}</span></span><span /></button>
+            <button key={o.id} className="row" disabled={busy} onClick={() => void bulkRun(`Moved ${sel.size} to ${o.name}`, (ids) => supabase().from('transactions').update({ category_id: o.id, needs_review: false, reason_source: 'you', reason: `You chose ${o.name}` }).in('id', ids))}><span className="who cat"><Icon name={o.icon} /></span><span className="nm">{o.name}<span className="meta" style={{ display: 'block' }}>{o.parentId !== o.id ? o.parentName : ''}</span></span><span /></button>
           ))}</div>
         </Sheet>
       )}

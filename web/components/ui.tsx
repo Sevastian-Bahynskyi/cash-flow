@@ -144,10 +144,11 @@ function CategoryPick({ t, m, onClose }: { t: TransactionRow; m: Model; onClose:
   const key = t.merchant_key ?? normalizeMerchantLookupKey(t.name)
   const income = t.kind === 'income'
   const same = m.tx.filter((x) => x.id !== t.id && x.needs_review && x.merchant_key && x.merchant_key === t.merchant_key)
-  const choose = async (o: { id: string; name: string; isSalary: boolean }): Promise<void> => {
+  // is_salary stays as the sync set it: flipping it on an existing row would start a cycle without its budgets.
+  const choose = async (o: { id: string; name: string }): Promise<void> => {
     setBusy(true)
     try {
-      await write(store, ['transactions'], () => supabase().from('transactions').update({ category_id: o.id, needs_review: false, reason_source: 'you', reason: `You chose ${o.name}`, confidence: 1, ...(income ? { is_salary: o.isSalary } : {}) }).eq('id', t.id))
+      await write(store, ['transactions'], () => supabase().from('transactions').update({ category_id: o.id, needs_review: false, reason_source: 'you', reason: `You chose ${o.name}`, confidence: 1 }).eq('id', t.id))
       setPicked(o)
     } catch (e) { toast(e instanceof Error ? e.message : 'Not saved.') } finally { setBusy(false) }
   }
@@ -171,7 +172,7 @@ function CategoryPick({ t, m, onClose }: { t: TransactionRow; m: Model; onClose:
   return (
     <Sheet open onClose={onClose} title={`Category for ${t.name}`}>
       <div className="panel">{m.options.filter((o) => income ? o.parentName.toLowerCase() === 'income' && o.parentId !== o.id : o.parentName.toLowerCase() !== 'income').map((o) => (
-        <button key={o.id} className="row" disabled={busy} aria-current={o.id === t.category_id ? 'true' : undefined} onClick={() => void choose({ id: o.id, name: o.name, isSalary: /salary/i.test(o.name) })}><span className="who cat"><Icon name={o.icon} /></span><span className="nm">{o.name}<span className="meta" style={{ display: 'block' }}>{o.parentId !== o.id ? o.parentName : ''}</span></span><span>{o.id === t.category_id ? <Icon name="check" /> : null}</span></button>
+        <button key={o.id} className="row" disabled={busy} aria-current={o.id === t.category_id ? 'true' : undefined} onClick={() => void choose({ id: o.id, name: o.name })}><span className="who cat"><Icon name={o.icon} /></span><span className="nm">{o.name}<span className="meta" style={{ display: 'block' }}>{o.parentId !== o.id ? o.parentName : ''}</span></span><span>{o.id === t.category_id ? <Icon name="check" /> : null}</span></button>
       ))}</div>
     </Sheet>
   )

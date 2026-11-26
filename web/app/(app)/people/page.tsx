@@ -22,7 +22,7 @@ const KIND: [PersonKind, string, string][] = [
 ]
 const owes = (v: number): string => v > 0 ? `owes you ${kr(v, true)}` : v < 0 ? `you owe ${kr(-v, true)}` : 'all square'
 
-/** Who owes whom, from bank transfers; Anna's shared pot on top; paybacks the bank rows suggest, one tap to accept. */
+/** Who owes whom, from bank transfers; the partner's shared pot on top; paybacks the bank rows suggest, one tap to accept. */
 function People({ m }: { m: Model }): React.JSX.Element {
   const store = useStore()
   const toast = useToast()
