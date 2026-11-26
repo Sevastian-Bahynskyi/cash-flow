@@ -42,7 +42,7 @@ Dark is tuned, not inverted: an indigo-black ground, a lighter indigo for small 
 
 ## Icons and pictures
 
-Our own system, simple and soft, replacing the direction's icons (owner, 26 Nov). Three whole systems are on the choices page; **pending the owner's pick**. Shared rules for all three: 24 grid, live area 3–21, round ends and joins, one geometry per meaning (`docs/redesign/icons/icons.js`), tinted with the neighbouring text, never an emoji, never a brand logo drawn by us.
+Our own system, simple and soft, replacing the direction's icons (owner, 26 Nov). The owner picked **B, Soft fill** (26 Nov) from three whole systems on the choices page: a 1.7 line with round ends, and a soft wash of the same colour (20%) inside each body. Rules: 24 grid, live area 3–21, round ends and joins, one geometry per meaning (`docs/redesign/icons/icons.js`), tinted with the neighbouring text, never an emoji, never a brand logo drawn by us (brand categories map to the nearest own icon).
 
 The people marks are not icons: a filled indigo dot is yours, an indigo dot over a saffron dot is shared, an open ring with an arrow is money moved.
 
