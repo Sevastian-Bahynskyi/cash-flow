@@ -6,11 +6,11 @@ import { Header } from '@/components/Header'
 import { Icon } from '@/components/Icon'
 import { Sheet } from '@/components/Sheet'
 import { useToast } from '@/components/Toast'
-import { DayList, DetailBody, EmptyAdd, Gate, SkRows, StatusLine, WhoMark, useDetail } from '@/components/ui'
+import { DayList, DetailBody, Empty, Gate, SkRows, StatusLine, SyncLine, TxRow, WhoMark, useDetail } from '@/components/ui'
 import { useStore, write } from '@/lib/data/store'
 import type { Model } from '@/lib/data/model'
 import { supabase } from '@/lib/supabase/client'
-import { kr, shortDate, todayYmd } from '@/lib/fmt'
+import { addDays, kr, shortDate } from '@/lib/fmt'
 import { isSalaryCategoryOption } from '@/lib/domain/category-rules'
 import { useWide } from '@/lib/useWide'
 import type { TransactionRow } from '@/lib/data/types'
@@ -24,6 +24,34 @@ function matches(t: TransactionRow, m: Model, q: string): boolean {
   const [y, mo, d] = t.occurred_on.split('-')
   const dates = [t.occurred_on, `${+d!}.${+mo!}`, `${d}.${mo}`, `${+d!}.${+mo!}.${y}`, `${d}.${mo}.${y}`, `${+mo!}.${y}`, `${y}-${mo}`, y!, `${+d!}/${+mo!}`]
   return q.toLowerCase().split(/\s+/).filter(Boolean).every((tok) => text.includes(tok) || dates.some((x) => x === tok || x.startsWith(tok + '.')))
+}
+
+/** Unsure rows from the last 30 days: the best guess is already applied, one tap confirms it. Older history was accepted as best guess. */
+function Inbox({ m, onOpen }: { m: Model; onOpen: (t: TransactionRow) => void }): React.JSX.Element | null {
+  const store = useStore()
+  const toast = useToast()
+  const [busy, setBusy] = useState<string | null>(null)
+  const since = addDays(m.today, -30)
+  const items = [...m.tx].reverse().filter((t) => t.needs_review && t.occurred_on >= since)
+  if (!items.length) return null
+  const confirm = async (ids: string[]): Promise<void> => {
+    setBusy(ids.length > 1 ? 'all' : ids[0]!)
+    try { await write(store, ['transactions'], () => supabase().from('transactions').update({ needs_review: false }).in('id', ids)); toast(ids.length > 1 ? `Confirmed ${ids.length}` : 'Confirmed') }
+    catch (e) { toast(e instanceof Error ? e.message : 'Not saved.') } finally { setBusy(null) }
+  }
+  const ready = items.filter((t) => t.category_id).map((t) => t.id)
+  return (
+    <section aria-label="Inbox">
+      <h2 className="sec" style={{ marginTop: 0 }}>Inbox, {items.length} to check {ready.length > 1 && <button disabled={Boolean(busy)} onClick={() => void confirm(ready)}>All look right</button>}</h2>
+      <div className="panel">{items.map((t) => (
+        <div key={t.id} className="inboxrow">
+          <TxRow t={t} m={m} onOpen={onOpen} />
+          <button className="btn ghost" disabled={Boolean(busy) || !t.category_id} onClick={() => void confirm([t.id])} aria-label={`Confirm ${t.name}`}>{busy === t.id ? '…' : 'Yes'}</button>
+        </div>
+      ))}</div>
+      <p className="note">Each one already counts with its best guess. Tap one to change it.</p>
+    </section>
+  )
 }
 
 const chunks = <T,>(a: T[], n = 100): T[][] => Array.from({ length: Math.ceil(a.length / n) }, (_, i) => a.slice(i * n, i * n + n))
@@ -41,8 +69,7 @@ function Transactions({ m }: { m: Model }): React.JSX.Element {
   const [shown, setShown] = useState(1)
   const [sel, setSel] = useState<Set<string> | null>(null)
   const [picked, setPicked] = useState<string | null>(null)
-  const [bulk, setBulk] = useState<null | 'cat' | 'date' | 'del'>(null)
-  const [bulkDate, setBulkDate] = useState(todayYmd())
+  const [bulk, setBulk] = useState<null | 'cat'>(null)
   const [busy, setBusy] = useState(false)
 
   const scoped = useMemo(() => {
@@ -70,8 +97,7 @@ function Transactions({ m }: { m: Model }): React.JSX.Element {
   const detail = wide ? (m.tx.find((t) => t.id === picked) ?? visible[0]?.rows[0]) : undefined
   const pickedRows = m.tx.filter((t) => sel?.has(t.id))
   const kinds = new Set(pickedRows.map((t) => t.kind))
-  const anyTop = pickedRows.some((t) => t.is_shared_topup)
-  const allShared = pickedRows.length > 0 && pickedRows.every((t) => t.shared)
+  const anyTop = pickedRows.some((t) => t.is_shared_topup || t.movement === 'moved')
   const total = scoped.reduce((a, t) => a + m.mine(t), 0)
 
   async function bulkRun(label: string, run: (ids: string[]) => PromiseLike<{ error: { message: string } | null }>): Promise<void> {
@@ -91,10 +117,12 @@ function Transactions({ m }: { m: Model }): React.JSX.Element {
 
   return (
     <>
-      <Header title={catName ?? 'Transactions'} back={Boolean(catParam)} big={catName ?? 'Transactions'} aside={m.current ? `${m.current.name} cycle, ${shortDate(m.current.startOn)} – ${shortDate(m.current.endInclusive)}` : undefined}
+      <Header title={catName ?? 'Activity'} back={Boolean(catParam)} big={catName ?? 'Activity'} aside={m.current ? `${m.current.name} cycle, ${shortDate(m.current.startOn)} – ${shortDate(m.current.endInclusive)}` : undefined}
         right={<button className="iconbtn" onClick={() => { setSearchOpen((s) => !s); if (searchOpen) setQ('') }} aria-label="Search" aria-expanded={searchOpen}><Icon name="search" /></button>} />
       <StatusLine />
+      {!catParam && <SyncLine />}
       <div className="cols"><div>
+        {!catParam && !sel && !q.trim() && <Inbox m={m} onOpen={onOpen} />}
         {sel ? (
           <div className="filters"><b style={{ padding: '0 4px' }}>{sel.size ? `${sel.size} selected` : 'Select transactions'}</b><span className="spacer" />
             <button className="btn link" onClick={() => setSel(new Set(visible.flatMap((g) => g.rows.map((t) => t.id)).filter((id) => !store.pendingIds.has(id))))}>All</button>
@@ -112,12 +140,12 @@ function Transactions({ m }: { m: Model }): React.JSX.Element {
         )}
         {searchOpen && <label className="search"><Icon name="search" /><span className="sr">Search</span><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name, note, category or date" autoComplete="off" autoFocus /></label>}
         {(q.trim() || catParam || filter !== 'all') && scoped.length > 0 && <p className="note num" style={{ display: 'flex', justifyContent: 'space-between' }}><span>{scoped.length} {scoped.length === 1 ? 'transaction' : 'transactions'}</span><span>Your spending {kr(total)}</span></p>}
-        {!m.tx.length ? <div className="panel" style={{ marginTop: 12 }}><EmptyAdd title="No transactions yet" sub="What you spend, what comes in and what you move to the pot shows here, day by day." /></div>
+        {!m.tx.length ? <div className="panel" style={{ marginTop: 12 }}><Empty title="No transactions yet" sub="What you spend, what comes in and what you move to the pot arrives from your bank, day by day." /></div>
           : !scoped.length ? <div className="panel" style={{ marginTop: 12 }}><div className="empty"><b>Nothing matches</b>Try another name or a date like 24.11.</div></div>
           : visible.map((g, i) => (
             <section key={g.key}>
               {(i > 0 || q.trim()) && <h2 className="sec" style={{ marginTop: 28 }}>{g.title}</h2>}
-              {g.rows.length ? <DayList rows={g.rows} m={m} onOpen={onOpen} selected={detail?.id ?? null} /> : <div className="panel" style={{ marginTop: 12 }}><EmptyAdd title="Nothing yet this cycle" /></div>}
+              {g.rows.length ? <DayList rows={g.rows} m={m} onOpen={onOpen} selected={detail?.id ?? null} /> : <div className="panel" style={{ marginTop: 12 }}><Empty title="Nothing yet this cycle" /></div>}
             </section>
           ))}
         {!q.trim() && !catParam && groups.length > shown && <div style={{ textAlign: 'center', padding: '18px 0 8px' }}><button className="btn ghost" onClick={() => setShown((s) => s + 1)}>Load older</button></div>}
@@ -127,33 +155,14 @@ function Transactions({ m }: { m: Model }): React.JSX.Element {
 
       {sel && (
         <div className="selbar">
-          <button disabled={!sel.size || anyTop || kinds.has('income') || busy} title={anyTop ? 'Top-ups to the pot can’t be moved' : undefined}
-            onClick={() => void bulkRun(`Moved ${sel.size} to ${allShared ? 'yours' : 'shared'}`, (ids) => supabase().from('transactions').update(allShared ? { shared: false, shared_participant: null, is_shared_topup: false } : { shared: true, shared_participant: 'me' }).in('id', ids))}>
-            <Icon name={allShared ? 'profile' : 'shared'} />{allShared ? 'To yours' : 'To shared'}</button>
           <button disabled={!sel.size || kinds.size > 1 || anyTop || busy} title={kinds.size > 1 ? 'Pick only expenses or only income' : undefined} onClick={() => setBulk('cat')}><Icon name="tag" />Category</button>
-          <button disabled={!sel.size || busy} onClick={() => setBulk('date')}><Icon name="cal" />Date</button>
-          <button className="del" disabled={!sel.size || busy} onClick={() => setBulk('del')}><Icon name="trash" />Delete</button>
         </div>
       )}
       {bulk === 'cat' && sel && (
         <Sheet open onClose={() => setBulk(null)} title={`Category for ${sel.size}`}>
           <div className="panel">{m.options.filter((o) => kinds.has('income') ? o.parentName.toLowerCase() === 'income' && o.parentId !== o.id : o.parentName.toLowerCase() !== 'income').map((o) => (
-            <button key={o.id} className="row" disabled={busy} onClick={() => void bulkRun(`Moved ${sel.size} to ${o.name}`, (ids) => supabase().from('transactions').update(kinds.has('income') ? { category_id: o.id, is_salary: isSalaryCategoryOption(o) } : { category_id: o.id }).in('id', ids))}><span className="who cat"><Icon name={o.icon} /></span><span className="nm">{o.name}<span className="meta" style={{ display: 'block' }}>{o.parentId !== o.id ? o.parentName : ''}</span></span><span /></button>
+            <button key={o.id} className="row" disabled={busy} onClick={() => void bulkRun(`Moved ${sel.size} to ${o.name}`, (ids) => supabase().from('transactions').update(kinds.has('income') ? { category_id: o.id, is_salary: isSalaryCategoryOption(o), needs_review: false, reason_source: 'you', reason: `You chose ${o.name}` } : { category_id: o.id, needs_review: false, reason_source: 'you', reason: `You chose ${o.name}` }).in('id', ids))}><span className="who cat"><Icon name={o.icon} /></span><span className="nm">{o.name}<span className="meta" style={{ display: 'block' }}>{o.parentId !== o.id ? o.parentName : ''}</span></span><span /></button>
           ))}</div>
-        </Sheet>
-      )}
-      {bulk === 'date' && sel && (
-        <Sheet open onClose={() => setBulk(null)} title={`Date for ${sel.size}`}>
-          <label className="field"><span>Date</span><input type="date" value={bulkDate} onChange={(e) => setBulkDate(e.target.value)} /></label>
-          <p className="note">Amount, name and category stay as they are.</p>
-          <div className="formfoot"><button className="btn" disabled={busy || !bulkDate} onClick={() => void bulkRun(`Changed the date of ${sel.size}`, (ids) => supabase().from('transactions').update({ occurred_on: bulkDate }).in('id', ids))}>Apply date</button></div>
-        </Sheet>
-      )}
-      {bulk === 'del' && sel && (
-        <Sheet open onClose={() => setBulk(null)} title={`Delete ${sel.size}`}>
-          <div className="dhero"><div className="big serif num">{sel.size}</div><p>{sel.size === 1 ? 'transaction' : 'transactions'} will be deleted for good.</p></div>
-          {pickedRows.some((t) => t.is_salary) && <p className="note" style={{ color: 'var(--over-text)' }}>A salary is among them. Deleting it also deletes that cycle’s budgets.</p>}
-          <div className="formfoot"><button className="btn ghost" onClick={() => setBulk(null)}>Cancel</button><button className="btn danger" disabled={busy} onClick={() => void bulkRun(`Deleted ${sel.size}`, (ids) => supabase().from('transactions').delete().in('id', ids))}>Delete {sel.size}</button></div>
         </Sheet>
       )}
     </>
@@ -162,7 +171,7 @@ function Transactions({ m }: { m: Model }): React.JSX.Element {
 
 export default function Page(): React.JSX.Element {
   return (
-    <Gate skeleton={<><Header title="Transactions" /><div className="panel"><SkRows n={8} /></div></>}>
+    <Gate skeleton={<><Header title="Activity" /><div className="panel"><SkRows n={8} /></div></>}>
       {(m) => <Suspense><Transactions m={m} /></Suspense>}
     </Gate>
   )

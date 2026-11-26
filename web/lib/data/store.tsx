@@ -23,6 +23,9 @@ type Store = {
   /** Ids saved on this device that have not reached the server yet. */
   pendingIds: ReadonlySet<string>
   reload: (only?: TableName[]) => Promise<void>
+  /** Asks the bank-sync function for fresh bank rows (it throttles to once per 15 min), then reloads. */
+  sync: () => Promise<void>
+  syncing: boolean
   patch: <K extends TableName>(name: K, update: (rows: Tables[K]) => Tables[K]) => void
   addTransactions: (rows: TransactionInsert[]) => Promise<TransactionRow[]>
   signOut: () => Promise<void>
@@ -49,23 +52,33 @@ async function all<T>(build: (from: number, to: number) => PromiseLike<{ data: T
 
 const sb = () => supabase()
 const LOAD: { [K in TableName]: (uid: string) => Promise<Tables[K]> } = {
-  transactions: () => all((a, b) => sb().from('transactions').select('*').order('occurred_on').order('created_at').order('id').range(a, b)),
+  // A pending bank row that never booked is 'void': kept in the database, never shown or counted.
+  transactions: () => all((a, b) => sb().from('transactions').select('*').neq('status', 'void').order('occurred_on').order('created_at').order('id').range(a, b)),
   categories: () => all((a, b) => sb().from('categories').select('id,user_id,parent_id,name,level,is_system,icon,color').order('level').order('name').order('id').range(a, b)),
   category_overrides: () => all((a, b) => sb().from('category_overrides').select('id,user_id,category_id,name,icon,updated_at').order('id').range(a, b)),
   budgets: () => all((a, b) => sb().from('budgets').select('id,user_id,category_id,salary_cycle_id,amount_minor,notes,created_at').order('id').range(a, b)),
-  savings_accounts: () => all((a, b) => sb().from('savings_accounts').select('id,user_id,name,goal_minor,color,icon,created_at').order('created_at').order('id').range(a, b)),
+  savings_accounts: () => all((a, b) => sb().from('savings_accounts').select('id,user_id,name,goal_minor,color,icon,bank_account_id,created_at').order('created_at').order('id').range(a, b)),
   savings_events: () => all((a, b) => sb().from('savings_events').select('id,user_id,savings_account_id,action,amount_minor,occurred_on,note,created_at').order('occurred_on').order('created_at').order('id').range(a, b)),
   loans: () => all((a, b) => sb().from('loans').select('id,user_id,name,principal_minor,remaining_minor,status,created_at').order('created_at', { ascending: false }).order('id').range(a, b)),
   loan_events: () => all((a, b) => sb().from('loan_events').select('*').order('occurred_on', { ascending: false }).order('created_at', { ascending: false }).order('id').range(a, b)),
   receivables: () => all((a, b) => sb().from('receivables').select('id,user_id,name,principal_minor,remaining_minor,status,created_at').order('created_at', { ascending: false }).order('id').range(a, b)),
   receivable_events: () => all((a, b) => sb().from('receivable_events').select('*').order('occurred_on', { ascending: false }).order('created_at', { ascending: false }).order('id').range(a, b)),
   merchant_category_rules: () => all((a, b) => sb().from('merchant_category_rules').select('*').order('priority', { ascending: false }).order('updated_at', { ascending: false }).order('id').range(a, b)),
-  transfer_people: () => all((a, b) => sb().from('transfer_people').select('id,user_id,name,normalized_name,created_at,updated_at').order('name').order('id').range(a, b)),
+  transfer_people: () => all((a, b) => sb().from('transfer_people').select('id,user_id,name,normalized_name,kind,opening_balance_minor,created_at,updated_at').order('name').order('id').range(a, b)),
   profile: async (uid) => {
     const { data, error } = await sb().from('profiles').select('display_name,avatar_url').eq('user_id', uid).maybeSingle()
     if (error) throw new Error(error.message)
     return data
   },
+  bank_connections: () => all((a, b) => sb().from('bank_connections').select('id,aspsp_name,valid_until,status').order('valid_until').order('id').range(a, b)),
+  bank_accounts: () => all((a, b) => sb().from('bank_accounts').select('id,connection_id,name,currency,role,balance_minor,balance_at,last_synced_at,last_error').order('role').order('id').range(a, b)),
+  sync_runs: async () => {
+    const { data, error } = await sb().from('sync_runs').select('id,trigger,started_at,finished_at,ok,error').order('started_at', { ascending: false }).limit(20)
+    if (error) throw new Error(error.message)
+    return data ?? []
+  },
+  transaction_splits: () => all((a, b) => sb().from('transaction_splits').select('id,user_id,transaction_id,category_id,amount_minor,note,created_at').order('created_at').order('id').range(a, b)),
+  paybacks: () => all((a, b) => sb().from('paybacks').select('id,user_id,payment_transaction_id,expense_transaction_id,amount_minor,created_at').order('created_at').order('id').range(a, b)),
 }
 const NAMES = Object.keys(LOAD) as TableName[]
 /** Rows saved on this device but not yet on the server, shown in every list until they sync. */
@@ -137,7 +150,20 @@ export function DataProvider({ children }: { children: React.ReactNode }): React
     return () => { alive = false; sub.subscription.unsubscribe() }
   }, [])
 
-  useEffect(() => { if (userId && !DEMO) void reload() }, [userId, reload])
+  const [syncing, setSyncing] = useState(false)
+  const sync = useCallback(async (): Promise<void> => {
+    if (DEMO || !userId || !navigator.onLine) return
+    setSyncing(true)
+    try {
+      // The user is here: the function forwards PSU headers so the bank counts it as user-present.
+      const { error: e } = await supabase().functions.invoke('bank-sync', { method: 'POST', body: {} })
+      if (e) console.error('[sync]', e)
+      await reload()
+    } finally { setSyncing(false) }
+  }, [userId, reload])
+
+  // App open: the device copy and the last server state first, then a sync.
+  useEffect(() => { if (userId && !DEMO) void reload().then(() => sync()) }, [userId, reload, sync])
 
   // Back online: send what was saved on the device, then refresh. Each row carries its own id, so a
   // flush that reached the server but lost its answer, or a second open window, never makes a duplicate.
@@ -199,8 +225,8 @@ export function DataProvider({ children }: { children: React.ReactNode }): React
   }, [flush])
 
   const pendingIds = useMemo(() => new Set(queue.map((q) => q.id)), [queue])
-  const value = useMemo<Store>(() => ({ userId, tables, status, error: error ?? queueError, offline, loadedAt, queued: queue.length, pendingIds, reload, patch, addTransactions, signOut }),
-    [userId, tables, status, error, queueError, offline, loadedAt, queue.length, pendingIds, reload, patch, addTransactions, signOut])
+  const value = useMemo<Store>(() => ({ userId, tables, status, error: error ?? queueError, offline, loadedAt, queued: queue.length, pendingIds, reload, sync, syncing, patch, addTransactions, signOut }),
+    [userId, tables, status, error, queueError, offline, loadedAt, queue.length, pendingIds, reload, sync, syncing, patch, addTransactions, signOut])
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }
 

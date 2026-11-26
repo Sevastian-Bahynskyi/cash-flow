@@ -27,8 +27,22 @@ function derive(t: Tables) {
   const isTransfer = (id: string | null): boolean => (parentOf(id)?.name.toLowerCase() ?? '') === TRANSFER
   const tx = t.transactions
   const share = computePersonalExpenseMinorByTransactionId(tx.map((r) => ({ ...r, shared_participant: r.shared_participant ?? null })))
-  /** What this row costs you: your share of a shared expense, nothing for money moved to the pot or a transfer. */
-  const mine = (r: TransactionRow): number => r.kind !== 'expense' || r.is_shared_topup || isTransfer(r.category_id) ? 0 : share.get(r.id) ?? r.amount_minor
+  const paidBack = new Map<string, number>()
+  for (const p of t.paybacks) paidBack.set(p.expense_transaction_id, (paidBack.get(p.expense_transaction_id) ?? 0) + p.amount_minor)
+  const splitsOf = new Map<string, typeof t.transaction_splits>()
+  for (const sp of t.transaction_splits) splitsOf.set(sp.transaction_id, [...(splitsOf.get(sp.transaction_id) ?? []), sp])
+  const NEUTRAL = new Set(['moved', 'topup', 'ignore'])
+  /** What this row costs you: your share of a shared expense, less what people paid back; nothing for money moved, top-ups or transfers. */
+  const mine = (r: TransactionRow): number => r.kind !== 'expense' || r.is_shared_topup || NEUTRAL.has(r.movement ?? '') || isTransfer(r.category_id) ? 0
+    : Math.max(0, (share.get(r.id) ?? r.amount_minor) - (paidBack.get(r.id) ?? 0))
+  /** Your cost of a row by category: split parts go to their own category, the rest stays on the row's (budgets and analytics sum these). */
+  const portions = (r: TransactionRow): { category_id: string | null; minor: number }[] => {
+    const v = mine(r)
+    const sp = splitsOf.get(r.id)
+    if (!v || !sp?.length || !r.amount_minor) return [{ category_id: r.category_id, minor: v }]
+    const parts = sp.map((x) => ({ category_id: x.category_id, minor: Math.round((v * x.amount_minor) / r.amount_minor) }))
+    return [...parts, { category_id: r.category_id, minor: v - parts.reduce((a, x) => a + x.minor, 0) }]
+  }
 
   const raw = buildNavigableCycles(tx)
   const cycles: Cycle[] = raw.map((c) => {
@@ -44,7 +58,7 @@ function derive(t: Tables) {
   function budgetsOf(c: Cycle | null) {
     const rows = c ? tx.filter(inCycle(c)) : []
     const spent = new Map<string, number>()
-    for (const r of rows) { const p = parentOf(r.category_id); const m = mine(r); if (p && m) spent.set(p.id, (spent.get(p.id) ?? 0) + m) }
+    for (const r of rows) for (const x of portions(r)) { const p = parentOf(x.category_id); if (p && x.minor) spent.set(p.id, (spent.get(p.id) ?? 0) + x.minor) }
     const list = (c ? t.budgets.filter((b) => b.salary_cycle_id === c.id) : []).map((b: BudgetRow) => {
       const cat = byId.get(b.category_id)
       const s = spent.get(b.category_id) ?? 0
@@ -68,7 +82,7 @@ function derive(t: Tables) {
   const days = current ? Math.max(1, daysBetween(current.startOn, current.endInclusive) + 1) : 0
   const daysLeft = current ? Math.max(0, daysBetween(today, current.endInclusive) + 1) : 0
 
-  return { t, today, options, cats, byId, meta, parentOf, incomeParents, isTransfer, tx, share, mine, cycles, current, inCycle, prevOf, budgetsOf, days, daysLeft,
+  return { t, today, options, cats, byId, meta, parentOf, incomeParents, isTransfer, tx, share, mine, portions, splitsOf, paidBack, cycles, current, inCycle, prevOf, budgetsOf, days, daysLeft,
     payday: current ? addDays(current.endInclusive, 1) : null, hasSalary: tx.some((r) => r.is_salary) }
 }
 

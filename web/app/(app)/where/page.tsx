@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import { Header } from '@/components/Header'
 import { Icon } from '@/components/Icon'
-import { EmptyAdd, Gate, SkRows, StatusLine } from '@/components/ui'
+import { Empty, Gate, SkRows, StatusLine } from '@/components/ui'
 import { Underline } from '@/components/Marks'
 import type { Model } from '@/lib/data/model'
 import { addDays, daysBetween, kr, parseYmd, plus, shortDate, todayYmd, ymd } from '@/lib/fmt'
@@ -29,6 +29,26 @@ function windowFor(m: Model, per: Per, back: number): Win | null {
   return { start: `${y}-01-01`, endEx: `${y + 1}-01-01`, label: String(y), prevLabel: String(y - 1), prev: { start: `${y - 1}-01-01`, endEx: `${y}-01-01` } }
 }
 
+const SHADES = [1, 0.72, 0.5, 0.34, 0.22]
+/** 100 squares, each one kr. in every 100 spent: the top five categories in one ink from dark to light, the rest grey (the Expo dashboard's waffle). */
+function Waffle({ list, spent }: { list: { cat?: { id: string; name: string }; s: number }[]; spent: number }): React.JSX.Element {
+  const top = list.slice(0, 5)
+  const raw = top.map((x) => (100 * x.s) / spent)
+  const n = raw.map(Math.floor)
+  // Largest remainders get the leftover squares, so the five add up the way the percentages read.
+  let rest = Math.round(raw.reduce((a, v) => a + v, 0)) - n.reduce((a, v) => a + v, 0)
+  for (const i of raw.map((v, i) => ({ i, r: v - n[i]! })).sort((a, b) => b.r - a.r).map((x) => x.i)) { if (rest-- <= 0) break; n[i]!++ }
+  const cells = n.flatMap((c, i) => Array.from({ length: c }, () => i))
+  return (
+    <div className="panel waffle">
+      <div className="grid" role="img" aria-label={top.map((x, i) => `${x.cat?.name}: ${n[i]} of every 100 kr.`).join(', ')}>
+        {Array.from({ length: 100 }, (_, k) => <i key={k} style={cells[k] === undefined ? undefined : { background: 'var(--you)', opacity: SHADES[cells[k]!] }} />)}
+      </div>
+      <div className="legend">{top.map((x, i) => <span key={x.cat?.id}><i style={{ background: 'var(--you)', opacity: SHADES[i] }} />{x.cat?.name} {n[i]}</span>)}{list.length > 5 && <span><i style={{ background: 'var(--surface-2)' }} />Everything else</span>}</div>
+    </div>
+  )
+}
+
 function Where({ m }: { m: Model }): React.JSX.Element {
   const [per, setPer] = useState<Per>('cycle')
   const [back, setBack] = useState(0)
@@ -40,12 +60,12 @@ function Where({ m }: { m: Model }): React.JSX.Element {
     const inW = (r: TransactionRow, a: string, b: string): boolean => r.occurred_on >= a && r.occurred_on < b
     const rows = m.tx.filter((r) => inW(r, w.start, w.endEx))
     const prevRows = w.prev ? m.tx.filter((r) => inW(r, w.prev!.start, w.prev!.endEx)) : []
-    const by = (L: TransactionRow[]): Map<string, number> => { const o = new Map<string, number>(); for (const r of L) { const p = m.parentOf(r.category_id); const v = m.mine(r); if (p && v) o.set(p.id, (o.get(p.id) ?? 0) + v) } return o }
+    const by = (L: TransactionRow[]): Map<string, number> => { const o = new Map<string, number>(); for (const r of L) for (const x of m.portions(r)) { const p = m.parentOf(x.category_id); if (p && x.minor) o.set(p.id, (o.get(p.id) ?? 0) + x.minor) } return o }
     const now = by(rows), was = by(prevRows)
     const list = [...now.entries()].map(([id, s]) => ({ cat: m.byId.get(id), s, l: was.get(id) ?? 0 })).filter((x) => x.cat).sort((a, b) => b.s - a.s)
     const spent = list.reduce((a, x) => a + x.s, 0), lastSpent = [...was.values()].reduce((a, v) => a + v, 0)
     const income = rows.filter((r) => r.kind === 'income' && !m.isTransfer(r.category_id)).reduce((a, r) => a + r.amount_minor, 0)
-    const moved = rows.filter((r) => r.kind === 'expense' && (r.is_shared_topup || m.isTransfer(r.category_id)) && r.shared_participant !== 'gf').reduce((a, r) => a + r.amount_minor, 0)
+    const moved = rows.filter((r) => r.kind === 'expense' && (r.is_shared_topup || r.movement === 'moved' || r.movement === 'topup' || m.isTransfer(r.category_id)) && r.shared_participant !== 'gf').reduce((a, r) => a + r.amount_minor, 0)
     // Running cash position: money in minus everything that left your account, day by day.
     const days = Math.max(1, daysBetween(w.start, w.endEx < addDays(todayYmd(), 1) ? w.endEx : addDays(todayYmd(), 1)))
     const run: number[] = []; let acc = 0
@@ -60,7 +80,7 @@ function Where({ m }: { m: Model }): React.JSX.Element {
       <div className="cyclepick"><button className="iconbtn" disabled={!canBack} onClick={() => setBack((b) => b + 1)} aria-label="Earlier"><Icon name="back" /></button><b>{w?.label ?? ''}</b><button className="iconbtn" disabled={back === 0} onClick={() => setBack((b) => b - 1)} aria-label="Later"><Icon name="chev" /></button></div>
     </div>
   )
-  if (!w || !data) return <>{seg}<div className="panel"><EmptyAdd title="Nothing yet" /></div></>
+  if (!w || !data) return <>{seg}<div className="panel"><Empty title="Nothing yet" /></div></>
   const { list, spent, lastSpent, income, moved, run, sharedMine } = data
   // Your part of shared spending was paid from the pot you already moved money into: count it once.
   const leftOver = income - (spent - sharedMine) - moved
@@ -75,10 +95,11 @@ function Where({ m }: { m: Model }): React.JSX.Element {
   return (
     <div style={{ maxWidth: 760 }}>
       {seg}
-      {!spent ? <div className="panel"><EmptyAdd title={`Nothing spent in ${w.label.toLowerCase().startsWith('this') ? w.label.toLowerCase() : w.label}`} sub={w.prev ? `The comparison with ${w.prevLabel} starts with the first transaction.` : undefined} /></div> : <>
+      {!spent ? <div className="panel"><Empty title={`Nothing spent in ${w.label.toLowerCase().startsWith('this') ? w.label.toLowerCase() : w.label}`} sub={w.prev ? `The comparison with ${w.prevLabel} starts with the first transaction.` : undefined} /></div> : <>
         <p className="answer mkb-answer">{top2.join(' and ')} took most of it.{w.prev && lastSpent ? <> <em><Underline>{kr(Math.abs(diff), true)} {diff >= 0 ? 'more' : 'less'}</Underline></em> than {w.prevLabel} in all.</> : null}</p>
         <p className="lede">{kr(spent, true)} spent{w.prev ? `, ${kr(lastSpent, true)} in ${w.prevLabel}` : ''}.{grew && grew.s > grew.l && lastSpent ? ` ${grew.cat!.name} grew the most: ${word(grew.s - grew.l)}.` : ''}</p>
-        <div className="panel">{list.map((x) => (
+        <Waffle list={list} spent={spent} />
+        <div className="panel" style={{ marginTop: 8 }}>{list.map((x) => (
           <div className="hb" key={x.cat!.id}>
             <span className="nm"><Icon name={x.cat!.icon} />{x.cat!.name}</span><span className="v">{kr(x.s, true)}</span>
             <span className="track" aria-hidden="true">

@@ -5,15 +5,13 @@ import { useState } from 'react'
 import { Header } from '@/components/Header'
 import { Icon } from '@/components/Icon'
 import { CycleCard } from '@/components/CycleCard'
-import { useAdd } from '@/components/AddSheet'
 import { Meter, StatePill, budgetState } from '@/components/Marks'
 import { goneShare, stateOf } from '@/components/marks-a/pace'
-import { Gate, NavRow, SkRows, StatusLine, TxRow, useDetail, EmptyAdd } from '@/components/ui'
+import { Gate, NavRow, SkRows, StatusLine, SyncLine, TxRow, useDetail, Empty } from '@/components/ui'
 import { useStore } from '@/lib/data/store'
 import type { Model } from '@/lib/data/model'
 import { pot } from '@/lib/data/pot'
 import { transactionBalance } from '@/lib/domain/balance'
-import { findSalaryCategoryOption } from '@/lib/domain/category-rules'
 import { kr, plus } from '@/lib/fmt'
 import { PARTNER } from '@/lib/partner'
 
@@ -29,13 +27,10 @@ function Avatar(): React.JSX.Element {
 }
 
 function NewAccount({ m }: { m: Model }): React.JSX.Element {
-  const add = useAdd()
-  const salary = findSalaryCategoryOption(m.options)
   return (
     <div className="cols"><div>
-      <section className="newcard"><h2>Your first cycle starts on payday</h2><p>Cashflow counts from one salary to the next. Log your last salary and the cycle starts.</p>
-        <button className="btn" onClick={() => add({ kind: 'income', category_id: salary?.id ?? null, name: 'Salary' })}><Icon name="in" />Log your salary</button></section>
-      <div className="panel steps3"><div><b>1</b><span>Log your salary</span></div><div><b>2</b><span>Set a budget per category</span></div><div><b>3</b><span>Add what you spend, in three taps</span></div></div>
+      <section className="newcard"><h2>Your first cycle starts on payday</h2><p>Cashflow counts from one salary to the next. The cycle starts when your salary arrives from the bank.</p></section>
+      <div className="panel steps3"><div><b>1</b><span>Your bank syncs</span></div><div><b>2</b><span>Set a budget per category</span></div><div><b>3</b><span>Check the Inbox now and then</span></div></div>
     </div><div>
       <h2 className="sec">With {PARTNER}</h2><div className="panel"><div className="empty"><b>Nothing shared yet</b>Money you both move into the pot, and what you spend from it, shows here.</div></div>
     </div></div>
@@ -60,7 +55,10 @@ function Home({ m }: { m: Model }): React.JSX.Element {
     <div className="cols">
       <div>
         <CycleCard m={m} />
-        {b.allMine > 0 && <div className="panel" style={{ marginTop: 8 }}><NavRow href="/where" icon="where" name="Where it went" sub={`${kr(b.allMine, true)} spent${prev.allMine ? `, ${kr(Math.abs(b.allMine - prev.allMine), true)} ${b.allMine >= prev.allMine ? 'more' : 'less'} than ${m.prevOf(c)?.name}` : ''}`} /></div>}
+        <div className="panel" style={{ marginTop: 8 }}>
+          {b.allMine > 0 && <NavRow href="/where" icon="where" name="Where it went" sub={`${kr(b.allMine, true)} spent${prev.allMine ? `, ${kr(Math.abs(b.allMine - prev.allMine), true)} ${b.allMine >= prev.allMine ? 'more' : 'less'} than ${m.prevOf(c)?.name}` : ''}`} />}
+          {b.list.length > 0 && <NavRow href="/budgets" icon="budgets" name="Budgets" sub={`${b.list.length} categories, ${kr(Math.max(0, b.left), true)} left`} />}
+        </div>
         {!b.list.length && c?.real && <div className="panel" style={{ marginTop: 8 }}><NavRow href="/budgets" icon="budgets" name="Set your budgets" sub="Then the card shows what is left to spend" /></div>}
         {(over.length > 0 || ahead.length > 0) && <>
           <h2 className="sec">Needs a look</h2>
@@ -93,7 +91,7 @@ function Home({ m }: { m: Model }): React.JSX.Element {
           </>
         ) : <div className="panel"><div className="empty"><b>Nothing in the pot this cycle</b>Top-ups and shared spending with {PARTNER} show here.</div></div>}
         <h2 className="sec">Latest <Link href="/transactions">All transactions</Link></h2>
-        <div className="panel">{latest.length ? latest.map((t) => <TxRow key={t.id} t={t} m={m} onOpen={open} />) : <EmptyAdd title="No transactions yet" />}</div>
+        <div className="panel">{latest.length ? latest.map((t) => <TxRow key={t.id} t={t} m={m} onOpen={open} />) : <Empty title="No transactions yet" />}</div>
       </div>
     </div>
   )
@@ -107,6 +105,7 @@ export default function Page(): React.JSX.Element {
       {(m) => <>
         <Header title={label ?? (m.current ? `${m.current.name} cycle` : 'Cashflow')} big={m.current ? `Your ${m.current.name} cycle` : 'Welcome'} aside={m.current && m.payday ? `${m.daysLeft} days to payday` : undefined} right={<Avatar />} />
         <StatusLine />
+        <SyncLine />
         <Home m={m} />
       </>}
     </Gate>

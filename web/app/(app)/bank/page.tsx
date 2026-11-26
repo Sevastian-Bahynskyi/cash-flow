@@ -4,21 +4,21 @@ import { useState } from 'react'
 import { Header } from '@/components/Header'
 import { Icon } from '@/components/Icon'
 import { Sheet } from '@/components/Sheet'
-import { Gate, SkRows, StatusLine } from '@/components/ui'
+import { Gate, SkRows, StatusLine, SyncLine } from '@/components/ui'
+import { useToast } from '@/components/Toast'
 import { Check } from '@/components/Marks'
 import { AMOUNT_ERR, AmountField, DeleteAsk, FormErr, IconPick, Seg, useSaver } from '@/components/settings/kit'
 import { useStore } from '@/lib/data/store'
 import type { Tables } from '@/lib/data/types'
 import { savingsTotal } from '@/lib/domain/savings'
-import { bankBalance } from '@/lib/domain/balance'
-import { dayLabel, kr, minorToInput, parseAmount, todayYmd } from '@/lib/fmt'
+import { dayLabel, kr, minorToInput, parseAmount, shortDate, todayYmd } from '@/lib/fmt'
 import { supabase } from '@/lib/supabase/client'
 import { useWide } from '@/lib/useWide'
 
 type Kind = 'savings' | 'loan' | 'owed'
 type Open = { kind: Kind; id: string | null }
 type Ev = { id: string; kind: string; amount_minor: number; occurred_on: string; created_at: string; note?: string | null }
-type Item = { id: string; name: string; value: number; goal: number | null; principal: number; icon: string; history: Ev[] }
+type Item = { id: string; name: string; value: number; goal: number | null; principal: number; icon: string; history: Ev[]; synced: boolean }
 
 // Loans and money owed to you have the same shape (DATA.md § 2); only the table and words differ.
 const DEBT = {
@@ -32,21 +32,55 @@ const newestFirst = (a: Ev, b: Ev): number => b.occurred_on.localeCompare(a.occu
 function itemsOf(t: Tables, kind: Kind): Item[] {
   if (kind === 'savings') return t.savings_accounts.map((s) => {
     const ev = t.savings_events.filter((e) => e.savings_account_id === s.id)
-    return { id: s.id, name: s.name, value: savingsTotal(ev), goal: s.goal_minor, principal: 0, icon: s.icon, history: ev.map((e) => ({ ...e, kind: e.action })).sort(newestFirst) }
+    // A goal tied to a synced savings account takes the bank's balance; PSD2 has no goals, so the target stays in the app.
+    const acc = s.bank_account_id ? t.bank_accounts.find((a) => a.id === s.bank_account_id) : undefined
+    return { id: s.id, name: s.name, value: acc ? acc.balance_minor ?? 0 : savingsTotal(ev), goal: s.goal_minor, principal: 0, icon: s.icon, history: ev.map((e) => ({ ...e, kind: e.action })).sort(newestFirst), synced: Boolean(acc) }
   })
   const rows = kind === 'loan' ? t.loans : t.receivables
   const ev: (Ev & { parent: string })[] = kind === 'loan' ? t.loan_events.map((e) => ({ ...e, parent: e.loan_id })) : t.receivable_events.map((e) => ({ ...e, parent: e.receivable_id }))
-  return rows.map((r) => ({ id: r.id, name: r.name, value: r.remaining_minor, goal: null, principal: r.principal_minor, icon: kind === 'loan' ? 'loan' : 'owed', history: ev.filter((e) => e.parent === r.id).sort(newestFirst) }))
+  return rows.map((r) => ({ id: r.id, name: r.name, value: r.remaining_minor, goal: null, principal: r.principal_minor, icon: kind === 'loan' ? 'loan' : 'owed', history: ev.filter((e) => e.parent === r.id).sort(newestFirst), synced: false }))
+}
+
+const ROLE: Record<string, string> = { personal: 'Yours', joint: 'Joint', savings: 'Savings' }
+
+/** The synced bank accounts: balance, last sync, and the consent that lets Cashflow read them (renewed every 180 days). */
+function Accounts({ t }: { t: Tables }): React.JSX.Element {
+  const toast = useToast()
+  const [busy, setBusy] = useState<string | null>(null)
+  const renew = async (connection_id: string): Promise<void> => {
+    setBusy(connection_id)
+    try {
+      const { data, error } = await supabase().functions.invoke<{ url: string }>('bank-consent', { method: 'POST', body: { connection_id } })
+      if (error || !data?.url) throw new Error('Couldn’t start the renewal. Try again in a moment.')
+      window.location.assign(data.url)
+    } catch (e) { toast(e instanceof Error ? e.message : 'Couldn’t start the renewal.'); setBusy(null) }
+  }
+  if (!t.bank_connections.length) return <div className="panel" style={{ marginBottom: 14 }}><div className="empty"><b>No bank connected</b>Cashflow reads your accounts through Enable Banking, read-only.</div></div>
+  return (
+    <>
+      <SyncLine />
+      {t.bank_connections.map((c) => {
+        const days = Math.floor((Date.parse(c.valid_until) - Date.now()) / 86_400_000)
+        const accs = t.bank_accounts.filter((a) => a.connection_id === c.id)
+        return (
+          <section key={c.id}>
+            <h2 className="sec">{c.aspsp_name} <button disabled={busy === c.id} onClick={() => void renew(c.id)}>{busy === c.id ? 'Opening…' : 'Renew access'}</button></h2>
+            <div className="panel">{accs.map((a) => (
+              <div className="row" key={a.id}><span className="who"><Icon name={a.role === 'joint' ? 'shared' : a.role === 'savings' ? 'savings' : 'bank'} /></span>
+                <span style={{ minWidth: 0 }}><div className="nm">{a.name ?? ROLE[a.role]} <span className="meta">{a.currency}</span></div><div className="meta">{ROLE[a.role]}{a.last_error ? ', last sync failed' : a.last_synced_at ? `, synced ${dayLabel(a.last_synced_at.slice(0, 10)).toLowerCase()}` : ''}</div></span>
+                <span className="amt num">{a.balance_minor === null ? '–' : kr(a.balance_minor, true, a.currency)}</span></div>
+            ))}</div>
+            <p className="note">Read-only access {days < 0 ? 'ended' : `until ${shortDate(c.valid_until.slice(0, 10))}`}{days >= 0 && days < 14 ? `, ${days} ${days === 1 ? 'day' : 'days'} left` : ''}.</p>
+          </section>
+        )
+      })}
+    </>
+  )
 }
 
 function Bank({ t }: { t: Tables }): React.JSX.Element {
   const [open, setOpen] = useState<Open | null>(null)
   const sv = itemsOf(t, 'savings'), lo = itemsOf(t, 'loan'), ow = itemsOf(t, 'owed')
-  const svTot = sv.reduce((a, s) => a + s.value, 0)
-  const loTot = t.loans.filter((l) => l.status === 'open').reduce((a, l) => a + l.remaining_minor, 0)
-  const owTot = t.receivables.filter((r) => r.status === 'open').reduce((a, r) => a + r.remaining_minor, 0)
-  // As the Expo app: one running total over every savings event, minus open loans (DATA.md § 6).
-  const balance = bankBalance(savingsTotal(t.savings_events), loTot)
   // done: a savings goal reached or a debt settled, marked with the hand-drawn check (MARKS.md).
   const row = (kind: Kind, x: Item, right: string, sub: string, prog: number | null, done = false): React.JSX.Element => (
     <button key={x.id} className={`linkrow mkb-bank ${kind}${done ? ' done' : ''}`} onClick={() => setOpen({ kind, id: x.id })}>
@@ -63,16 +97,12 @@ function Bank({ t }: { t: Tables }): React.JSX.Element {
   const cur = open?.id ? all[open.kind].find((x) => x.id === open.id) ?? null : null
   return (
     <>
-      <div className="stats bankstats" style={{ marginBottom: 4 }}>
-        <div className="stat"><div className="big2 num">{kr(balance, true)}</div><p>Bank balance</p></div>
-        <div className="stat"><div className="big2 num">{kr(svTot, true)}</div><p>Savings total</p></div>
-        <div className="stat"><div className="big2 num">{kr(loTot, true)}</div><p>Still to repay</p></div>
-        <div className="stat"><div className="big2 num">{kr(owTot, true)}</div><p>Owed to you</p></div>
-      </div>
+      <Accounts t={t} />
       <div className="cols3">
-        {sec('Savings', 'savings', sv.map((s) => row('savings', s, kr(s.value, true), s.goal ? (s.value >= s.goal ? `Goal reached, ${kr(s.goal, true)}` : `${pct(s.value, s.goal)} of 100 toward ${kr(s.goal, true)}`) : 'No goal set yet', s.goal ? Math.min(100, pct(s.value, s.goal)) : null, Boolean(s.goal) && s.value >= s.goal!)), 'No savings yet. Name a pot and set a goal.', 'New savings')}
-        {sec('Loans', 'loan', lo.map((l) => row('loan', l, l.value ? kr(l.value, true) : 'Settled', l.value ? `left of ${kr(l.principal, true)}` : `${kr(l.principal, true)} repaid`, l.value ? 100 - pct(l.value, l.principal) : null, !l.value)), 'No loans. Add one to track what is left to repay.', 'New loan')}
-        {sec('Owed to you', 'owed', ow.map((o) => row('owed', o, o.value ? kr(o.value, true) : 'Settled', o.value ? `still owed of ${kr(o.principal, true)}` : 'Returned in full', o.value ? 100 - pct(o.value, o.principal) : null, !o.value)), 'Nobody owes you money.', 'Someone owes you')}
+        {sec('Savings goals', 'savings', sv.map((s) => row('savings', s, kr(s.value, true), s.goal ? (s.value >= s.goal ? `Goal reached, ${kr(s.goal, true)}` : `${pct(s.value, s.goal)} of 100 toward ${kr(s.goal, true)}`) : 'No goal set yet', s.goal ? Math.min(100, pct(s.value, s.goal)) : null, Boolean(s.goal) && s.value >= s.goal!)), 'No goals yet. Name one and tie it to your savings account.', 'New goal')}
+        {/* Loans and money owed now live with the people they are about (People); old settled ones stay readable here. */}
+        {lo.length > 0 && sec('Loans', 'loan', lo.map((l) => row('loan', l, l.value ? kr(l.value, true) : 'Settled', l.value ? `left of ${kr(l.principal, true)}, now on People` : `${kr(l.principal, true)} repaid`, l.value ? 100 - pct(l.value, l.principal) : null, !l.value)), '', 'New loan')}
+        {ow.length > 0 && sec('Owed to you', 'owed', ow.map((o) => row('owed', o, o.value ? kr(o.value, true) : 'Settled', o.value ? `still owed of ${kr(o.principal, true)}` : 'Returned in full', o.value ? 100 - pct(o.value, o.principal) : null, !o.value)), '', 'Someone owes you')}
       </div>
       {open && (open.id === null || cur) && <BankSheet key={`${open.kind}-${open.id ?? 'new'}`} kind={open.kind} x={cur} t={t} onClose={() => setOpen(null)} />}
     </>
@@ -130,11 +160,13 @@ function Actions({ kind, x, t }: { kind: Kind; x: Item; t: Tables }): React.JSX.
         <p className={done ? 'mkb-done' : undefined}>{done && <Check size={18} seed={7} />}{kind === 'savings' ? (x.goal ? `${done ? 'Reached the' : 'of'} ${kr(x.goal, true)} goal` : 'No goal set yet') : done ? (kind === 'loan' ? `${kr(x.principal, true)} repaid` : 'Returned in full') : kind === 'loan' ? `left to repay of ${kr(x.principal, true)}` : `still owed of ${kr(x.principal, true)}`}</p>
         {kind === 'savings' && x.goal ? <span className="goal dgoal" aria-hidden="true"><i style={{ width: `${Math.min(100, pct(x.value, x.goal))}%` }} /></span> : null}
       </div>
-      <div style={{ margin: '18px 0 12px' }}><Seg label="What happened" value={act} onChange={setAct} options={acts} /></div>
-      <AmountField id="bamt" label="Amount" value={amt} onChange={(v) => { setAmt(v); setAmtErr(null) }} error={amtErr} />
-      {kind === 'savings' && <label className="field" htmlFor="bnote"><span>Note</span><input id="bnote" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional" autoComplete="off" /></label>}
-      <FormErr err={err} />
-      <button className="btn" style={{ width: '100%' }} disabled={busy} onClick={() => void go()}>{busy ? 'Saving…' : 'Save'}</button>
+      {x.synced ? <p className="note" style={{ textAlign: 'center' }}>The balance comes from your synced savings account.</p> : <>
+        <div style={{ margin: '18px 0 12px' }}><Seg label="What happened" value={act} onChange={setAct} options={acts} /></div>
+        <AmountField id="bamt" label="Amount" value={amt} onChange={(v) => { setAmt(v); setAmtErr(null) }} error={amtErr} />
+        {kind === 'savings' && <label className="field" htmlFor="bnote"><span>Note</span><input id="bnote" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional" autoComplete="off" /></label>}
+        <FormErr err={err} />
+        <button className="btn" style={{ width: '100%' }} disabled={busy} onClick={() => void go()}>{busy ? 'Saving…' : 'Save'}</button>
+      </>}
       <h2 className="sect">History</h2>
       <div className="panel">{x.history.length ? x.history.map((e) => (
         <div className="row" key={e.id}><span className="who cat"><Icon name={e.kind === 'add' || e.kind === 'lent' || e.kind === 'borrowed' ? 'in' : e.kind === 'set' ? 'edit' : 'out'} /></span>
@@ -153,6 +185,8 @@ function EditForm({ kind, x, t, onDone }: { kind: Kind; x: Item | null; t: Table
   const [amt, setAmt] = useState(x ? (kind === 'savings' ? (x.goal ? minorToInput(x.goal) : '') : minorToInput(x.principal)) : '')
   const [left, setLeft] = useState(debt ? minorToInput(debt.remaining_minor) : '')
   const [icon, setIcon] = useState(x?.icon ?? 'savings')
+  const savingsAccs = t.bank_accounts.filter((a) => a.role === 'savings')
+  const [acc, setAcc] = useState<string>((kind === 'savings' && x ? t.savings_accounts.find((r) => r.id === x.id)?.bank_account_id : null) ?? savingsAccs[0]?.id ?? '')
   const [e, setE] = useState<{ name?: string; amt?: string; left?: string }>({})
   const [ask, setAsk] = useState(false)
   const W = WORDS[kind]
@@ -172,8 +206,8 @@ function EditForm({ kind, x, t, onDone }: { kind: Kind; x: Item | null; t: Table
     let ok: boolean
     if (kind === 'savings') {
       ok = await save('Saved', [[['savings_accounts'], () => x
-        ? supabase().from('savings_accounts').update({ name: n, goal_minor: m, icon }).eq('id', x.id)
-        : supabase().from('savings_accounts').insert({ user_id: userId, name: n, goal_minor: m, icon })]])
+        ? supabase().from('savings_accounts').update({ name: n, goal_minor: m, icon, bank_account_id: acc || null }).eq('id', x.id)
+        : supabase().from('savings_accounts').insert({ user_id: userId, name: n, goal_minor: m, icon, bank_account_id: acc || null })]])
     } else {
       const d = DEBT[kind]
       const principal = m as number, remaining = l as number
@@ -202,6 +236,8 @@ function EditForm({ kind, x, t, onDone }: { kind: Kind; x: Item | null; t: Table
         {e.name && <span className="err2">{e.name}</span>}</label>
       <AmountField id="bamt1" label={W[2]} value={amt} onChange={(v) => { setAmt(v); setE({ ...e, amt: undefined }) }} error={e.amt} hint={kind === 'savings' ? 'Optional' : undefined} />
       {kind !== 'savings' && <AmountField id="bleft" label={kind === 'loan' ? 'Still to repay' : 'Still owed'} value={left} onChange={(v) => { setLeft(v); setE({ ...e, left: undefined }) }} error={e.left} hint={x ? undefined : 'Leave empty if nothing is paid back yet'} />}
+      {kind === 'savings' && savingsAccs.length > 0 && <label className="field" htmlFor="bacc"><span>Balance from</span>
+        <select id="bacc" value={acc} onChange={(ev) => setAcc(ev.target.value)}>{savingsAccs.map((a) => <option key={a.id} value={a.id}>{a.name ?? 'Savings'} ({a.currency})</option>)}<option value="">Not synced, I track it here</option></select></label>}
       {kind === 'savings' && <IconPick value={icon} onPick={setIcon} extra={[['savings', 'Savings']]} />}
       {ask && <DeleteAsk what="it" busy={busy} onYes={() => void del()} onNo={() => setAsk(false)} />}
       <FormErr err={err} />
@@ -216,7 +252,7 @@ function EditForm({ kind, x, t, onDone }: { kind: Kind; x: Item | null; t: Table
 export default function Page(): React.JSX.Element {
   const wide = useWide()
   const { tables } = useStore()
-  const head = <Header title="Bank" big="Bank" aside="Savings, loans and money owed to you" back={!wide} />
+  const head = <Header title="Accounts & sync" big="Accounts & sync" aside="Your banks, balances and savings goals" back={!wide} />
   return (
     <Gate skeleton={<>{head}<div className="panel"><SkRows n={2} /></div><h2 className="sec">Savings</h2><div className="panel"><SkRows n={2} /></div></>}>
       {() => <>{head}<StatusLine />{tables && <Bank t={tables} />}</>}

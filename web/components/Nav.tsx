@@ -5,23 +5,22 @@ import { usePathname } from 'next/navigation'
 import { Icon } from './Icon'
 import { useWide } from '@/lib/useWide'
 
-// Phone: four places and Add. Desktop: every place in a calm sidebar (no admin chrome, tells.md N1).
+// Phone: four places. Desktop: every place in a calm sidebar (no admin chrome, tells.md N1).
 const PLACES: { href: string; icon: string; label: string; desk?: boolean; sepBefore?: boolean }[] = [
   { href: '/', icon: 'cycle', label: 'Cycle' },
-  { href: '/transactions', icon: 'list', label: 'Transactions' },
-  { href: '/budgets', icon: 'budgets', label: 'Budgets' },
+  { href: '/budgets', icon: 'budgets', label: 'Budgets', desk: true },
   { href: '/where', icon: 'where', label: 'Where it went', desk: true },
-  { href: '/shared', icon: 'shared', label: 'Shared' },
-  { href: '/bank', icon: 'bank', label: 'Bank', desk: true },
-  { href: '/categories', icon: 'tag', label: 'Categories', desk: true, sepBefore: true },
+  { href: '/transactions', icon: 'list', label: 'Activity' },
+  { href: '/people', icon: 'shared', label: 'People' },
+  { href: '/bank', icon: 'bank', label: 'Accounts & sync', desk: true, sepBefore: true },
+  { href: '/categories', icon: 'tag', label: 'Categories', desk: true },
   { href: '/rules', icon: 'rule', label: 'Merchant rules', desk: true },
-  { href: '/alerts', icon: 'bell', label: 'Alerts', desk: true },
-  { href: '/profile', icon: 'profile', label: 'Profile', desk: true },
+  { href: '/profile', icon: 'profile', label: 'Settings' },
 ]
-// On a phone, places reached through Profile light up Cycle; the cycle plan lights up Budgets.
-const PHONE_PARENT: Record<string, string> = { '/where': '/', '/bank': '/', '/categories': '/', '/rules': '/', '/alerts': '/', '/profile': '/', '/budgets/plan': '/budgets' }
+// On a phone, budgets and analytics light up Cycle; Anna's pot lights up People; settings pages light up Settings.
+const PHONE_PARENT: Record<string, string> = { '/budgets': '/', '/budgets/plan': '/', '/where': '/', '/shared': '/people', '/bank': '/profile', '/categories': '/profile', '/rules': '/profile' }
 
-export function Nav({ onAdd }: { onAdd: () => void }): React.JSX.Element {
+export function Nav(): React.JSX.Element {
   const path = usePathname()
   const wide = useWide()
   const here = wide ? path : PHONE_PARENT[path] ?? path
@@ -37,7 +36,6 @@ export function Nav({ onAdd }: { onAdd: () => void }): React.JSX.Element {
           </Link>
         </span>
       ))}
-      <button className="addbtn" onClick={onAdd} aria-label="Add a transaction"><Icon name="add" /><span>Add</span></button>
     </nav>
   )
 }
