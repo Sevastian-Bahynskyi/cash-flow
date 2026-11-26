@@ -23,10 +23,9 @@ Your month between paydays is something you hold: a deep indigo card with what i
 | `anna` / `anna-text` | `#E7A53C` / `#8A5800` | `#F0B04A` / `#F3C06E` | the partner's colour |
 | `over-fill` / `over-card` / `over-text` / `over-soft` | `#B4352B` / `#A9322A` / `#B4352B` / `#F5DEDA` | `#C4463B` / `#8F2C25` / `#FF948A` / `#3A1E1E` | crossed budget only |
 | `in` | `#1D7646` | `#74D6A0` | money in only |
+| `ahead` / `ahead-text` / `ahead-soft` | `#D2601A` / `#A8470A` / `#FBE4D3` | `#F0884A` / `#FFB07E` / `#3B2618` | ahead of pace only |
 
 **States and marks** (owner, 26 Nov: "three states, colors is fine"; "hand drawn lines basically used somewhere to identify something"): on track indigo, ahead of pace orange (`ahead`, always with the word "ahead"), over red; rough hand-drawn hatching marks a line crossed, a hand-drawn tick marks today, a check marks a budget kept. The full table is `docs/redesign/MARKS.md`.
-
-| `ahead` / `ahead-text` / `ahead-soft` | `#D2601A` / `#A8470A` / `#FBE4D3` | `#F0884A` / `#FFB07E` / `#3B2618` | ahead of pace only |
 
 Dark is tuned, not inverted: an indigo-black ground, a lighter indigo for small marks, the same rich cards.
 
