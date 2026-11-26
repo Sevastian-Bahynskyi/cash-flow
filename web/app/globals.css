@@ -409,3 +409,5 @@ a{color:inherit;text-decoration:none}
 @media (min-width:960px){@keyframes sheetin{from{transform:translate(-50%,-46%);opacity:0}}}
 .scrim.on{animation:fadein .2s}
 @keyframes fadein{from{opacity:0}}
+
+@media (min-width:960px){.cols.even .hero .big{font-size:64px}}
