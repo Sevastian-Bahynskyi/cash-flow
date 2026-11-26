@@ -47,6 +47,17 @@ Bars are round, 8px in lists and 12px on a card. No hatching, no hand-drawn stro
 
 Big number: what is left in the budgets (or in minus out with no budgets). Under it, a 128px running total of spending so far: a soft white area for yours, saffron at its foot for your part of shared, a white line on top and a dot at today; the budgets as a dashed ceiling with its amount, and an even pace as a dashed diagonal from zero to the ceiling. Above the line means spending ahead of the days. Labels: start and end of the cycle, and Today when there is room.
 
+## The second look: Bright
+
+The owner liked two of three prototyped looks (26 Nov) and wants to live with both before choosing: "implement both A and B [...] in the settings I switch to B and show the whole app in this style". Soft stays the default; **Settings > Look** switches to Bright, saved on the device (`web/lib/look.ts`, `<html data-look="bright">`). All of Bright lives in `web/app/bright.css` as token and shape overrides; screens and features are the same.
+
+- Inspired by Headspace's energy, not its branding: big flat colour blocks, big chunky type (Bricolage Grotesque, 800 only on the numbers that are the point), white ground (near-black in dark).
+- Cobalt `#2350F5` is you (the cycle card, bars, icon tiles), sunflower `#FFC42E` is the partner (the pot block, the days-gone bar). Over a budget is the solid ink tile with the words "… over" (black in light, near-white in dark); still no red.
+- The cycle card shows two thick bars, money used against days gone, instead of the running-total chart. On a phone, budgets and "Needs a look" are a grid of tiles.
+- Same bans as Soft: no purple, no gradients, glow or glass.
+
+When the owner picks one, delete the other (its CSS, the switch, the race bars or the chart) rather than keeping both.
+
 ## Type and figures
 
 - **Hanken Grotesk** 400/500/600 for everything, numbers too: big numbers 600 with tight tracking (−0.03em). No serif, no italics. Sentence case, no uppercase kickers.
