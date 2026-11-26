@@ -44,6 +44,9 @@ Each list and chart is designed in all four states before it is done:
 - **Error:** names what failed, keeps what is known visible, offers Retry.
 - **Content,** including stress: a huge month, a 1 kr transaction, a category name of forty characters, 300 transactions in a cycle, a negative balance.
 
-## What the references teach (to be filled from the stage 2 research board)
+## What the owner's marks teach (references board, 26 Nov)
 
-Why each loved screen works, in one line each, with the app and screen named. Filled from `docs/redesign/references` after the owner marks them.
+The full list with a line per screen is `docs/redesign/references.json`; the marks are in `docs/design/owner-taste-evidence.md` § Cashflow.
+
+- **Loved:** money as a confident object (Apple Card, Revolut's big balance), a tactile control that makes money concrete (Apple Card's interest dial), people in the shared part (Revolut's joint account, payments as a chat), calm dense structure (Linear), a picture that answers "where did it go" (Monarch's Sankey), budgets as rows with the amount available in a coloured pill (YNAB) or aligned columns (Copilot), overspending shown with its next step (YNAB).
+- **Hated:** monospace terminal ledgers (Lunch Money), pale airy minimalism (Mercury, Things), generic fintech (Emma, Rocket), AI suggestion queues and insight cards (Copilot).

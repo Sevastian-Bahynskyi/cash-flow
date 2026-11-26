@@ -13,6 +13,8 @@ The one source of truth for Claude Code and Codex in this repository. `CLAUDE.md
 
 Cashflow is a behavioural budgeting tool, not an accounting system. Priorities: speed > completeness, clarity > flexibility, predictability > automation.
 
+Scope, in the owner's words: track my money, create budgets, see whether I follow them, a good overview of my transactions, and an overview of our shared account. Automatic and smart: every transaction is clearly shared or personal, and a transfer to the shared account is not personal spending (issue #7). Liking a design is never a request for a feature: build only what the owner asks for.
+
 Rules that must not drift:
 
 - **Fastest add path:** amount → category → name → save. Amount field focused with the numeric keypad on open. Date, note and split stay off the happy path.
