@@ -43,7 +43,7 @@ function Waffle({ list, spent }: { list: { cat?: { id: string; name: string }; s
       <div className="grid" role="img" aria-label={top.map((x, i) => `${x.cat?.name}: ${n[i]} of every 100 kr.`).join(', ')}>
         {Array.from({ length: 100 }, (_, k) => <i key={k} style={cells[k] === undefined ? undefined : { background: CAT[cells[k]!] }} />)}
       </div>
-      <div className="legend">{top.map((x, i) => <span key={x.cat?.id}><i style={{ background: CAT[i] }} />{x.cat?.name} {n[i]}</span>)}{list.length > 5 && <span><i style={{ background: 'var(--surface-2)' }} />Everything else</span>}</div>
+      <div className="legend">{top.map((x, i) => <span key={x.cat?.id}><i style={{ background: CAT[i] }} />{x.cat?.name} {n[i]}</span>)}{list.length > 5 && <span><i style={{ background: 'none', boxShadow: 'inset 0 0 0 1.5px var(--line-2)' }} />Everything else</span>}</div>
     </div>
   )
 }

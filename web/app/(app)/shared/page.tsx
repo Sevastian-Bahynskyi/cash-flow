@@ -54,9 +54,9 @@ function Shared({ m }: { m: Model }): React.JSX.Element {
           {cats.length > 0 && <div className="legend" style={{ margin: '10px 4px 0' }}><span><i style={{ background: 'var(--you-mark)' }} />Your part</span><span><i style={{ background: 'var(--anna)' }} />{PARTNER}’s part</span></div>}
         </div><div>
           <h2 className="sec">Into the pot</h2>
-          <div className="panel">{tops.length ? <div className="bubbles">{tops.slice(0, 12).map((t) => (
+          {tops.length ? <div className="bubbles">{tops.slice(0, 12).map((t) => (
             <button key={t.id} className={`bub ${t.shared_participant === 'gf' ? 'a' : 'y'}`} onClick={() => open(t)}><b className="num">{kr(t.amount_minor, true)}</b><span>{t.shared_participant === 'gf' ? `${PARTNER} moved in` : 'You moved in'}, {shortDate(t.occurred_on)}</span></button>
-          ))}</div> : <div className="empty">No top-ups {per === 'cycle' ? 'this cycle' : 'yet'}.</div>}</div>
+          ))}</div> : <div className="panel"><div className="empty">No top-ups {per === 'cycle' ? 'this cycle' : 'yet'}.</div></div>}
           <h2 className="sec">Latest together <Link href="/transactions?shared=1">All</Link></h2>
           <div className="panel">{recent.length ? recent.slice(0, 8).map((t) => <TxRow key={t.id} t={t} m={m} onOpen={open} />) : <div className="empty">Nothing yet.</div>}</div>
         </div></div>
