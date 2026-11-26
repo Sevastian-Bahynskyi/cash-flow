@@ -10,6 +10,7 @@
   --anna:#E7A53C; --anna-text:#8A5800; --on-anna:#2A1A00;
   --over-fill:#B4352B; --over-card:#A9322A; --over-text:#B4352B; --over-soft:#F5DEDA;
   --in:#1D7646;
+  --ahead:#D2601A; --ahead-text:#A8470A; --ahead-soft:#FBE4D3;
   --focus:#2D2F8F; --scrim:rgba(18,18,30,.38); --shadow:0 1px 2px rgba(20,20,40,.06),0 8px 24px rgba(20,20,40,.08);
   --skel:rgba(23,24,43,.08);
 }
@@ -20,6 +21,7 @@
   --anna:#F0B04A; --anna-text:#F3C06E; --on-anna:#2A1A00;
   --over-fill:#C4463B; --over-card:#8F2C25; --over-text:#FF948A; --over-soft:#3A1E1E;
   --in:#74D6A0;
+  --ahead:#F0884A; --ahead-text:#FFB07E; --ahead-soft:#3B2618;
   --focus:#AEB1FF; --scrim:rgba(0,0,0,.55); --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35);
   --skel:rgba(255,255,255,.07);
   color-scheme:dark}}
@@ -30,6 +32,7 @@
   --anna:#F0B04A; --anna-text:#F3C06E; --on-anna:#2A1A00;
   --over-fill:#C4463B; --over-card:#8F2C25; --over-text:#FF948A; --over-soft:#3A1E1E;
   --in:#74D6A0;
+  --ahead:#F0884A; --ahead-text:#FFB07E; --ahead-soft:#3B2618;
   --focus:#AEB1FF; --scrim:rgba(0,0,0,.55); --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35);
   --skel:rgba(255,255,255,.07);
 }
@@ -426,3 +429,21 @@ a{color:inherit;text-decoration:none}
 /* Google's sign-in button: white with its own G, in both themes (Google branding). */
 .gbtn{background:#fff;color:#1F1F1F;border:1px solid #747775;gap:12px;font-weight:500}
 .gbtn:disabled{opacity:.6}
+
+/* ===== marks: hand-drawn strokes with one meaning each (docs/redesign/MARKS.md) ===== */
+/* Hatch: the owner's sketch, rough diagonal strokes, as a mask so it takes any colour. */
+.mk-hatch,.hatch{-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14'%3E%3Cpath d='M-1 13.5Q5 7.8 14.6 -0.6' stroke='%23000' stroke-width='2.1' stroke-linecap='round' fill='none'/%3E%3Cpath d='M6 15.2Q10.5 11 15.4 6.4' stroke='%23000' stroke-width='1.8' stroke-linecap='round' fill='none'/%3E%3Cpath d='M-1.4 5.8Q2 3.2 5.6 -0.8' stroke='%23000' stroke-width='1.8' stroke-linecap='round' fill='none'/%3E%3C/svg%3E") 0 0/14px 14px repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14'%3E%3Cpath d='M-1 13.5Q5 7.8 14.6 -0.6' stroke='%23000' stroke-width='2.1' stroke-linecap='round' fill='none'/%3E%3Cpath d='M6 15.2Q10.5 11 15.4 6.4' stroke='%23000' stroke-width='1.8' stroke-linecap='round' fill='none'/%3E%3Cpath d='M-1.4 5.8Q2 3.2 5.6 -0.8' stroke='%23000' stroke-width='1.8' stroke-linecap='round' fill='none'/%3E%3C/svg%3E") 0 0/14px 14px repeat}
+.mk-meter{position:relative;display:block;height:10px;border-radius:5px;background:var(--surface-2);overflow:visible}
+.mk-meter .mk-fill{position:absolute;left:0;top:0;bottom:0;border-radius:5px;background:var(--you)}
+.mk-meter .mk-hatch{position:absolute;top:0;bottom:0;background:var(--ahead);border-radius:0 5px 5px 0}
+.mk-meter.over .mk-fill{background:var(--over-soft)}
+.mk-meter.over .mk-hatch{background:var(--over-fill);border-radius:5px}
+.mk-meter .mk-tick{position:absolute;top:-4px;width:8px;height:18px;overflow:visible}
+.mk-meter .mk-tick path{fill:none;stroke:var(--ink);stroke-width:1.8;stroke-linecap:round}
+.brow[aria-current="true"] .mk-meter{background:var(--line-2)}
+.pill.ahead{background:var(--ahead-soft);color:var(--ahead-text)}
+.mk-under{position:relative;display:inline-block;white-space:nowrap}
+.mk-under svg{position:absolute;left:-2%;right:-2%;bottom:-.18em;width:104%;height:.32em;overflow:visible}
+.mk-under path{fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;vector-effect:non-scaling-stroke}
+.mk-check path,.mk-ring path{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.mk-ring{position:absolute;pointer-events:none}
