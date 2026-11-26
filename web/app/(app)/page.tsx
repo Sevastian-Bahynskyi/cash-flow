@@ -6,6 +6,8 @@ import { Header } from '@/components/Header'
 import { Icon } from '@/components/Icon'
 import { CycleCard } from '@/components/CycleCard'
 import { useAdd } from '@/components/AddSheet'
+import { Meter, StatePill, budgetState } from '@/components/Marks'
+import { goneShare, stateOf } from '@/components/marks-a/pace'
 import { Gate, NavRow, SkRows, StatusLine, TxRow, useDetail, EmptyAdd } from '@/components/ui'
 import { useStore } from '@/lib/data/store'
 import type { Model } from '@/lib/data/model'
@@ -48,7 +50,8 @@ function Home({ m }: { m: Model }): React.JSX.Element {
   const b = m.budgetsOf(c)
   const prev = m.budgetsOf(m.prevOf(c))
   const over = b.list.filter((x) => x.left < 0)
-  const near = b.list.filter((x) => x.left >= 0 && x.ratio >= 0.85)
+  const share = goneShare(m, c)
+  const ahead = b.list.filter((x) => x.left >= 0 && budgetState(x.spent, x.amount, share) === 'ahead')
   const p = pot(b.rows)
   const latest = [...m.tx].reverse().slice(0, 5)
   const yearRows = m.tx.filter((r) => r.occurred_on.slice(0, 4) === m.today.slice(0, 4))
@@ -59,11 +62,11 @@ function Home({ m }: { m: Model }): React.JSX.Element {
         <CycleCard m={m} />
         {b.allMine > 0 && <div className="panel" style={{ marginTop: 8 }}><NavRow href="/where" icon="where" name="Where it went" sub={`${kr(b.allMine, true)} spent${prev.allMine ? `, ${kr(Math.abs(b.allMine - prev.allMine), true)} ${b.allMine >= prev.allMine ? 'more' : 'less'} than ${m.prevOf(c)?.name}` : ''}`} /></div>}
         {!b.list.length && c?.real && <div className="panel" style={{ marginTop: 8 }}><NavRow href="/budgets" icon="budgets" name="Set your budgets" sub="Then the card shows what is left to spend" /></div>}
-        {over.length > 0 && <>
+        {(over.length > 0 || ahead.length > 0) && <>
           <h2 className="sec">Needs a look</h2>
-          <div className="alert"><Link className="row" href={`/budgets?cat=${over[0]!.id}`}><span className="who cat"><Icon name={over[0]!.cat!.icon} /></span><span><div className="nm">{over[0]!.cat!.name}</div><div className="meta num">{kr(over[0]!.spent, true)} of {kr(over[0]!.amount, true)}</div></span><span className="amt ovq">{kr(-over[0]!.left, true)} over</span></Link></div>
-          {(over.length > 1 || near.length > 0) && <div className="panel" style={{ marginTop: 8 }}>{[...over.slice(1), ...near].map((x) => (
-            <Link className="row" key={x.id} href={`/budgets?cat=${x.id}`}><span className="who cat"><Icon name={x.cat!.icon} /></span><span><div className="nm">{x.cat!.name}</div><div className="meta num">{kr(x.spent, true)} of {kr(x.amount, true)}</div></span>{x.left < 0 ? <span className="amt ovq"><i className="ovdot" />{kr(-x.left, true)} over</span> : <span className="pill">{kr(x.left, true)} left</span>}</Link>
+          {over.length > 0 && <div className="alert"><Link className="row" href={`/budgets?cat=${over[0]!.id}`}><span className="who cat"><Icon name={over[0]!.cat!.icon} /></span><span><div className="nm">{over[0]!.cat!.name}</div><div className="meta num">{kr(over[0]!.spent, true)} of {kr(over[0]!.amount, true)}</div></span><span className="amt ovq">{kr(-over[0]!.left, true)} over</span></Link></div>}
+          {(over.length > 1 || ahead.length > 0) && <div className="panel mka-lines" style={{ marginTop: 8 }}>{[...over.slice(1), ...ahead].map((x) => (
+            <Link className="row" key={x.id} href={`/budgets?cat=${x.id}`}><span className="who cat"><Icon name={x.cat!.icon} /></span><span style={{ minWidth: 0 }}><div className="nm">{x.cat!.name}</div><div className="meta num">{kr(x.spent, true)} of {kr(x.amount, true)}</div><Meter spent={x.spent} amount={x.amount} daysGoneShare={share} /></span><StatePill left={x.left} st={stateOf(x.spent, x.amount, share)} /></Link>
           ))}</div>}
         </>}
         <h2 className="sec">Balance</h2>

@@ -5,6 +5,7 @@ import { Header } from '@/components/Header'
 import { Icon } from '@/components/Icon'
 import { Sheet } from '@/components/Sheet'
 import { Gate, SkRows, StatusLine } from '@/components/ui'
+import { Check } from '@/components/Marks'
 import { AMOUNT_ERR, AmountField, DeleteAsk, FormErr, IconPick, Seg, useSaver } from '@/components/settings/kit'
 import { useStore } from '@/lib/data/store'
 import type { Tables } from '@/lib/data/types'
@@ -46,10 +47,11 @@ function Bank({ t }: { t: Tables }): React.JSX.Element {
   const owTot = t.receivables.filter((r) => r.status === 'open').reduce((a, r) => a + r.remaining_minor, 0)
   // As the Expo app: one running total over every savings event, minus open loans (DATA.md § 6).
   const balance = bankBalance(savingsTotal(t.savings_events), loTot)
-  const row = (kind: Kind, x: Item, right: string, sub: string, prog: number | null): React.JSX.Element => (
-    <button key={x.id} className="linkrow" onClick={() => setOpen({ kind, id: x.id })}>
+  // done: a savings goal reached or a debt settled, marked with the hand-drawn check (MARKS.md).
+  const row = (kind: Kind, x: Item, right: string, sub: string, prog: number | null, done = false): React.JSX.Element => (
+    <button key={x.id} className={`linkrow mkb-bank ${kind}${done ? ' done' : ''}`} onClick={() => setOpen({ kind, id: x.id })}>
       <span className="who"><Icon name={x.icon} /></span>
-      <span style={{ minWidth: 0 }}><span className="nm">{x.name}</span><span className="sub">{sub}</span>{prog !== null && <span className="goal" aria-hidden="true"><i style={{ width: `${prog}%` }} /></span>}</span>
+      <span style={{ minWidth: 0 }}><span className="nm">{x.name}</span><span className="sub">{done && <Check size={16} seed={x.name.length} />}{sub}</span>{prog !== null && <span className="goal" aria-hidden="true"><i style={{ width: `${prog}%` }} /></span>}</span>
       <span className="end"><b className="num bankamt">{right}</b><Icon name="chev" /></span>
     </button>
   )
@@ -68,9 +70,9 @@ function Bank({ t }: { t: Tables }): React.JSX.Element {
         <div className="stat"><div className="big2 num">{kr(owTot, true)}</div><p>Owed to you</p></div>
       </div>
       <div className="cols3">
-        {sec('Savings', 'savings', sv.map((s) => row('savings', s, kr(s.value, true), s.goal ? `${pct(s.value, s.goal)} of 100 toward ${kr(s.goal, true)}` : 'No goal set yet', s.goal ? Math.min(100, pct(s.value, s.goal)) : null)), 'No savings yet. Name a pot and set a goal.', 'New savings')}
-        {sec('Loans', 'loan', lo.map((l) => row('loan', l, l.value ? kr(l.value, true) : 'Settled', l.value ? `left of ${kr(l.principal, true)}` : `${kr(l.principal, true)} repaid`, l.value ? 100 - pct(l.value, l.principal) : null)), 'No loans. Add one to track what is left to repay.', 'New loan')}
-        {sec('Owed to you', 'owed', ow.map((o) => row('owed', o, o.value ? kr(o.value, true) : 'Settled', o.value ? `still owed of ${kr(o.principal, true)}` : 'Returned in full', o.value ? 100 - pct(o.value, o.principal) : null)), 'Nobody owes you money.', 'Someone owes you')}
+        {sec('Savings', 'savings', sv.map((s) => row('savings', s, kr(s.value, true), s.goal ? (s.value >= s.goal ? `Goal reached, ${kr(s.goal, true)}` : `${pct(s.value, s.goal)} of 100 toward ${kr(s.goal, true)}`) : 'No goal set yet', s.goal ? Math.min(100, pct(s.value, s.goal)) : null, Boolean(s.goal) && s.value >= s.goal!)), 'No savings yet. Name a pot and set a goal.', 'New savings')}
+        {sec('Loans', 'loan', lo.map((l) => row('loan', l, l.value ? kr(l.value, true) : 'Settled', l.value ? `left of ${kr(l.principal, true)}` : `${kr(l.principal, true)} repaid`, l.value ? 100 - pct(l.value, l.principal) : null, !l.value)), 'No loans. Add one to track what is left to repay.', 'New loan')}
+        {sec('Owed to you', 'owed', ow.map((o) => row('owed', o, o.value ? kr(o.value, true) : 'Settled', o.value ? `still owed of ${kr(o.principal, true)}` : 'Returned in full', o.value ? 100 - pct(o.value, o.principal) : null, !o.value)), 'Nobody owes you money.', 'Someone owes you')}
       </div>
       {open && (open.id === null || cur) && <BankSheet key={`${open.kind}-${open.id ?? 'new'}`} kind={open.kind} x={cur} t={t} onClose={() => setOpen(null)} />}
     </>
@@ -97,6 +99,7 @@ function Actions({ kind, x, t }: { kind: Kind; x: Item; t: Tables }): React.JSX.
   const [amt, setAmt] = useState('')
   const [note, setNote] = useState('')
   const [amtErr, setAmtErr] = useState<string | null>(null)
+  const done = kind === 'savings' ? Boolean(x.goal) && x.value >= x.goal! : !x.value
   const word: Record<string, string> = { add: 'Put in', remove: 'Taken out', set: 'Balance set to', repaid: kind === 'loan' ? 'Repaid' : 'Returned', borrowed: 'Borrowed', lent: 'Lent' }
   const go = async (): Promise<void> => {
     const m = parseAmount(amt)
@@ -124,7 +127,7 @@ function Actions({ kind, x, t }: { kind: Kind; x: Item; t: Tables }): React.JSX.
   return (
     <>
       <div className="dhero"><div className="big serif num">{x.value ? kr(x.value, true) : 'Settled'}</div>
-        <p>{kind === 'savings' ? (x.goal ? `of ${kr(x.goal, true)} goal` : 'No goal set yet') : kind === 'loan' ? `left to repay of ${kr(x.principal, true)}` : `still owed of ${kr(x.principal, true)}`}</p>
+        <p className={done ? 'mkb-done' : undefined}>{done && <Check size={18} seed={7} />}{kind === 'savings' ? (x.goal ? `${done ? 'Reached the' : 'of'} ${kr(x.goal, true)} goal` : 'No goal set yet') : done ? (kind === 'loan' ? `${kr(x.principal, true)} repaid` : 'Returned in full') : kind === 'loan' ? `left to repay of ${kr(x.principal, true)}` : `still owed of ${kr(x.principal, true)}`}</p>
         {kind === 'savings' && x.goal ? <span className="goal dgoal" aria-hidden="true"><i style={{ width: `${Math.min(100, pct(x.value, x.goal))}%` }} /></span> : null}
       </div>
       <div style={{ margin: '18px 0 12px' }}><Seg label="What happened" value={act} onChange={setAct} options={acts} /></div>

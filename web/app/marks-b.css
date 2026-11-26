@@ -1,1 +1,29 @@
 /* Marks applied to lists, analytics, shared and bank (agent B). Tokens only. */
+
+/* Lists: today's day gets a pen oval; each day header carries a thin spend bar scaled to the heaviest day
+   in the list (indigo yours, saffron your part of shared), so heavy days stand out. */
+.mkb-dayh{position:relative;padding-bottom:12px}
+.mkb-today{position:relative;display:inline-block;color:var(--ink)}
+.mkb-oval{position:absolute;left:-10px;top:-5px;width:calc(100% + 20px);height:calc(100% + 10px);overflow:visible;pointer-events:none}
+.mkb-oval path{fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;vector-effect:non-scaling-stroke}
+.mkb-daybar{position:absolute;left:4px;right:4px;bottom:4px;height:3px;display:flex;gap:2px;border-radius:2px;background:var(--line)}
+.mkb-daybar i{display:block;height:100%;border-radius:2px;background:var(--you-mark);min-width:3px}
+.mkb-daybar i.sh{background:var(--anna)}
+
+/* Where it went: the part of a bar past last period's tick, ink-hatched (more than last). */
+.hb .track i.mkb-more{background:var(--ink);border-radius:0 5px 5px 0}
+.hb .d.mkb-quiet{opacity:.85}
+.answer.mkb-answer{margin-bottom:14px;line-height:1.28}
+
+/* Shared: category bars split in two inks, your part and the partner's. */
+.mkb-split{display:block;overflow:hidden}
+.hb .mkb-split i{border-radius:0}
+.hb .mkb-split i:first-child{border-radius:5px 0 0 5px;background:var(--you-mark)}
+.hb .mkb-split i.a{background:var(--anna);border-radius:0 5px 5px 0}
+
+/* Bank: debts repaid read quiet; a goal reached or a debt settled gets the check, in the money-in green. */
+.mkb-bank.loan .goal i,.mkb-bank.owed .goal i{background:var(--ink-3)}
+.mkb-bank.done .goal i{background:var(--in)}
+.mkb-bank.done .sub{color:var(--in);display:flex;align-items:center;gap:4px}
+.mkb-bank .sub .mk-check{flex:none}
+.mkb-done{color:var(--in);display:inline-flex;align-items:center;gap:6px}

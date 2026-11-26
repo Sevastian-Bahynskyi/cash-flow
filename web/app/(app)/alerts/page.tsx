@@ -11,30 +11,32 @@ import { dayLabel, kr } from '@/lib/fmt'
 import { PARTNER } from '@/lib/partner'
 import { useWide } from '@/lib/useWide'
 import { budgetAlerts } from '@/components/settings/alerts'
+import { Meter, StatePill } from '@/components/Marks'
+import { goneShare, stateOf } from '@/components/marks-a/pace'
 
 function Alerts({ m }: { m: Model }): React.JSX.Element {
   const add = useAdd()
-  const { over, close } = budgetAlerts(m)
+  const a = budgetAlerts(m)
+  const share = goneShare(m, m.current)
+  const close = a.close.filter((x) => !a.ahead.includes(x))
+  type Line = (typeof a.over)[number]
+  const line = (x: Line, meta: string): React.JSX.Element => (
+    <Link key={x.id} className="row" href={`/budgets?cat=${x.id}`}>
+      <span className="who cat"><Icon name={x.cat?.icon ?? 'other'} /></span>
+      <span style={{ minWidth: 0 }}><div className="nm">{x.cat?.name}</div><div className="meta num">{meta}</div><Meter spent={x.spent} amount={x.amount} daysGoneShare={share} /></span>
+      <StatePill left={x.left} st={stateOf(x.spent, x.amount, share)} />
+    </Link>
+  )
   const b = m.budgetsOf(m.current)
   const next = m.payday ? labelForSalaryDate(m.payday).replace(/ \d{4}$/, (y) => (y.trim() === m.today.slice(0, 4) ? '' : y)) : null
   return (
     <div style={{ maxWidth: 760 }}>
       <h2 className="sec">Over budget</h2>
-      <div className="panel">{over.length ? over.map((x) => (
-        <Link key={x.id} className="row" href={`/budgets?cat=${x.id}`}>
-          <span className="who cat"><Icon name={x.cat?.icon ?? 'other'} /></span>
-          <span style={{ minWidth: 0 }}><div className="nm">{x.cat?.name}</div><div className="meta num">{kr(x.spent, true)} of {kr(x.amount, true)}</div></span>
-          {x.left < 0 ? <span className="amt ovq"><i className="ovdot" />{kr(-x.left, true)} over</span> : <span className="pill zero">Fully spent</span>}
-        </Link>
-      )) : <div className="empty">No budget is over.</div>}</div>
+      <div className="panel mka-lines">{a.over.length ? a.over.map((x) => line(x, `${kr(x.spent, true)} of ${kr(x.amount, true)}`)) : <div className="empty">No budget is over.</div>}</div>
+      {a.ahead.length > 0 && <><h2 className="sec">Ahead of the days</h2>
+        <div className="panel mka-lines">{a.ahead.map((x) => line(x, `${Math.round(x.ratio * 100)} of 100 used, ${Math.round(share * 100)} of 100 days gone`))}</div></>}
       <h2 className="sec">Close to the line</h2>
-      <div className="panel">{close.length ? close.map((x) => (
-        <Link key={x.id} className="row" href={`/budgets?cat=${x.id}`}>
-          <span className="who cat"><Icon name={x.cat?.icon ?? 'other'} /></span>
-          <span style={{ minWidth: 0 }}><div className="nm">{x.cat?.name}</div><div className="meta num">{Math.round(x.ratio * 100)} of 100 used, {m.daysLeft} days left</div></span>
-          <span className="pill">{kr(x.left, true)} left</span>
-        </Link>
-      )) : <div className="empty">Nothing is close.</div>}</div>
+      <div className="panel mka-lines">{close.length ? close.map((x) => line(x, `${Math.round(x.ratio * 100)} of 100 used, ${m.daysLeft} days left`)) : <div className="empty">Nothing is close.</div>}</div>
       <h2 className="sec">Heads-up</h2>
       <div className="panel">
         {m.payday && <div className="row"><span className="who cat"><Icon name="cal" /></span><span><div className="nm">Payday {dayLabel(m.payday)}</div><div className="meta">Log the salary and the {next} cycle starts.</div></span><span /></div>}

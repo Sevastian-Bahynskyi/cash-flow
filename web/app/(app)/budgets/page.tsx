@@ -7,6 +7,8 @@ import { Header } from '@/components/Header'
 import { Icon } from '@/components/Icon'
 import { BudgetEditor, RichNote } from '@/components/BudgetEditor'
 import { useAdd } from '@/components/AddSheet'
+import { Check, Meter, StatePill } from '@/components/Marks'
+import { goneShare, stateOf } from '@/components/marks-a/pace'
 import { Gate, NavRow, SkRows, StatusLine, TxRow, useDetail } from '@/components/ui'
 import type { Cycle, Model } from '@/lib/data/model'
 import { findSalaryCategoryOption } from '@/lib/domain/category-rules'
@@ -77,17 +79,20 @@ function Budgets({ m }: { m: Model }): React.JSX.Element {
   const lastSpent = sel ? prevB.spent.get(sel.id) ?? 0 : 0
   const isCurrent = c.id === m.current?.id
   const days = isCurrent ? m.daysLeft : 0
+  const share = goneShare(m, c)
+  const st = stateOf(spentSel, amount, share)
+  const kept = c.real && amount > 0 && spentSel <= amount && m.today > c.endInclusive
   const unbudgetedParents = parents.filter((p) => !b.list.some((x) => x.id === p.id))
 
   const row = (cat: CategoryRow): React.JSX.Element => {
     const x = b.list.find((y) => y.id === cat.id)
     const s = b.spent.get(cat.id) ?? 0
-    const pill = !x ? <span className="pill zero">{s ? kr(s, true) : 'No budget'}</span> : x.left < 0 ? <span className="pill ov">{kr(-x.left, true)} over</span> : x.left === 0 ? <span className="pill zero">Used up</span> : <span className="pill">{kr(x.left, true)} left</span>
+    const pill = !x ? <span className="pill zero">{s ? kr(s, true) : 'No budget'}</span> : <StatePill left={x.left} st={stateOf(s, x.amount, share)} />
     return (
       <button key={cat.id} className="brow" aria-current={sel?.id === cat.id ? 'true' : undefined} onClick={() => go({ cat: cat.id })}>
         <span className="who cat"><Icon name={cat.icon} /></span><span className="nm">{cat.name}</span>
         <span className="dcol">{kr(s, true)}</span><span className="dcol">{x ? kr(x.amount, true) : '–'}</span>{pill}
-        {x && <span className="meter"><i className={x.left < 0 ? 'ov' : ''} style={{ width: `${Math.min(100, 100 * x.ratio).toFixed(1)}%` }} /></span>}
+        {x && <Meter spent={s} amount={x.amount} daysGoneShare={share} />}
         {x && <span className="cap num">{kr(s, true)} of {kr(x.amount, true)}</span>}
       </button>
     )
@@ -116,11 +121,11 @@ function Budgets({ m }: { m: Model }): React.JSX.Element {
         <div className="deskonly"><h2 className="sec" style={{ marginTop: 0 }}>All budgets</h2>{all}</div>
         <div>
           {sel && (
-            <section className={`hero ${over ? 'over' : ''}`} aria-label={sel.name}>
+            <section className={`hero ${over ? 'over' : ''} mka-${st}`} aria-label={sel.name}>
               <div className="top"><b style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Icon name={sel.icon} />{sel.name}</b><span>{c.name} cycle</span></div>
               <div className="big num">{kr(spentSel, true)}</div>
               <div className="sub">{amount ? <>spent of <em>{kr(amount, true)}</em></> : 'spent, no budget set'}</div>
-              <div className="pace"><span>{!spentSel ? 'Nothing spent here yet' : !amount ? 'Set a budget to see what is left' : over ? <><b>{kr(spentSel - amount, true)} over</b>{days ? ` with ${days} days to payday` : ''}</> : <><b>{kr(amount - spentSel, true)} left</b>{days ? ` for ${days} days` : ''}</>}</span>{m.prevOf(c) && <span className="num">{m.prevOf(c)?.name}: {kr(lastSpent, true)}</span>}</div>
+              <div className="pace"><span>{!spentSel ? 'Nothing spent here yet' : !amount ? 'Set a budget to see what is left' : over ? <><b>{kr(spentSel - amount, true)} over</b>{days ? ` with ${days} days to payday` : ''}</> : kept ? <span className="mka-kept"><Check size={20} /><span><b>Kept</b>, {kr(amount - spentSel, true)} left at payday</span></span> : st === 'ahead' ? <span className="mka-aheadline"><span><b>{kr(amount - spentSel, true)} left</b>{days ? ` for ${days} days` : ''}</span><span className="pill ahead"><i className="hatch" aria-hidden="true" />ahead of the days</span></span> : <><b>{kr(amount - spentSel, true)} left</b>{days ? ` for ${days} days` : ''}</>}</span>{m.prevOf(c) && <span className="num">{m.prevOf(c)?.name}: {kr(lastSpent, true)}</span>}</div>
             </section>
           )}
           {sel && item?.budget.notes && <p className="note"><RichNote text={item.budget.notes} /></p>}

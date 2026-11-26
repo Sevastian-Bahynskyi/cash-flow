@@ -3,6 +3,7 @@
 import type { Model } from '@/lib/data/model'
 import { daysBetween, dayLabel, kr, shortDate } from '@/lib/fmt'
 import { PARTNER } from '@/lib/partner'
+import { Ring, Underline } from '@/components/Marks'
 
 /** The month as an object you hold: what is left, days to payday, a bar per day (yours white, shared saffron). */
 export function CycleCard({ m }: { m: Model }): React.JSX.Element | null {
@@ -30,7 +31,7 @@ export function CycleCard({ m }: { m: Model }): React.JSX.Element | null {
   return (
     <section className={`hero ${hasBudgets && big < 0 ? 'over' : ''}`} aria-label="This cycle">
       <div className="top"><span>{shortDate(c.startOn)} <span className="dash">–</span> {shortDate(c.endInclusive)}</span><span>{m.payday ? `Payday ${dayLabel(m.payday)}` : ''}</span></div>
-      <div className="big num">{big < 0 ? kr(big, true) : kr(big, true)}</div>
+      <div className="big num"><Underline>{kr(big, true)}</Underline></div>
       <div className="sub">
         {hasBudgets ? (big < 0 ? 'over all budgets, ' : 'left to spend, ') : 'in minus out this cycle, '}
         <em>{due ? 'payday is due' : `${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} to payday`}</em>
@@ -53,6 +54,7 @@ export function CycleCard({ m }: { m: Model }): React.JSX.Element | null {
             )
           })}
           <circle cx={todayIdx * step + step / 2} cy={H + 7} r={2.4} fill="var(--on-you)" />
+          <g className="mka-today" transform={`translate(${(todayIdx * step + step / 2 - 14).toFixed(1)} ${H - 2})`}><Ring size={28} /></g>
           <line x1={0} x2={W} y1={H + 14} y2={H + 14} stroke="var(--on-you-line)" strokeWidth={2} strokeLinecap="round" />
           {hasBudgets && <line x1={0} x2={(W * Math.min(1, b.used / Math.max(1, b.total))).toFixed(1)} y1={H + 14} y2={H + 14} stroke="var(--on-you)" strokeWidth={2} strokeLinecap="round" />}
           <line x1={todayIdx * step} x2={todayIdx * step} y1={H + 10} y2={H + 18} stroke="var(--anna)" strokeWidth={2} strokeLinecap="round" />

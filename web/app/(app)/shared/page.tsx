@@ -6,6 +6,7 @@ import { Header } from '@/components/Header'
 import { Icon } from '@/components/Icon'
 import { useAdd } from '@/components/AddSheet'
 import { Gate, SkRows, StatusLine, TxRow, useDetail } from '@/components/ui'
+import { Underline } from '@/components/Marks'
 import type { Model } from '@/lib/data/model'
 import { pot } from '@/lib/data/pot'
 import { kr, shortDate } from '@/lib/fmt'
@@ -47,13 +48,14 @@ function Shared({ m }: { m: Model }): React.JSX.Element {
             <div className="pace" style={{ border: 0, margin: 0, padding: 0 }}><span>You put in <b className="num">{kr(p.meTopupTotal, true)}</b></span><span>{PARTNER} put in <b className="num">{kr(p.gfTopupTotal, true)}</b></span></div>
           </section>
           <div className="panel" style={{ marginTop: 12, padding: 16 }}>
-            <p className="owes">Your part of <span className="num">{kr(p.sharedExpenseTotal, true)}</span> spent together is <em className="num">{kr(p.userEffectiveShare, true)}</em></p>
+            <p className="owes">Your part of <span className="num">{kr(p.sharedExpenseTotal, true)}</span> spent together is <em className="num"><Underline seed={11}>{kr(p.userEffectiveShare, true)}</Underline></em></p>
             <p className="note" style={{ padding: '6px 0 0' }}>{p.totalTopupTotal ? `It follows what you each put in: ${p.myPct} of every 100 kr. is yours.` : 'Nothing was put in yet, so it’s split half and half.'} Nobody types a ratio.</p>
           </div>
           <h2 className="sec">Spent together <button onClick={() => add({ shared: true })}>Add</button></h2>
           <div className="panel">{cats.length ? cats.map(([id, s]) => { const c = m.byId.get(id); return c ? (
-            <Link className="hb" key={id} href={`/transactions?shared=1&cat=${id}`}><span className="nm"><Icon name={c.icon} />{c.name}</span><span className="v">{kr(s, true)}</span><span className="track" aria-hidden="true"><i style={{ width: `${(100 * s / max).toFixed(1)}%` }} /></span></Link>
+            <Link className="hb" key={id} href={`/transactions?shared=1&cat=${id}`}><span className="nm"><Icon name={c.icon} />{c.name}</span><span className="v">{kr(s, true)}</span><span className="track mkb-split" aria-hidden="true"><i style={{ width: `${(100 * s * p.userShareRatio / max).toFixed(1)}%` }} /><i className="a" style={{ left: `${(100 * s * p.userShareRatio / max).toFixed(1)}%`, width: `${(100 * s * (1 - p.userShareRatio) / max).toFixed(1)}%` }} /></span></Link>
           ) : null }) : <div className="empty">Nothing spent together yet.</div>}</div>
+          {cats.length > 0 && <div className="legend" style={{ margin: '10px 4px 0' }}><span><i style={{ background: 'var(--you-mark)' }} />Your part</span><span><i style={{ background: 'var(--anna)' }} />{PARTNER}’s part</span></div>}
         </div><div>
           <h2 className="sec">Into the pot <button onClick={() => add({ is_shared_topup: true })}>Move money</button></h2>
           <div className="panel">{tops.length ? <div className="bubbles">{tops.slice(0, 12).map((t) => (

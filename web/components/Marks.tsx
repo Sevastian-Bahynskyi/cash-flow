@@ -60,6 +60,7 @@ export type BudgetState = 'ok' | 'ahead' | 'over' | 'none'
 export function budgetState(spent: number, amount: number, daysGoneShare: number): BudgetState {
   if (!amount) return 'none'
   if (spent > amount) return 'over'
+  if (spent === amount) return 'ok' // used up exactly: not over, and nothing left to be ahead with
   const used = spent / amount
   return used >= 0.1 && used > daysGoneShare + 0.08 ? 'ahead' : 'ok'
 }

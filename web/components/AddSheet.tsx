@@ -9,6 +9,8 @@ import { useStore } from '@/lib/data/store'
 import { useModel } from '@/lib/data/model'
 import { supabase } from '@/lib/supabase/client'
 import { PARTNER } from '@/lib/partner'
+import type { BudgetState } from './Marks'
+import { goneShare, stateOf } from './marks-a/pace'
 import { addDays, dayLabel, kr, minorToInput, parseAmount, todayYmd, typedAmount } from '@/lib/fmt'
 import { convertToDkk, currencyOptions } from '@/lib/domain/currency'
 import { findSharedTopupCategoryOption, isAllowedIncomeCategoryOption, isSalaryCategoryOption, normalizeIncomeCategoryOption } from '@/lib/domain/category-rules'
@@ -74,10 +76,10 @@ function Composer({ draft, onClose, onAgain }: { draft: Draft; onClose: () => vo
     }
     return seen.map((id) => optById.get(id)).filter(Boolean) as CategoryOption[]
   }, [m, mode, forMode, optById])
-  const leftIn = (o: CategoryOption): number | null => {
+  const leftIn = (o: CategoryOption): { left: number; st: BudgetState } | null => {
     if (!m) return null
     const b = m.budgetsOf(m.current).list.find((x) => x.id === o.parentId)
-    return b ? b.left : null
+    return b ? { left: b.left, st: stateOf(b.spent, b.amount, goneShare(m, m.current)) } : null
   }
   const names = useMemo(() => {
     if (!m || !cat) return []
@@ -171,7 +173,7 @@ function Composer({ draft, onClose, onAgain }: { draft: Draft; onClose: () => vo
       <button key={o.id} className="row" onClick={() => { setCat(o.id); setStep(3); setQ('') }} aria-pressed={cat === o.id}>
         <span className="who cat"><Icon name={o.icon} /></span>
         <span className="nm">{o.parentId !== o.id ? o.name : o.name}<span className="meta" style={{ display: 'block' }}>{o.parentId !== o.id ? o.parentName : ''}</span></span>
-        {left === null ? <span /> : left < 0 ? <span className="amt" style={{ color: 'var(--over-text)', fontWeight: 500 }}>{kr(-left, true)} over</span> : <span className="amt" style={{ color: 'var(--ink-3)', fontWeight: 400 }}>{kr(left, true)} left</span>}
+        {left === null ? <span /> : <span className={`amt mka-left ${left.st}`}>{left.st === 'over' ? `${kr(-left.left, true)} over` : `${kr(left.left, true)} left${left.st === 'ahead' ? ', ahead' : ''}`}</span>}
       </button>
     )
   }

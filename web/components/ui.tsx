@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Icon } from './Icon'
+import { Oval } from './marks-b/Oval'
 import { Sheet } from './Sheet'
 import { useAdd } from './AddSheet'
 import { useToast } from './Toast'
@@ -146,14 +147,25 @@ function Detail({ id, onClose }: { id: string; onClose: () => void }): React.JSX
 
 /** Day groups with each day's spending, newest first. */
 export function DayList({ rows, m, onOpen, selected }: { rows: TransactionRow[]; m: Model; onOpen: (t: TransactionRow) => void; selected?: string | null }): React.JSX.Element {
-  const days = [...new Set(rows.map((t) => t.occurred_on))]
+  const days = [...new Set(rows.map((t) => t.occurred_on))].map((d) => {
+    const items = rows.filter((t) => t.occurred_on === d)
+    return { d, items, tot: items.reduce((a, t) => a + m.mine(t), 0), shared: items.reduce((a, t) => a + (t.shared ? m.mine(t) : 0), 0) }
+  })
+  // Each day's spend as a thin bar against a typical heavy day (the 90th percentile), so one rent day
+  // doesn't flatten the rest; days above it fill the bar.
+  const sorted = days.map((x) => x.tot).filter(Boolean).sort((a, z) => a - z)
+  const top = Math.max(1, (sorted[Math.floor(sorted.length * 0.9)] ?? 1) * 1.15)
+  const today = todayYmd()
   return (
-    <>{days.map((d) => {
-      const items = rows.filter((t) => t.occurred_on === d)
-      const tot = items.reduce((a, t) => a + m.mine(t), 0)
+    <>{days.map(({ d, items, tot, shared }) => {
+      const label = dayLabel(d)
       return (
         <div key={d}>
-          <div className="dayh"><span>{dayLabel(d)}</span>{tot ? <span className="num">{kr(tot)}</span> : null}</div>
+          <div className="dayh mkb-dayh">
+            {d === today ? <span className="mkb-today">{label}<Oval /></span> : <span>{label}</span>}
+            {tot ? <span className="num">{kr(tot)}</span> : null}
+            {tot > 0 && <span className="mkb-daybar" aria-hidden="true"><i style={{ width: `${Math.min(100, (100 * (tot - shared)) / top).toFixed(1)}%` }} />{shared > 0 && <i className="sh" style={{ width: `${Math.min(100 - Math.min(100, (100 * (tot - shared)) / top), (100 * shared) / top).toFixed(1)}%` }} />}</span>}
+          </div>
           <div className="panel">{items.map((t) => <TxRow key={t.id} t={t} m={m} onOpen={onOpen} current={selected === t.id} />)}</div>
         </div>
       )

@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import { Header } from '@/components/Header'
 import { Icon } from '@/components/Icon'
 import { EmptyAdd, Gate, SkRows, StatusLine } from '@/components/ui'
+import { Underline } from '@/components/Marks'
 import type { Model } from '@/lib/data/model'
 import { addDays, daysBetween, kr, parseYmd, plus, shortDate, todayYmd, ymd } from '@/lib/fmt'
 import type { TransactionRow } from '@/lib/data/types'
@@ -65,6 +66,7 @@ function Where({ m }: { m: Model }): React.JSX.Element {
   const leftOver = income - (spent - sharedMine) - moved
   const diff = spent - lastSpent
   const max = Math.max(1, ...list.map((x) => Math.max(x.s, x.l)))
+  const cmp = Boolean(w.prev && lastSpent)
   const word = (v: number): string => v > 0 ? `${kr(v, true)} more` : v < 0 ? `${kr(-v, true)} less` : 'the same'
   const top2 = list.slice(0, 2).map((x, i) => (i ? x.cat!.name.toLowerCase() : x.cat!.name))
   const grew = [...list].sort((a, b) => (b.s - b.l) - (a.s - a.l))[0]
@@ -74,17 +76,22 @@ function Where({ m }: { m: Model }): React.JSX.Element {
     <div style={{ maxWidth: 760 }}>
       {seg}
       {!spent ? <div className="panel"><EmptyAdd title={`Nothing spent in ${w.label.toLowerCase().startsWith('this') ? w.label.toLowerCase() : w.label}`} sub={w.prev ? `The comparison with ${w.prevLabel} starts with the first transaction.` : undefined} /></div> : <>
-        <p className="answer">{top2.join(' and ')} took most of it.{w.prev && lastSpent ? <> <em>{kr(Math.abs(diff), true)} {diff >= 0 ? 'more' : 'less'}</em> than {w.prevLabel} in all.</> : null}</p>
+        <p className="answer mkb-answer">{top2.join(' and ')} took most of it.{w.prev && lastSpent ? <> <em><Underline>{kr(Math.abs(diff), true)} {diff >= 0 ? 'more' : 'less'}</Underline></em> than {w.prevLabel} in all.</> : null}</p>
         <p className="lede">{kr(spent, true)} spent{w.prev ? `, ${kr(lastSpent, true)} in ${w.prevLabel}` : ''}.{grew && grew.s > grew.l && lastSpent ? ` ${grew.cat!.name} grew the most: ${word(grew.s - grew.l)}.` : ''}</p>
         <div className="panel">{list.map((x) => (
           <div className="hb" key={x.cat!.id}>
             <span className="nm"><Icon name={x.cat!.icon} />{x.cat!.name}</span><span className="v">{kr(x.s, true)}</span>
-            <span className="track" aria-hidden="true"><i style={{ width: `${(100 * x.s / max).toFixed(1)}%` }} />{x.l > 0 && <u style={{ left: `calc(${(100 * x.l / max).toFixed(1)}% - 1px)` }} />}</span>
+            <span className="track" aria-hidden="true">
+              {/* Past last period's tick the bar is ink-hatched: more than last (MARKS.md). */}
+              <i style={{ width: `${(100 * (cmp ? Math.min(x.s, x.l) : x.s) / max).toFixed(1)}%` }} />
+              {cmp && x.s > x.l && <i className="hatch mkb-more" style={{ left: `${(100 * x.l / max).toFixed(1)}%`, width: `${(100 * (x.s - x.l) / max).toFixed(1)}%` }} />}
+              {x.l > 0 && <u style={{ left: `calc(${(100 * x.l / max).toFixed(1)}% - 1px)` }} />}
+            </span>
             {w.prev && <span className="d">{!x.l ? `Nothing in ${w.prevLabel}` : x.s === x.l ? `The same as ${w.prevLabel}` : <><b>{word(x.s - x.l)}</b> than {w.prevLabel}, {kr(x.l, true)}</>}</span>}
-            <span className="d">{Math.round(100 * x.s / spent)} of every 100 kr. spent</span>
+            <span className="d mkb-quiet">{Math.round(100 * x.s / spent)} of every 100 kr. spent</span>
           </div>
         ))}</div>
-        {w.prev && <div className="legend" style={{ margin: '10px 4px 0' }}><span><i style={{ background: 'var(--you)' }} />{w.label}</span><span><i style={{ background: 'var(--ink)', width: 3, height: 12 }} />{w.prevLabel}</span></div>}
+        {w.prev && <div className="legend" style={{ margin: '10px 4px 0' }}><span><i style={{ background: 'var(--you)' }} />{w.label}</span><span><i style={{ background: 'var(--ink)', width: 3, height: 12 }} />{w.prevLabel}</span>{cmp && <span><i className="hatch" style={{ background: 'var(--ink)', width: 18, height: 10 }} />More than {w.prevLabel}</span>}</div>}
         <p className="note">Your part of shared expenses counts. Not counted as spending: {kr(moved, true)} moved to the pot, to savings or between accounts.</p>
       </>}
       <h2 className="sec" style={{ marginTop: 32 }}>Money in and out</h2>
