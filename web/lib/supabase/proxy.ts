@@ -6,6 +6,7 @@ const PUBLIC = ['/sign-in', '/auth/callback', '/manifest.webmanifest', '/sw.js',
 
 /** Refreshes the session cookie on every navigation and sends signed-out visitors to sign in. */
 export async function updateSession(request: NextRequest): Promise<NextResponse> {
+  if (process.env.NEXT_PUBLIC_DEMO === '1' && process.env.NODE_ENV !== 'production') return NextResponse.next({ request })
   let response = NextResponse.next({ request })
   const supabase = createServerClient(supabaseUrl, supabasePublishableKey, {
     cookies: {

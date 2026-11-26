@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { idbClear, idbGet, idbSet } from './idb'
+import { DEMO, demoTables } from './demo'
 import type { TableName, Tables, TransactionInsert, TransactionRow } from './types'
 
 /**
@@ -105,6 +106,7 @@ export function DataProvider({ children }: { children: React.ReactNode }): React
   // Who is signed in; then the device copy first (instant, and offline), then the network.
   useEffect(() => {
     let alive = true
+    if (DEMO) { setUserId('demo'); setTables(demoTables()); setLoadedAt(Date.now()); setStatus('ready'); return }
     void (async () => {
       const { data } = await supabase().auth.getSession()
       let uid = data.session?.user.id ?? null
@@ -123,7 +125,7 @@ export function DataProvider({ children }: { children: React.ReactNode }): React
     return () => { alive = false; sub.subscription.unsubscribe() }
   }, [])
 
-  useEffect(() => { if (userId) void reload() }, [userId, reload])
+  useEffect(() => { if (userId && !DEMO) void reload() }, [userId, reload])
 
   // Back online: send what was saved on the device, then refresh.
   const flush = useCallback(async (): Promise<void> => {

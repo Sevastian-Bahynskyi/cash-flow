@@ -3,6 +3,7 @@ import { Hanken_Grotesk, Newsreader } from 'next/font/google'
 import { PwaRegistration } from '@/components/PwaRegistration'
 import { APP_ICON_VERSION, appIconUrl } from '@/lib/app-icon'
 import './globals.css'
+import './more.css'
 
 const hanken = Hanken_Grotesk({ subsets: ['latin'], weight: ['400', '500', '600'], variable: '--font-hanken', display: 'swap' })
 const newsreader = Newsreader({ subsets: ['latin'], weight: ['400', '500'], style: ['normal', 'italic'], variable: '--font-newsreader', display: 'swap' })
