@@ -6,3 +6,9 @@ verify_jwt = false
 
 [functions.suggest-category]
 verify_jwt = false
+
+[functions.bank-sync]
+verify_jwt = true
+
+[functions.bank-consent]
+verify_jwt = true
