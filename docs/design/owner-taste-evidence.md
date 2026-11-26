@@ -94,6 +94,9 @@ Use this file to check a rule, not as a rule book: the skill files are the rules
 - "It should be completely automatic and smart. It should be very clear and identify what is the shared transaction, what is my own transaction."
 - "when I transfer from my personal account to [...] our shared account with my girlfriend, the transaction should be counted smartly so that it doesn't count as my personal spending" (backend work for later: issue #7).
 
+**The pick (26 Nov, choices page of five directions)**
+- "E, but desing our own simple soft icon system": direction E, Two inks (`docs/redesign/directions/c1`), with an icon system of our own, simple and soft, instead of the direction's icons. No per-screen notes.
+
 **References board marks (26 Nov; 54 screens, `docs/redesign/references.json`; no notes left)**
 - Loved: Apple Card and Wallet (all 4: the card, savings, the interest dial, installments); Revolut (all 4: big balance over a photo, joint account with two people, payments as a chat, salary rules); Linear (all 3); Monarch home, Sankey, budget bars, goal photo card; YNAB plan, approve swipe, cover overspending, widget, dark reflect bars; Copilot budget table, cash-flow bars, recurrings.
 - Hated: Lunch Money (all: monospace, dense), Mercury (all: pale, airy minimal; dark grainy), Things (all), Splitwise (all), Emma (all), Rocket Money (all), Copilot home, insights and AI review queue, YNAB goal ledger.
