@@ -3,24 +3,38 @@
 import type { Model } from '@/lib/data/model'
 import { daysBetween, dayLabel, kr, shortDate } from '@/lib/fmt'
 import { PARTNER } from '@/lib/partner'
-import { Ring, Underline } from '@/components/Marks'
 
-/** The month as an object you hold: what is left, days to payday, a bar per day (yours white, shared saffron). */
+const pct = (v: number): string => `${(100 * v).toFixed(2)}%`
+
+/**
+ * The cycle as one card: what is left, days to payday, and a running total of spending so far
+ * (your own on top, your part of shared in saffron below), against the budgets and an even pace.
+ */
 export function CycleCard({ m }: { m: Model }): React.JSX.Element | null {
   const c = m.current
   if (!c) return null
   const b = m.budgetsOf(c)
+  const hasBudgets = b.list.length > 0
   const n = m.days, todayIdx = Math.min(n - 1, Math.max(0, daysBetween(c.startOn, m.today)))
-  const daily = Array.from({ length: n }, () => ({ mine: 0, shared: 0 }))
+  // With budgets the line counts what the budgets count (budgeted categories, split parts in their own), so it ends at "used".
+  const budgeted = new Set(b.list.map((x) => x.id))
+  const daily = Array.from({ length: todayIdx + 1 }, () => ({ mine: 0, shared: 0 }))
   for (const r of b.rows) {
     const i = daysBetween(c.startOn, r.occurred_on)
-    const v = m.mine(r)
-    if (i >= 0 && i < n && v) daily[i]![r.shared ? 'shared' : 'mine'] += v
+    if (i < 0 || i > todayIdx) continue
+    const v = hasBudgets ? m.portions(r).filter((x) => budgeted.has(m.parentOf(x.category_id)?.id ?? '')).reduce((a, x) => a + x.minor, 0) : m.mine(r)
+    if (v) daily[i]![r.shared ? 'shared' : 'mine'] += v
   }
-  const totals = daily.slice(0, todayIdx + 1).map((d) => d.mine + d.shared).filter(Boolean).sort((x, y) => x - y)
-  const cap = Math.max(1, (totals[Math.floor(totals.length * 0.9)] ?? 1) * 1.15)
-  const W = 310, H = 72, step = W / n, bw = Math.min(6, step * 0.7)
-  const hasBudgets = b.list.length > 0
+  let cm = 0, cs = 0
+  const cum = daily.map((d) => { cm += d.mine; cs += d.shared; return { mine: cm, shared: cs } })
+  const spentSoFar = cm + cs
+  const max = Math.max(hasBudgets ? b.total : 0, spentSoFar, 1) * 1.1
+  const X = (i: number): number => (i + 1) / n, Y = (v: number): number => 1 - v / max
+  const pts = (f: (p: { mine: number; shared: number }) => number): string => cum.map((p, i) => `L${(X(i) * 320).toFixed(1)} ${(Y(f(p)) * 100).toFixed(1)}`).join('')
+  const total = `M0 100${pts((p) => p.mine + p.shared)}`
+  const shared = `M0 100${pts((p) => p.shared)}`
+  const close = `L${(X(todayIdx) * 320).toFixed(1)} 100Z`
+
   const big = hasBudgets ? b.left : b.income - b.allMine
   const daysLeft = m.daysLeft
   const perDay = hasBudgets && big > 0 && daysLeft ? Math.round(big / daysLeft) : 0
@@ -28,41 +42,44 @@ export function CycleCard({ m }: { m: Model }): React.JSX.Element | null {
   const gonePct = Math.round((100 * (todayIdx + 1)) / n)
   const pace = !b.used ? 'Nothing spent yet this cycle' : usedPct > gonePct + 2 ? 'Spending is ahead of the days' : usedPct < gonePct - 2 ? 'Spending is behind the days' : 'Spending keeps pace with the days'
   const due = m.payday && m.payday <= m.today
+  const todayX = X(todayIdx)
   return (
-    <section className={`hero ${hasBudgets && big < 0 ? 'over' : ''}`} aria-label="This cycle">
-      <div className="top"><span>{shortDate(c.startOn)} <span className="dash">–</span> {shortDate(c.endInclusive)}</span><span>{m.payday ? `Payday ${dayLabel(m.payday)}` : ''}</span></div>
-      <div className="big num"><Underline>{kr(big, true)}</Underline></div>
+    <section className="hero" aria-label="This cycle">
+      <div className="top"><span>{shortDate(c.startOn)} – {shortDate(c.endInclusive)}</span><span>{m.payday ? `Payday ${dayLabel(m.payday)}` : ''}</span></div>
+      <div className="big num">{kr(big, true)}</div>
       <div className="sub">
         {hasBudgets ? (big < 0 ? 'over all budgets, ' : 'left to spend, ') : 'in minus out this cycle, '}
         <em>{due ? 'payday is due' : `${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} to payday`}</em>
         {perDay > 0 && <><br />About {kr(perDay, true)} a day</>}
       </div>
       <div className="days">
-        <svg viewBox={`0 -2 ${W} ${H + 18}`} role="img" aria-label="Spending per day this cycle">
-          {daily.map((d, i) => {
-            const x = i * step + (step - bw) / 2
-            if (i > todayIdx) return <rect key={i} x={x} y={H - 8} width={bw} height={8} rx={3} fill="none" stroke="var(--on-you-line)" strokeWidth={1.2} />
-            const tot = d.mine + d.shared
-            if (!tot) return <rect key={i} x={x} y={H - 2} width={bw} height={2} rx={1} fill="var(--on-you-line)" />
-            const h = Math.max(4, Math.min(1, tot / cap) * (H - 4)), hs = (h * d.shared) / tot, hm = h - hs
-            return (
-              <g key={i}>
-                {hm > 0 && <rect x={x} y={H - hm} width={bw} height={hm} rx={3} fill="var(--on-you)" />}
-                {hs > 0 && <rect x={x} y={H - h} width={bw} height={Math.max(2, hs - (hm ? 1.5 : 0))} rx={3} fill="var(--anna)" />}
-                {tot > cap && <path d={`M${x - 1} ${H - h + 12}l${bw + 2} -3M${x - 1} ${H - h + 16}l${bw + 2} -3`} stroke="var(--you)" strokeWidth={1.6} />}
-              </g>
-            )
-          })}
-          <circle cx={todayIdx * step + step / 2} cy={H + 7} r={2.4} fill="var(--on-you)" />
-          <g className="mka-today" transform={`translate(${(todayIdx * step + step / 2 - 14).toFixed(1)} ${H - 2})`}><Ring size={28} /></g>
-          <line x1={0} x2={W} y1={H + 14} y2={H + 14} stroke="var(--on-you-line)" strokeWidth={2} strokeLinecap="round" />
-          {hasBudgets && <line x1={0} x2={(W * Math.min(1, b.used / Math.max(1, b.total))).toFixed(1)} y1={H + 14} y2={H + 14} stroke="var(--on-you)" strokeWidth={2} strokeLinecap="round" />}
-          <line x1={todayIdx * step} x2={todayIdx * step} y1={H + 10} y2={H + 18} stroke="var(--anna)" strokeWidth={2} strokeLinecap="round" />
-        </svg>
-        <div className="axis"><span style={{ left: 0 }}>{shortDate(c.startOn)}</span><span style={{ right: `${((100 * (n - todayIdx - 0.5)) / n).toFixed(2)}%`, transform: 'translateX(50%)' }}>Today</span></div>
+        <span className="dayslabel">Spent so far <b className="num">{kr(spentSoFar, true)}</b></span>
+        <div className="plot">
+          <svg viewBox="0 0 320 100" preserveAspectRatio="none" role="img" aria-label={`Spent so far this cycle: ${kr(spentSoFar, true)}${hasBudgets ? ` of ${kr(b.total, true)} in budgets` : ''}, day ${todayIdx + 1} of ${n}.`}>
+            {hasBudgets && <line x1={0} x2={320} y1={Y(b.total) * 100} y2={Y(b.total) * 100} className="budgetline" />}
+            {hasBudgets && <line x1={0} x2={320} y1={100} y2={Y(b.total) * 100} className="paceline" />}
+            <path d={total + close} className="area" />
+            {cs > 0 && <path d={shared + close} className="area shared" />}
+            <path d={total} className="line" />
+            <line x1={0} x2={320} y1={100} y2={100} className="base" />
+          </svg>
+          {hasBudgets && <span className="budgetcap num" style={{ top: pct(Y(b.total)) }}>Budgets {kr(b.total, true)}</span>}
+          <span className="todaydot" style={{ left: pct(todayX), top: pct(Y(spentSoFar)) }} />
+        </div>
+        <div className="axis">
+          {/* start and end always show; "Today" only where it has room (the dot already marks today) */}
+          <span style={{ left: 0 }}>{shortDate(c.startOn)}</span>
+          {todayX > 0.25 && todayX < 0.72 && <span style={{ left: pct(todayX), transform: 'translateX(-50%)' }}>Today</span>}
+          <span style={{ right: 0 }}>{shortDate(c.endInclusive)}</span>
+        </div>
       </div>
-      {hasBudgets && <div className="pace"><span>{pace}</span><span className="num"><b>{usedPct}%</b> of budgets used, <b>{gonePct}%</b> of days gone</span></div>}
-      <div className="key" style={{ marginTop: 8 }}><span><i style={{ background: 'var(--on-you)' }} />Yours</span><span><i style={{ background: 'var(--anna)' }} />Shared with {PARTNER}</span><span><i style={{ border: '1.2px solid var(--on-you-2)' }} />Days to come</span></div>
+      {/* Bright shows the pace as two thick bars instead of the chart (bright.css); Soft hides them */}
+      {hasBudgets && <div className="race" aria-hidden="true">
+        <div><span>Money used</span><b>{usedPct}%</b></div><span className="rb"><i style={{ width: `${Math.min(100, usedPct)}%` }} /></span>
+        <div><span>Days gone</span><b>{gonePct}%</b></div><span className="rb d"><i style={{ width: `${gonePct}%` }} /></span>
+      </div>}
+      {hasBudgets && <div className="pace"><span>{pace}</span><span className="num pct"><b>{usedPct}%</b> of budgets used, <b>{gonePct}%</b> of days gone</span></div>}
+      <div className="key"><span><i style={{ background: 'var(--on-you)' }} />Yours</span><span><i style={{ background: 'var(--anna)' }} />Shared with {PARTNER}</span>{hasBudgets && <span><i className="dashed" />Even pace</span>}</div>
     </section>
   )
 }

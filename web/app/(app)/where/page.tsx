@@ -4,7 +4,6 @@ import { useMemo, useState } from 'react'
 import { Header } from '@/components/Header'
 import { Icon } from '@/components/Icon'
 import { Empty, Gate, SkRows, StatusLine } from '@/components/ui'
-import { Underline } from '@/components/Marks'
 import type { Model } from '@/lib/data/model'
 import { addDays, daysBetween, kr, parseYmd, plus, shortDate, todayYmd, ymd } from '@/lib/fmt'
 import type { TransactionRow } from '@/lib/data/types'
@@ -29,8 +28,8 @@ function windowFor(m: Model, per: Per, back: number): Win | null {
   return { start: `${y}-01-01`, endEx: `${y + 1}-01-01`, label: String(y), prevLabel: String(y - 1), prev: { start: `${y - 1}-01-01`, endEx: `${y}-01-01` } }
 }
 
-const SHADES = [1, 0.72, 0.5, 0.34, 0.22]
-/** 100 squares, each one kr. in every 100 spent: the top five categories in one ink from dark to light, the rest grey (the Expo dashboard's waffle). */
+const CAT = ['var(--cat1)', 'var(--cat2)', 'var(--cat3)', 'var(--cat4)', 'var(--cat5)']
+/** 100 dots, each one kr. in every 100 spent: the top five categories in five calm hues, the rest grey (the Expo dashboard's waffle). */
 function Waffle({ list, spent }: { list: { cat?: { id: string; name: string }; s: number }[]; spent: number }): React.JSX.Element {
   const top = list.slice(0, 5)
   const raw = top.map((x) => (100 * x.s) / spent)
@@ -42,9 +41,9 @@ function Waffle({ list, spent }: { list: { cat?: { id: string; name: string }; s
   return (
     <div className="panel waffle">
       <div className="grid" role="img" aria-label={top.map((x, i) => `${x.cat?.name}: ${n[i]} of every 100 kr.`).join(', ')}>
-        {Array.from({ length: 100 }, (_, k) => <i key={k} style={cells[k] === undefined ? undefined : { background: 'var(--you)', opacity: SHADES[cells[k]!] }} />)}
+        {Array.from({ length: 100 }, (_, k) => <i key={k} style={cells[k] === undefined ? undefined : { background: CAT[cells[k]!] }} />)}
       </div>
-      <div className="legend">{top.map((x, i) => <span key={x.cat?.id}><i style={{ background: 'var(--you)', opacity: SHADES[i] }} />{x.cat?.name} {n[i]}</span>)}{list.length > 5 && <span><i style={{ background: 'var(--surface-2)' }} />Everything else</span>}</div>
+      <div className="legend">{top.map((x, i) => <span key={x.cat?.id}><i style={{ background: CAT[i] }} />{x.cat?.name} {n[i]}</span>)}{list.length > 5 && <span><i style={{ background: 'none', boxShadow: 'inset 0 0 0 1.5px var(--line-2)' }} />Everything else</span>}</div>
     </div>
   )
 }
@@ -96,23 +95,23 @@ function Where({ m }: { m: Model }): React.JSX.Element {
     <div style={{ maxWidth: 760 }}>
       {seg}
       {!spent ? <div className="panel"><Empty title={`Nothing spent in ${w.label.toLowerCase().startsWith('this') ? w.label.toLowerCase() : w.label}`} sub={w.prev ? `The comparison with ${w.prevLabel} starts with the first transaction.` : undefined} /></div> : <>
-        <p className="answer mkb-answer">{top2.join(' and ')} took most of it.{w.prev && lastSpent ? <> <em><Underline>{kr(Math.abs(diff), true)} {diff >= 0 ? 'more' : 'less'}</Underline></em> than {w.prevLabel} in all.</> : null}</p>
+        <p className="answer mkb-answer">{top2.join(' and ')} took most of it.{w.prev && lastSpent ? <> <em>{kr(Math.abs(diff), true)} {diff >= 0 ? 'more' : 'less'}</em> than {w.prevLabel} in all.</> : null}</p>
         <p className="lede">{kr(spent, true)} spent{w.prev ? `, ${kr(lastSpent, true)} in ${w.prevLabel}` : ''}.{grew && grew.s > grew.l && lastSpent ? ` ${grew.cat!.name} grew the most: ${word(grew.s - grew.l)}.` : ''}</p>
         <Waffle list={list} spent={spent} />
         <div className="panel" style={{ marginTop: 8 }}>{list.map((x) => (
           <div className="hb" key={x.cat!.id}>
             <span className="nm"><Icon name={x.cat!.icon} />{x.cat!.name}</span><span className="v">{kr(x.s, true)}</span>
             <span className="track" aria-hidden="true">
-              {/* Past last period's tick the bar is ink-hatched: more than last (MARKS.md). */}
+              {/* Past last period's tick the bar is a lighter blue: more than last. */}
               <i style={{ width: `${(100 * (cmp ? Math.min(x.s, x.l) : x.s) / max).toFixed(1)}%` }} />
-              {cmp && x.s > x.l && <i className="hatch mkb-more" style={{ left: `${(100 * x.l / max).toFixed(1)}%`, width: `${(100 * (x.s - x.l) / max).toFixed(1)}%` }} />}
+              {cmp && x.s > x.l && <i className="mkb-more" style={{ left: `${(100 * x.l / max).toFixed(1)}%`, width: `${(100 * (x.s - x.l) / max).toFixed(1)}%` }} />}
               {x.l > 0 && <u style={{ left: `calc(${(100 * x.l / max).toFixed(1)}% - 1px)` }} />}
             </span>
             {w.prev && <span className="d">{!x.l ? `Nothing in ${w.prevLabel}` : x.s === x.l ? `The same as ${w.prevLabel}` : <><b>{word(x.s - x.l)}</b> than {w.prevLabel}, {kr(x.l, true)}</>}</span>}
             <span className="d mkb-quiet">{Math.round(100 * x.s / spent)} of every 100 kr. spent</span>
           </div>
         ))}</div>
-        {w.prev && <div className="legend" style={{ margin: '10px 4px 0' }}><span><i style={{ background: 'var(--you)' }} />{w.label}</span><span><i style={{ background: 'var(--ink)', width: 3, height: 12 }} />{w.prevLabel}</span>{cmp && <span><i className="hatch" style={{ background: 'var(--ink)', width: 18, height: 10 }} />More than {w.prevLabel}</span>}</div>}
+        {w.prev && <div className="legend" style={{ margin: '10px 4px 0' }}><span><i style={{ background: 'var(--you-mark)' }} />{w.label}</span><span><i style={{ background: 'var(--ink-2)', width: 3, height: 12 }} />{w.prevLabel}</span>{cmp && <span><i style={{ background: 'var(--you-mark)', opacity: .45 }} />More than {w.prevLabel}</span>}</div>}
         <p className="note">Your part of shared expenses counts. Not counted as spending: {kr(moved, true)} moved to the pot, to savings or between accounts.</p>
       </>}
       <h2 className="sec" style={{ marginTop: 32 }}>Money in and out</h2>

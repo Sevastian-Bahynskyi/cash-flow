@@ -36,17 +36,19 @@ function Pace({ m, c, cat, budget }: { m: Model; c: Cycle; cat: CategoryRow; bud
     <div className="chart">
       <svg viewBox={`0 0 ${W} ${H + 22}`} role="img" aria-label={`${cat.name}: spent by day this cycle against the cycle before and the budget`}>
         <line x1={0} x2={W - 4} y1={H} y2={H} stroke="var(--line-2)" />
-        {budget > 0 && <line x1={0} x2={W - 4} y1={Y(budget)} y2={Y(budget)} stroke="var(--over-fill)" strokeWidth={1.2} />}
-        {last.length > 0 && <path d={path(last)} fill="none" stroke="var(--ink-3)" strokeWidth={1.6} strokeLinejoin="round" opacity={0.7} />}
-        {now.length > 0 && <path d={path(now)} fill="none" stroke="var(--you-text)" strokeWidth={2.4} strokeLinejoin="round" strokeLinecap="round" />}
-        {now.length > 0 && <circle cx={X(now.length - 1)} cy={Y(end)} r={4} fill="var(--you-text)" stroke="var(--surface)" strokeWidth={2} />}
-        <text x={0} y={H + 16} fontSize={10} fill="var(--ink-3)">{shortDate(c.startOn)}</text>
-        <text x={W - 4} y={H + 16} fontSize={10} fill="var(--ink-3)" textAnchor="end">{shortDate(c.endInclusive)}</text>
+        {budget > 0 && <line x1={0} x2={W - 4} y1={Y(budget)} y2={Y(budget)} stroke="var(--ink-2)" strokeWidth={1.4} strokeDasharray="5 5" />}
+        {budget > 0 && <text x={0} y={Y(budget) - 6} fontSize={11} fill="var(--ink-2)">Budget {kr(budget, true)}</text>}
+        {last.length > 0 && <path d={path(last)} fill="none" stroke="var(--ink-3)" strokeWidth={2} strokeLinejoin="round" opacity={0.55} />}
+        {now.length > 0 && <path d={`${path(now)}L${X(now.length - 1).toFixed(1)} ${H}L${X(0).toFixed(1)} ${H}Z`} fill="var(--you-mark)" opacity={0.14} />}
+        {now.length > 0 && <path d={path(now)} fill="none" stroke="var(--you-mark)" strokeWidth={3} strokeLinejoin="round" strokeLinecap="round" />}
+        {now.length > 0 && <circle cx={X(now.length - 1)} cy={Y(end)} r={5} fill="var(--you-mark)" stroke="var(--surface)" strokeWidth={2.5} />}
+        <text x={0} y={H + 17} fontSize={11} fill="var(--ink-3)">{shortDate(c.startOn)}</text>
+        <text x={W - 4} y={H + 17} fontSize={11} fill="var(--ink-3)" textAnchor="end">{shortDate(c.endInclusive)}</text>
       </svg>
       <div className="legend">
-        <span><i style={{ background: 'var(--you-text)' }} />This cycle <b>{kr(end, true)}</b></span>
+        <span><i style={{ background: 'var(--you-mark)' }} />This cycle <b>{kr(end, true)}</b></span>
         {prev && <span><i style={{ background: 'var(--ink-3)' }} />{prev.name} <b>{kr(last[last.length - 1] ?? 0, true)}</b></span>}
-        {budget > 0 && <span><i style={{ background: 'var(--over-fill)' }} />Budget <b>{kr(budget, true)}</b></span>}
+        {budget > 0 && <span><i style={{ background: 'none', borderTop: '2px dashed var(--ink-2)', height: 0 }} />Budget <b>{kr(budget, true)}</b></span>}
       </div>
     </div>
   )
@@ -98,7 +100,7 @@ function Budgets({ m }: { m: Model }): React.JSX.Element {
   const all = (
     <>
       <div className="thead deskonly"><span /><span style={{ textAlign: 'left' }}>Category</span><span>Spent</span><span>Budget</span><span>Left</span></div>
-      <div className="panel">{b.list.map((x) => row(x.cat as CategoryRow))}{unbudgetedParents.map(row)}</div>
+      <div className="panel blist">{b.list.map((x) => row(x.cat as CategoryRow))}{unbudgetedParents.map(row)}</div>
       {b.list.length > 0 && <p className="note num" style={{ display: 'flex', justifyContent: 'space-between' }}><span>All budgets</span><span>{kr(b.used, true)} of {kr(b.total, true)}</span></p>}
     </>
   )
@@ -119,11 +121,12 @@ function Budgets({ m }: { m: Model }): React.JSX.Element {
         <div className="deskonly"><h2 className="sec" style={{ marginTop: 0 }}>All budgets</h2>{all}</div>
         <div>
           {sel && (
-            <section className={`hero ${over ? 'over' : ''} mka-${st}`} aria-label={sel.name}>
+            <section className={`hero mka-${st}`} aria-label={sel.name}>
               <div className="top"><b style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Icon name={sel.icon} />{sel.name}</b><span>{c.name} cycle</span></div>
               <div className="big num">{kr(spentSel, true)}</div>
               <div className="sub">{amount ? <>spent of <em>{kr(amount, true)}</em></> : 'spent, no budget set'}</div>
-              <div className="pace"><span>{!spentSel ? 'Nothing spent here yet' : !amount ? 'Set a budget to see what is left' : over ? <><b>{kr(spentSel - amount, true)} over</b>{days ? ` with ${days} days to payday` : ''}</> : kept ? <span className="mka-kept"><Check size={20} /><span><b>Kept</b>, {kr(amount - spentSel, true)} left at payday</span></span> : st === 'ahead' ? <span className="mka-aheadline"><span><b>{kr(amount - spentSel, true)} left</b>{days ? ` for ${days} days` : ''}</span><span className="pill ahead"><i className="hatch" aria-hidden="true" />ahead of the days</span></span> : <><b>{kr(amount - spentSel, true)} left</b>{days ? ` for ${days} days` : ''}</>}</span>{m.prevOf(c) && <span className="num">{m.prevOf(c)?.name}: {kr(lastSpent, true)}</span>}</div>
+              {amount > 0 && <span className="herometer"><Meter spent={spentSel} amount={amount} daysGoneShare={share} /></span>}
+              <div className="pace"><span>{!spentSel ? 'Nothing spent here yet' : !amount ? 'Set a budget to see what is left' : over ? <><b>{kr(spentSel - amount, true)} over</b>{days ? ` with ${days} days to payday` : ''}</> : kept ? <span className="mka-kept"><Check size={20} /><span><b>Kept</b>, {kr(amount - spentSel, true)} left at payday</span></span> : st === 'ahead' ? <span className="mka-aheadline"><span><b>{kr(amount - spentSel, true)} left</b>{days ? ` for ${days} days` : ''}</span><span className="pill ahead">ahead of the days</span></span> : <><b>{kr(amount - spentSel, true)} left</b>{days ? ` for ${days} days` : ''}</>}</span>{m.prevOf(c) && <span className="num">{m.prevOf(c)?.name}: {kr(lastSpent, true)}</span>}</div>
             </section>
           )}
           {sel && item?.budget.notes && <p className="note"><RichNote text={item.budget.notes} /></p>}

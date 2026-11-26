@@ -1,5 +1,7 @@
 # Colour and marks: what makes Cashflow easy to scan
 
+> **Replaced on 26 Nov 2026** by the Soft look in `.agents/skills/ui-ux/brand.md`: the owner found the hatching and hand-drawn marks harsh on real data, so they are gone. Kept for history.
+
 Owner, 26 Nov 2026: three budget states with colour are fine; more colour or marks so the app is not "just gray", easier on the eye to scan, creative, outstanding; hand-drawn lines may mark things (sketch: rough red diagonal hatching). Nothing here adds a feature.
 
 ## The rule

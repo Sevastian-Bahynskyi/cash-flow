@@ -1,5 +1,5 @@
 /** Rendered from `branding/cashflow-icon.svg` by `pnpm icons`. Bump after re-rendering: iOS caches icons by URL. */
-export const APP_ICON_VERSION = 2
+export const APP_ICON_VERSION = 3
 
 export type AppIconSize = 180 | 192 | 512 | 1024 | 'maskable'
 

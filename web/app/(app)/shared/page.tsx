@@ -5,7 +5,6 @@ import { useState } from 'react'
 import { Header } from '@/components/Header'
 import { Icon } from '@/components/Icon'
 import { Gate, SkRows, StatusLine, TxRow, useDetail } from '@/components/ui'
-import { Underline } from '@/components/Marks'
 import type { Model } from '@/lib/data/model'
 import { pot } from '@/lib/data/pot'
 import { kr, shortDate } from '@/lib/fmt'
@@ -38,14 +37,14 @@ function Shared({ m }: { m: Model }): React.JSX.Element {
       ) : (
         <div className="cols"><div>
           <section className="hero" aria-label={`The pot with ${PARTNER}`}>
-            <div className="top"><span>The pot you share</span><span className="pair" aria-hidden="true" style={{ transform: 'scale(.7)', transformOrigin: 'right center', width: 80 }}><span className="a">{PARTNER[0]}</span><span className="y">You</span></span></div>
-            <div className="big num" style={{ fontSize: 56, marginTop: 6 }}>{kr(p.sharedBalance, true)}</div>
+            <div className="top"><span>The pot you share</span><span className="pair" aria-hidden="true"><span className="a">{PARTNER[0]}</span><span className="y">You</span></span></div>
+            <div className="big num" style={{ fontSize: 'min(48px, 11vw)', marginTop: 6 }}>{kr(p.sharedBalance)}</div>
             <div className="sub">{p.sharedBalance < 0 ? 'more spent than put in' : 'left in the pot'}</div>
             <div className="sharebar" aria-hidden="true"><i style={{ flex: p.meTopupTotal || 0.0001, background: 'var(--on-you)' }} /><i style={{ flex: p.gfTopupTotal || 0.0001, background: 'var(--anna)' }} /></div>
             <div className="pace" style={{ border: 0, margin: 0, padding: 0 }}><span>You put in <b className="num">{kr(p.meTopupTotal, true)}</b></span><span>{PARTNER} put in <b className="num">{kr(p.gfTopupTotal, true)}</b></span></div>
           </section>
           <div className="panel" style={{ marginTop: 12, padding: 16 }}>
-            <p className="owes">Your part of <span className="num">{kr(p.sharedExpenseTotal, true)}</span> spent together is <em className="num"><Underline seed={11}>{kr(p.userEffectiveShare, true)}</Underline></em></p>
+            <p className="owes">Your part of <span className="num">{kr(p.sharedExpenseTotal, true)}</span> spent together is <em className="num">{kr(p.userEffectiveShare, true)}</em></p>
             <p className="note" style={{ padding: '6px 0 0' }}>{p.totalTopupTotal ? `It follows what you each put in: ${p.myPct} of every 100 kr. is yours.` : 'Nothing was put in yet, so it’s split half and half.'} Nobody types a ratio.</p>
           </div>
           <h2 className="sec">Spent together</h2>
@@ -55,9 +54,9 @@ function Shared({ m }: { m: Model }): React.JSX.Element {
           {cats.length > 0 && <div className="legend" style={{ margin: '10px 4px 0' }}><span><i style={{ background: 'var(--you-mark)' }} />Your part</span><span><i style={{ background: 'var(--anna)' }} />{PARTNER}’s part</span></div>}
         </div><div>
           <h2 className="sec">Into the pot</h2>
-          <div className="panel">{tops.length ? <div className="bubbles">{tops.slice(0, 12).map((t) => (
+          {tops.length ? <div className="bubbles">{tops.slice(0, 12).map((t) => (
             <button key={t.id} className={`bub ${t.shared_participant === 'gf' ? 'a' : 'y'}`} onClick={() => open(t)}><b className="num">{kr(t.amount_minor, true)}</b><span>{t.shared_participant === 'gf' ? `${PARTNER} moved in` : 'You moved in'}, {shortDate(t.occurred_on)}</span></button>
-          ))}</div> : <div className="empty">No top-ups {per === 'cycle' ? 'this cycle' : 'yet'}.</div>}</div>
+          ))}</div> : <div className="panel"><div className="empty">No top-ups {per === 'cycle' ? 'this cycle' : 'yet'}.</div></div>}
           <h2 className="sec">Latest together <Link href="/transactions?shared=1">All</Link></h2>
           <div className="panel">{recent.length ? recent.slice(0, 8).map((t) => <TxRow key={t.id} t={t} m={m} onOpen={open} />) : <div className="empty">Nothing yet.</div>}</div>
         </div></div>

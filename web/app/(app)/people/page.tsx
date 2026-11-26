@@ -87,7 +87,7 @@ function People({ m }: { m: Model }): React.JSX.Element {
         <h2 className="sec">Who owes whom</h2>
         <div className="panel">{list.length ? list.map((b) => (
           <button className="row" key={b.person_id} onClick={() => setEdit(b.person_id)}>
-            <span className="who"><span className="avatar" style={{ width: 26, height: 26, fontSize: 12 }}>{b.name.trim()[0]?.toUpperCase()}</span></span>
+            <span className="who"><span className="avatar">{b.name.trim()[0]?.toUpperCase()}</span></span>
             <span style={{ minWidth: 0 }}><div className="nm">{b.name}</div><div className="meta">{b.kind === 'family' ? 'Family, asked each time' : b.lastOn ? `Last ${shortDate(b.lastOn)}` : 'No transfers yet'}</div></span>
             <span className={`amt ${b.balance_minor > 0 ? 'in' : ''}`}>{b.kind === 'family' ? '' : owes(b.balance_minor)}</span>
           </button>

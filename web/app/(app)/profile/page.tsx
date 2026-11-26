@@ -10,6 +10,7 @@ import { useStore } from '@/lib/data/store'
 import type { Model } from '@/lib/data/model'
 import { kr, shortDate, todayYmd } from '@/lib/fmt'
 import { PARTNER } from '@/lib/partner'
+import { readLook, saveLook, type Look } from '@/lib/look'
 import { supabase } from '@/lib/supabase/client'
 
 type ExportRow = { occurred_on: string; name: string; kind: 'expense' | 'income'; converted_amount_minor: number; original_amount_minor: number; currency_code: string; shared: boolean; is_shared_topup: boolean; shared_participant: 'me' | 'gf' | null; categories: { name: string } | { name: string }[] | null }
@@ -146,6 +147,7 @@ function Profile({ m }: { m: Model }): React.JSX.Element {
         </div>
       </div>
       <div>
+        <LookPick />
         <h2 className="sec">Export</h2>
         <Export m={m} />
         <div className="panel" style={{ marginTop: 20 }}>
@@ -155,6 +157,21 @@ function Profile({ m }: { m: Model }): React.JSX.Element {
         </div>
       </div>
     </div>
+  )
+}
+
+/** Soft or Bright, while the owner tries both; kept on this device. */
+function LookPick(): React.JSX.Element {
+  const [look, setLook] = useState<Look>('soft')
+  useEffect(() => setLook(readLook()), [])
+  return (
+    <>
+      <h2 className="sec">Look</h2>
+      <div className="panel" style={{ padding: 16 }}>
+        <Seg label="Look" value={look} onChange={(v) => { saveLook(v); setLook(v) }} options={[['soft', 'Soft'], ['bright', 'Bright']]} />
+        <p className="note" style={{ padding: '10px 0 0', margin: 0 }}>Soft is calm and quiet. Bright has big colour and big type. Saved on this device.</p>
+      </div>
+    </>
   )
 }
 

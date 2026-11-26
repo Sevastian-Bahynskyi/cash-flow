@@ -17,8 +17,15 @@ test('parseAmount reads typed amounts as integer minor units', () => {
 
 test('typedAmount keeps what was typed, in the locale format', async () => {
   const { typedAmount } = await import('./fmt.ts')
-  const dec = new Intl.NumberFormat(undefined).formatToParts(1.5).find((p) => p.type === 'decimal')?.value
+  const dec = ','
   assert.ok(typedAmount('12,', 'DKK').includes(`12${dec}`))
   assert.ok(typedAmount('12,5', 'DKK').includes(`12${dec}5`))
   assert.ok(!typedAmount('', 'DKK').includes(`${dec}`) || typedAmount('', 'DKK').includes('0'))
+})
+
+test('kr formats money one way, whatever the device language', async () => {
+  const { kr } = await import('./fmt.ts')
+  assert.equal(kr(184350), '1.843,50\u00a0kr.')
+  assert.equal(kr(-810700, true), '\u22128.107\u00a0kr.')
+  assert.equal(kr(332, false, 'EUR'), '3,32\u00a0€')
 })
