@@ -1,6 +1,8 @@
 # Stage 3 prompt
 
-Paste everything below the line into a fresh Claude Code session started in `/Users/seva/Developer/personal/cash-flow` (or the `cash-flow-redesign` worktree if PR #6 is not merged yet).
+The owner starts a fresh session in `/Users/seva/Developer/personal/cash-flow` with one line that points here. Everything below the line is the brief.
+
+**Where to work:** the main checkout holds the owner's uncommitted changes; never touch them. `git fetch`, then create a worktree from `origin/main` on a new branch (`git worktree add ../cash-flow-stage3 -b redesign/stage3 origin/main`) and do all work there.
 
 ---
 
