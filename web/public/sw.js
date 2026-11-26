@@ -1,11 +1,11 @@
 // Cashflow's service worker (web-pwa skill). Offline reading, designed on purpose:
 // - versioned static assets (/_next/static, icons, fonts) cache-first;
-// - navigations network-first; offline, the app shell ("/", which holds no data of its own) answers
-//   every page, and the app reads the last loaded data from IndexedDB on the device.
+// - navigations network-first; every page's HTML is a client shell with no data of its own (the app
+//   reads the last loaded data from IndexedDB), so offline a visited page answers itself, else "/".
 // Never cache API or Supabase responses here. Every respondWith path resolves to a real Response:
 // a rejected one shows iOS's "FetchEvent.respondWith received an error" instead of the app.
 const STATIC = 'cashflow-static-v1'
-const SHELL = 'cashflow-shell-v1'
+const SHELL = 'cashflow-shell-v2'
 
 self.addEventListener('install', () => { self.skipWaiting() })
 
@@ -29,10 +29,10 @@ self.addEventListener('fetch', (event) => {
     event.respondWith((async () => {
       try {
         const res = await fetch(req)
-        if (res.ok && url.pathname === '/' && !res.redirected) (await caches.open(SHELL)).put('/', res.clone())
+        if (res.ok && !res.redirected && !url.pathname.startsWith('/auth/')) (await caches.open(SHELL)).put(url.pathname, res.clone())
         return res
       } catch {
-        return (await caches.match('/', { cacheName: SHELL })) || offlinePage()
+        return (await caches.match(url.pathname, { cacheName: SHELL })) || (await caches.match('/', { cacheName: SHELL })) || offlinePage()
       }
     })())
     return

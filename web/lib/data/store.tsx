@@ -170,6 +170,7 @@ export function DataProvider({ children }: { children: React.ReactNode }): React
   const signOut = useCallback(async () => {
     await idbClear()
     try { localStorage.removeItem('cashflow:uid') } catch { /* nothing kept */ }
+    if ('caches' in window) for (const k of await caches.keys()) await caches.delete(k)
     await supabase().auth.signOut()
     window.location.assign('/sign-in')
   }, [])
