@@ -1,0 +1,55 @@
+<title>Cashflow Choices</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap">
+<style>
+/* The phone stands left, its screens and the notes right. The phone keeps the app's own light colours in both themes. */
+:root{--bg:#F3F6FA;--paper:#FFFFFF;--ink:#101C3F;--soft:#56627F;--line:#DCE3EE;--sea:#2A55CF;--sea-soft:#E3ECFF;--ok:#17724F}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0C1223;--paper:#151E36;--ink:#E9EFFF;--soft:#A3B0CF;--line:#263252;--sea:#9DBBFF;--sea-soft:#1C2C58;--ok:#86DDB8;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0C1223;--paper:#151E36;--ink:#E9EFFF;--soft:#A3B0CF;--line:#263252;--sea:#9DBBFF;--sea-soft:#1C2C58;--ok:#86DDB8;color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:400 16px/1.45 Figtree,system-ui,sans-serif;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 60px}
+button,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none;padding:0;text-align:inherit}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid var(--sea);outline-offset:2px}
+main{max-width:980px;margin:0 auto;display:grid;grid-template-columns:390px minmax(0,1fr);gap:40px;align-items:start}
+@media (max-width:820px){main{grid-template-columns:minmax(0,1fr);justify-items:center}.side{width:100%}}
+.side{display:grid;gap:18px;min-width:0}
+h1.t{font:700 30px/1.15 Figtree,sans-serif;margin:0}
+.tabs{display:flex;gap:8px;flex-wrap:wrap}
+.tabs button{padding:11px 18px;min-height:44px;border-radius:999px;background:var(--sea-soft);color:var(--sea);font-weight:600}
+.tabs button.on{background:var(--sea);color:var(--paper)}
+.strip{display:flex;flex-wrap:wrap;gap:8px}
+.strip button{display:flex;gap:8px;align-items:center;padding:8px 14px 8px 8px;min-height:44px;border-radius:999px;background:var(--paper);border:2px solid transparent;font-size:15px}
+.strip em{font-style:normal;font-weight:700;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--sea-soft);color:var(--sea);font-size:13px}
+.strip .on{border-color:var(--sea)}.strip .has em{background:var(--ok);color:var(--paper)}
+.box{background:var(--paper);border-radius:22px;padding:18px;display:grid;gap:12px}
+.box header{display:flex;justify-content:space-between;gap:10px;align-items:baseline}.box header b{font-size:20px}.box header span{color:var(--soft)}
+textarea{width:100%;min-height:110px;border-radius:16px;border:1px solid var(--line);background:var(--bg);padding:13px 15px;resize:vertical}
+.state{min-height:20px;font-size:14px;color:var(--soft)}
+.nav{display:flex;gap:8px;flex-wrap:wrap}.nav button{padding:11px 18px;min-height:44px;border-radius:999px;border:1.5px solid var(--line);font-weight:600}
+/* the phone */
+#phone{width:390px;max-width:100%;height:800px;border-radius:48px;overflow:hidden;position:relative;background:#F6F9FF;color:#101C3F;border:9px solid #0B1226;box-shadow:0 30px 70px -30px rgba(10,20,60,.5)}
+.status{position:absolute;z-index:5;left:0;right:0;top:0;height:46px;display:flex;justify-content:center;pointer-events:none;mix-blend-mode:normal}
+.status b{display:none}.status i{width:104px;height:28px;border-radius:20px;background:#0B1226;margin-top:9px}
+#view{position:absolute;inset:0}
+.scrn{position:absolute;inset:0;animation:in .42s cubic-bezier(.2,.9,.25,1)}.scrn.still{animation:none}
+@keyframes in{from{opacity:0;transform:translateX(calc(var(--dir)*38px))}}
+.varh{margin:0 0 8px;color:var(--soft)}
+.shot{position:absolute;left:0;top:0;width:100%}.shot img{width:100%;display:block}.shot svg{position:absolute;inset:0;width:100%;height:100%}
+/* your screens' own styles go here */
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+@media (max-width:430px){#phone{width:100%}}
+</style>
+<main>
+  <div id="phone" aria-label="Prototype phone"></div>
+  <div class="side">
+    <h1 class="t">Cashflow Choices</h1>
+    <div class="tabs" id="flows"></div>
+    <div class="strip" id="strip"></div>
+    <div><p id="varh" class="varh" hidden>Question 2 decides which one they see:</p><div class="tabs" id="vars" hidden></div></div>
+    <div class="box"><header><b id="sname"></b><span id="where"></span></header><p id="said" class="varh" style="margin:0" hidden></p><div class="tabs" id="likes" hidden><button data-like="yes">Yes</button><button data-like="no">No</button></div><textarea id="note" aria-label="Your note for this screen" placeholder="Your note for this screen"></textarea><div class="state" id="state" role="status"></div></div>
+    <div class="nav"><button id="prev">Back</button><button id="fwd">Next screen</button><button id="again">Start again</button></div>
+  </div>
+</main>
+<script src="screens.js"></script>
+<script src="choices.js"></script>
