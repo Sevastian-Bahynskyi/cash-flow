@@ -1,0 +1,855 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Cashflow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Hanken+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Colour rule: two people, two colours. Indigo is you, saffron is Anna; anything shared carries both.
+   Red only where a budget line was crossed, green only for money coming in. Everything else is ink. */
+:root{
+  --ground:#E9E8E4; --surface:#FAFAF8; --surface-2:#F1F0EC; --line:rgba(23,24,43,.10); --line-2:rgba(23,24,43,.18);
+  --ink:#17182B; --ink-2:#4F5264; --ink-3:#666979;
+  --you:#2D2F8F; --you-deep:#23246F; --you-text:#2D2F8F; --you-soft:#DFE0F3; --you-mark:#2D2F8F; --on-you:#FFFFFF; --on-you-2:rgba(255,255,255,.74); --on-you-line:rgba(255,255,255,.22);
+  --anna:#E7A53C; --anna-text:#8A5800; --on-anna:#2A1A00;
+  --over-fill:#B4352B; --over-card:#A9322A; --over-text:#B4352B; --over-soft:#F5DEDA;
+  --in:#1D7646;
+  --focus:#2D2F8F; --scrim:rgba(18,18,30,.38); --shadow:0 1px 2px rgba(20,20,40,.06),0 8px 24px rgba(20,20,40,.08);
+  --skel:rgba(23,24,43,.08);
+}
+:root[data-theme="dark"]{
+  --ground:#0E0F16; --surface:#181925; --surface-2:#20212F; --line:rgba(255,255,255,.08); --line-2:rgba(255,255,255,.16);
+  --ink:#ECECF3; --ink-2:#B5B7C8; --ink-3:#9496AB;
+  --you:#3A3DA6; --you-deep:#2C2E86; --you-text:#AEB1FF; --you-soft:#2A2C5A; --you-mark:#7E82F2; --on-you:#FFFFFF; --on-you-2:rgba(255,255,255,.76); --on-you-line:rgba(255,255,255,.22);
+  --anna:#F0B04A; --anna-text:#F3C06E; --on-anna:#2A1A00;
+  --over-fill:#C4463B; --over-card:#8F2C25; --over-text:#FF948A; --over-soft:#3A1E1E;
+  --in:#74D6A0;
+  --focus:#AEB1FF; --scrim:rgba(0,0,0,.55); --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35);
+  --skel:rgba(255,255,255,.07);
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--ground);color:var(--ink)}
+body{font:400 15px/1.4 'Hanken Grotesk',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;-webkit-font-smoothing:antialiased;min-height:100vh}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:8px}
+.num{font-variant-numeric:tabular-nums}
+.serif{font-family:'Newsreader',Georgia,'Times New Roman',serif;font-optical-sizing:auto}
+svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.dash{font-family:'Newsreader',Georgia,serif}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+/* shell */
+#view{padding:47px 16px 120px;max-width:640px;margin:0 auto}
+.nav{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(4,1fr) 72px;padding:6px 8px 34px;align-items:center}
+.brand{display:none}
+.tab{display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0;min-height:48px;color:var(--ink-3);font-size:11px;font-weight:500}
+.tab[aria-current="page"]{color:var(--ink)}
+.tab[aria-current="page"] svg{color:var(--you-text)}
+.addbtn{justify-self:center;width:52px;height:52px;border-radius:16px;background:var(--you);color:var(--on-you);display:grid;place-items:center}
+.addbtn span{display:none}
+.addbtn svg.i{width:24px;height:24px;stroke-width:2}
+
+.bar{display:grid;grid-template-columns:44px 1fr 44px;align-items:center;height:48px;margin:0 -4px 8px}
+.bar h1{margin:0;text-align:center;font-size:16px;font-weight:600}
+.iconbtn{width:44px;height:44px;display:grid;place-items:center;border-radius:12px;color:var(--ink)}
+.iconbtn:hover{background:var(--surface-2)}
+.pagehead{display:none}
+
+h2.sec{font-size:13px;font-weight:600;color:var(--ink-2);margin:26px 4px 8px;display:flex;justify-content:space-between;align-items:baseline}
+h2.sec a,h2.sec button{font-weight:500;color:var(--you-text);font-size:13px}
+.panel{background:var(--surface);border-radius:18px;overflow:hidden}
+
+/* hero: the month as an object you hold */
+.hero{position:relative;background:var(--you);color:var(--on-you);border-radius:24px;padding:18px 20px 16px;box-shadow:inset 0 1px 0 rgba(255,255,255,.14),var(--shadow);overflow:hidden}
+.hero.over{background:var(--over-card)}
+.hero .top{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;color:var(--on-you-2)}
+.hero .top b{color:var(--on-you);font-weight:600;font-size:14px}
+.big{font-family:'Newsreader',Georgia,serif;font-weight:400;font-size:64px;line-height:1;letter-spacing:-.02em;margin:22px 0 4px}
+.hero .sub{font-size:15px;color:var(--on-you-2)}
+.hero .sub em{font-family:'Newsreader',Georgia,serif;font-style:italic;font-size:19px;color:var(--on-you)}
+.days{margin-top:22px;position:relative}
+.days svg{display:block;width:100%;height:auto;overflow:visible}
+.axis{position:relative;height:16px;margin-top:6px;font-size:11px;color:var(--on-you-2)}
+.axis span{position:absolute;top:0;white-space:nowrap}
+.pace{display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px 12px;font-size:13px;color:var(--on-you-2);margin-top:10px;padding-top:10px;border-top:1px solid var(--on-you-line)}
+.pace b{color:var(--on-you);font-weight:500}
+.key{display:flex;gap:14px;font-size:12px;color:var(--on-you-2)}
+.key i{display:inline-block;width:8px;height:8px;border-radius:3px;margin-right:5px;vertical-align:0}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:4px 9px;border-radius:99px;background:rgba(255,255,255,.16);color:var(--on-you)}
+.grow{transform-origin:50% 100%;transform-box:fill-box;animation:grow .7s cubic-bezier(.2,.8,.2,1)}
+@keyframes grow{from{transform:scaleY(.15)}}
+
+/* rows */
+.row{display:grid;grid-template-columns:28px 1fr auto;gap:12px;align-items:center;padding:11px 14px;min-height:56px;width:100%;text-align:left;border-top:1px solid var(--line)}
+.row:first-child{border-top:0}
+button.row:hover{background:var(--surface-2)}
+.row .nm{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .meta{font-size:13px;color:var(--ink-3);display:flex;gap:6px;align-items:center;white-space:nowrap;overflow:hidden}
+.row .meta svg.i{width:14px;height:14px}
+.row .amt{text-align:right;font-variant-numeric:tabular-nums;font-weight:500;white-space:nowrap}
+.row .amt small{display:block;font-size:12px;font-weight:400;color:var(--ink-3)}
+.amt.in{color:var(--in)}
+.amt.moved{color:var(--ink-2);font-weight:400}
+.who{width:28px;height:28px;display:grid;place-items:center}
+.who svg{width:26px;height:26px}
+.cat{color:var(--ink-2)}
+
+/* needs a look */
+.alert{background:var(--over-card);color:#fff;border-radius:18px;overflow:hidden}
+.alert .row{border-color:rgba(255,255,255,.16);color:#fff}
+.alert .row .meta{color:rgba(255,255,255,.78)}
+.alert .row:hover{background:rgba(255,255,255,.06)}
+.alert .who{color:#fff}
+.alert .row{min-height:68px}
+.alert .nm{font-size:17px}
+.alert .ovq{color:#fff;font-size:17px}
+.alert .ovdot{display:none}
+.ovq{display:inline-flex;align-items:center;gap:7px;color:var(--over-text)}
+.ovdot{width:7px;height:7px;border-radius:50%;background:var(--over-fill)}
+
+/* shared pot */
+.pot{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:center;padding:16px;width:100%;text-align:left}
+.pair{position:relative;width:80px;height:44px}
+.pair span{position:absolute;top:0;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font-weight:600;font-size:14px;border:2px solid var(--surface)}
+.pair .a{left:0;background:var(--anna);color:var(--on-anna)}
+.pair .y{left:34px;background:var(--you);color:var(--on-you);font-size:12px}
+.pot .v{font-family:'Newsreader',Georgia,serif;font-size:28px;line-height:1.1}
+.pot p{margin:2px 0 0;color:var(--ink-2);font-size:13px}
+.split{display:flex;height:8px;border-radius:4px;overflow:hidden;margin:10px 0 6px;gap:2px}
+.split i{display:block}
+.potlines{grid-column:1/-1;display:grid;gap:0;border-top:1px solid var(--line);margin:0 -16px -16px}
+.potlines div{display:flex;justify-content:space-between;padding:10px 16px;font-size:14px;border-top:1px solid var(--line)}
+.potlines div:first-child{border-top:0}
+.potlines span{color:var(--ink-2)}
+
+/* transactions */
+.filters{display:flex;gap:8px;align-items:center;margin:4px 0 6px}
+.seg{display:flex;background:var(--surface-2);border-radius:12px;padding:3px;gap:2px}
+.seg button{display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:9px;font-size:13px;font-weight:500;color:var(--ink-2);min-height:36px}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.seg svg{width:16px;height:16px}
+.search{display:flex;align-items:center;gap:8px;background:var(--surface);border-radius:12px;padding:0 12px;height:42px;margin:8px 0;color:var(--ink-3)}
+.search input{border:0;background:none;outline:none;flex:1;height:100%;color:var(--ink)}
+.dayh{display:flex;justify-content:space-between;align-items:baseline;padding:18px 4px 6px;font-size:13px;font-weight:600;color:var(--ink-2)}
+.dayh .num{font-weight:500}
+.bubbles{display:grid;gap:8px;padding:12px}
+.bub{max-width:78%;padding:10px 14px;border-radius:18px;font-size:13px}
+.bub b{display:block;font-family:'Newsreader',Georgia,serif;font-weight:400;font-size:22px;line-height:1.15}
+.bub.a{background:var(--anna);color:var(--on-anna);border-bottom-left-radius:6px;justify-self:start}
+.bub.y{background:var(--you);color:var(--on-you);border-bottom-right-radius:6px;justify-self:end;text-align:right}
+.bub span{opacity:.8}
+.note{font-size:13px;color:var(--ink-2);padding:10px 4px 0}
+
+/* budgets */
+.brow{display:grid;grid-template-columns:28px 1fr auto;gap:4px 12px;align-items:center;padding:12px 14px;width:100%;text-align:left;border-top:1px solid var(--line)}
+.brow:first-child{border-top:0}
+.brow:hover{background:var(--surface-2)}
+.brow[aria-current="true"]{background:var(--surface-2)}
+.brow .nm{font-weight:500}
+.brow .meter{grid-column:2/4;height:4px;border-radius:2px;background:var(--surface-2);overflow:hidden}
+.brow[aria-current="true"] .meter{background:var(--line-2)}
+.brow .meter i{display:block;height:100%;background:var(--you)}
+.brow .meter i.ov{background:var(--over-fill)}
+.brow .cap{grid-column:2/4;font-size:12px;color:var(--ink-3)}
+.brow .dcol{display:none}
+.pill{font-variant-numeric:tabular-nums;font-size:13px;font-weight:600;padding:3px 9px;border-radius:99px;background:var(--you-soft);color:var(--you-text);white-space:nowrap}
+.pill.ov{background:var(--over-fill);color:#fff}
+.pill.zero{background:var(--surface-2);color:var(--ink-2)}
+.chart{background:var(--surface);border-radius:18px;padding:16px}
+.chart svg{display:block;width:100%;height:auto}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--ink-2);margin-top:10px}
+.legend i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:6px}
+.legend b{color:var(--ink);font-weight:500;font-variant-numeric:tabular-nums}
+
+/* analytics */
+.answer{font-family:'Newsreader',Georgia,serif;font-size:30px;line-height:1.15;margin:8px 4px 6px;letter-spacing:-.01em}
+.answer em{color:var(--you-text)}
+.lede{color:var(--ink-2);margin:0 4px 18px;font-size:15px}
+.hb{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:12px 16px;border-top:1px solid var(--line)}
+.hb:first-child{border-top:0}
+.hb .nm{display:flex;align-items:center;gap:8px;font-weight:500}
+.hb .nm svg{color:var(--ink-2)}
+.hb .v{font-variant-numeric:tabular-nums;font-weight:500;text-align:right}
+.hb .track{grid-column:1/-1;position:relative;height:10px;background:var(--surface-2);border-radius:5px}
+.hb .track i{position:absolute;left:0;top:0;bottom:0;background:var(--you);border-radius:5px}
+.hb .track u{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--ink);border-radius:1px}
+.hb .d{grid-column:1/-1;font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.hb .d b{font-weight:500;color:var(--ink-2)}
+
+/* states */
+.sk{background:var(--skel);border-radius:6px;display:block;animation:sk 1.4s ease-in-out infinite}
+@keyframes sk{50%{opacity:.5}}
+.empty{padding:28px 20px;text-align:center;color:var(--ink-2)}
+.empty b{display:block;color:var(--ink);font-weight:500;margin-bottom:4px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 18px;border-radius:14px;font-weight:600;background:var(--you);color:var(--on-you)}
+.btn:disabled{opacity:.38;cursor:default}
+.btn.ghost{background:var(--surface-2);color:var(--ink)}
+.empty .btn{margin-top:14px}
+.err{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--over-soft);color:var(--ink);border-radius:14px;padding:10px 10px 10px 14px;font-size:13px;margin:0 0 12px}
+.err button{font-weight:600;color:var(--over-text);padding:8px 10px;border-radius:10px}
+.updating{opacity:.55}
+
+/* prototype state switcher: owner-only chrome */
+.proto{position:fixed;top:8px;right:8px;z-index:60;display:flex;gap:1px;padding:2px;border-radius:9px;background:var(--ink);opacity:.86;font-size:10px}
+.proto button{color:var(--ground);padding:4px 7px;border-radius:7px;min-height:24px}
+.proto button[aria-pressed="true"]{background:var(--ground);color:var(--ink)}
+.proto[hidden]{display:none}
+
+/* sheets */
+.scrim{position:fixed;inset:0;background:var(--scrim);z-index:40;opacity:0;pointer-events:none;transition:opacity .2s}
+.scrim.on{opacity:1;pointer-events:auto}
+.sheet{position:fixed;inset:0;z-index:50;background:var(--ground);display:flex;flex-direction:column;transform:translateY(100%);transition:transform .28s cubic-bezier(.2,.8,.2,1);visibility:hidden}
+.sheet.on{transform:none;visibility:visible}
+.sheet .in{flex:1;display:flex;flex-direction:column;padding:47px 16px 34px;min-height:0;overflow:auto}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:0 0 6px}
+.steps button{text-align:left;font-size:12px;color:var(--ink-3);padding:8px 0 4px;border-top:3px solid var(--line-2)}
+.steps button.done{color:var(--ink-2);border-color:var(--you)}
+.steps button[aria-current="step"]{color:var(--ink);border-color:var(--you);font-weight:600}
+.amountbox{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;min-height:150px}
+.amountbox .big{margin:0;font-size:68px;font-variant-numeric:tabular-nums}
+.amountbox .big.zero{color:var(--ink-3)}
+.amountbox p{margin:8px 0 0;color:var(--ink-2);font-size:14px}
+.off{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin:0 0 10px}
+.off button{display:inline-flex;align-items:center;gap:5px;padding:8px 10px;border-radius:12px;background:var(--surface);font-size:13px;font-weight:500;min-height:40px;color:var(--ink-2)}
+.off button[aria-pressed="true"]{background:var(--you-soft);color:var(--you-text)}
+.off svg.i{width:16px;height:16px}
+.off .shmark svg{width:20px;height:16px}
+.notein{width:100%;border:0;border-radius:12px;background:var(--surface);padding:12px 14px;margin:0 0 10px;outline:none}
+.keys{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.keys button{height:54px;border-radius:14px;background:var(--surface);font-size:24px;font-weight:400;font-variant-numeric:tabular-nums}
+.keys button:active{background:var(--surface-2)}
+.next{margin-top:10px;width:100%;min-height:54px;font-size:16px}
+.catlist{display:grid;gap:12px;margin-top:8px}
+.catlist .lbl{font-size:13px;font-weight:600;color:var(--ink-2);margin:6px 4px 0}
+.catlist .row{min-height:52px}
+.recent .row{min-height:60px}
+.recent .row .nm{font-size:17px}
+.namebox{margin-top:12px}
+.namebox label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin:0 4px 6px}
+.namebox input{width:100%;height:56px;border:0;border-radius:14px;background:var(--surface);padding:0 16px;font-size:18px;outline:none}
+.namebox input:focus{box-shadow:0 0 0 2px var(--focus)}
+.sugs{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+.sugs button{padding:9px 14px;border-radius:12px;background:var(--surface);font-weight:500;min-height:42px}
+.summary{display:flex;justify-content:space-between;align-items:baseline;background:var(--surface);border-radius:16px;padding:14px 16px;margin-top:8px}
+.summary .serif{font-size:30px}
+.spacer{flex:1}
+.toast{position:fixed;left:50%;bottom:118px;z-index:70;transform:translate(-50%,20px);opacity:0;transition:.25s;background:var(--ink);color:var(--ground);border-radius:14px;padding:6px 6px 6px 16px;display:flex;align-items:center;gap:14px;font-size:14px;white-space:nowrap;pointer-events:none}
+.toast.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+.toast button{color:var(--ground);font-weight:600;padding:8px 12px;border-radius:10px;background:rgba(127,127,127,.25)}
+.detail .in{padding-top:47px}
+.dl{background:var(--surface);border-radius:18px;margin-top:18px}
+.dl div{display:flex;justify-content:space-between;gap:16px;padding:13px 16px;border-top:1px solid var(--line);font-size:14px}
+.dl div:first-child{border-top:0}
+.dl dt{color:var(--ink-2)} .dl dd{margin:0;text-align:right}
+.dhero{text-align:center;padding:24px 0 4px}
+.dhero .big{margin:0;font-size:56px}
+.dhero p{margin:6px 0 0;color:var(--ink-2)}
+.deskdetail{display:none}
+
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* desktop: the same app, more of it on one screen */
+@media (min-width:960px){
+  body{display:grid;grid-template-columns:232px 1fr}
+  .nav{position:sticky;top:0;height:100vh;border-top:0;border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:stretch;gap:2px;padding:28px 16px;grid-row:1}
+  .brand{display:block;font-family:'Newsreader',Georgia,serif;font-size:26px;padding:0 10px 22px}
+  .addbtn{order:-1;width:auto;height:44px;border-radius:12px;display:flex;gap:8px;justify-content:center;margin:0 0 18px;font-weight:600;justify-self:auto}
+  .addbtn span{display:inline}
+  .addbtn svg.i{width:20px;height:20px}
+  .brand{order:-2}
+  .tab{flex-direction:row;gap:12px;font-size:15px;padding:10px 12px;border-radius:10px;min-height:42px;color:var(--ink-2)}
+  .tab[aria-current="page"]{background:var(--surface);color:var(--ink)}
+  #view{max-width:1120px;width:100%;padding:36px 48px 64px;margin:0;grid-column:2}
+  .bar{display:none}
+  .pagehead{display:flex;align-items:baseline;justify-content:space-between;margin:0 0 20px;gap:16px}
+  .pagehead h1{font-family:'Newsreader',Georgia,serif;font-weight:400;font-size:36px;margin:0;letter-spacing:-.01em}
+  .pagehead p{margin:0;color:var(--ink-2)}
+  .pagehead .back{display:inline-flex;align-items:center;gap:4px;color:var(--ink-2);font-size:14px;margin-bottom:6px}
+  .cols{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:28px;align-items:start}
+  .cols.even{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .cols > div > h2.sec:first-child{margin-top:0}
+  .hero{padding:24px 28px 20px}
+  .big{font-size:88px}
+  .brow{grid-template-columns:28px minmax(0,1fr) 96px 96px 120px}
+  .brow .dcol{display:block;text-align:right;font-variant-numeric:tabular-nums;color:var(--ink-2)}
+  .brow .meter,.brow .cap{grid-column:2/6}
+  .brow .cap{display:none}
+  .thead{display:grid;grid-template-columns:28px minmax(0,1fr) 96px 96px 120px;gap:12px;padding:0 14px 8px;font-size:12px;color:var(--ink-3)}
+  .thead span{text-align:right}
+  .deskdetail{display:block;position:sticky;top:36px}
+  .proto{top:12px;right:16px}
+  .sheet{inset:auto;left:50%;top:50%;width:480px;height:min(760px,94vh);border-radius:24px;transform:translate(-50%,-46%);opacity:0;transition:transform .25s,opacity .2s;box-shadow:var(--shadow)}
+  .sheet.on{transform:translate(-50%,-50%);opacity:1}
+  .sheet .in{padding:24px 24px}
+  .toast{bottom:32px;left:calc(50% + 116px)}
+  .answer{font-size:40px;max-width:720px}
+}
+@media (min-width:960px){ .phoneonly{display:none} }
+@media (max-width:959px){ .deskonly{display:none!important} }
+</style>
+</head>
+<body>
+<nav class="nav" aria-label="Main">
+  <div class="brand">Cashflow</div>
+  <button class="tab" data-go="home"><svg class="i" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9"/><path d="M12 3v9l5 3"/></svg><span>Cycle</span></button>
+  <button class="tab" data-go="transactions"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg><span>Transactions</span></button>
+  <button class="tab" data-go="budget"><svg class="i" viewBox="0 0 24 24"><path d="M4 16a8 8 0 0 1 16 0"/><path d="M12 16l4-5"/><path d="M3 20h18"/></svg><span>Budgets</span></button>
+  <button class="tab" data-go="analytics"><svg class="i" viewBox="0 0 24 24"><path d="M5 20V11M10 20V5M15 20v-7M20 20v-4"/></svg><span>Where it went</span></button>
+  <button class="addbtn" data-act="add" aria-label="Add a transaction"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Add</span></button>
+</nav>
+<main id="view" tabindex="-1"></main>
+
+<div class="scrim" id="scrim"></div>
+<section class="sheet" id="add" role="dialog" aria-modal="true" aria-label="Add a transaction"><div class="in" id="addin"></div></section>
+<section class="sheet detail" id="detail" role="dialog" aria-modal="true" aria-label="Transaction"><div class="in" id="detailin" tabindex="-1" style="outline:none"></div></section>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="proto" id="proto" role="group" aria-label="Prototype state">
+  <button data-state="content">Content</button><button data-state="empty">Empty</button><button data-state="loading">Loading</button><button data-state="error">Error</button>
+</div>
+
+<script src="../../data/cashflow-fake.js"></script>
+<script>
+(function(){
+const D = window.CASHFLOW_DATA;
+const SCREENS = ['home','add','transactions','budget','analytics'];
+const cats = Object.fromEntries(D.categories.map(c => [c.id, c]));
+const budgets = D.categories.filter(c => c.budget_minor);
+const DAY = 864e5;
+const t0 = Date.parse(D.cycle.start + 'T00:00:00Z');
+const today = D.today;
+const todayIdx = (Date.parse(today + 'T00:00:00Z') - t0) / DAY;
+const NDAYS = D.cycle.days_total;
+const lastStart = Date.parse(D.last_cycle.start + 'T00:00:00Z');
+
+let txs = D.transactions.slice();
+let state = 'content';
+let screen = 'home', under = 'home', stack = [];
+let selCat = 'eating_out', filter = 'all', query = '', searchOpen = false, selTx = null;
+let justSaved = null;
+
+/* money: integer øre everywhere, Intl only at the edge */
+const nf2 = new Intl.NumberFormat(D.locale, {style:'currency', currency:D.currency});
+const nf0 = new Intl.NumberFormat(D.locale, {style:'currency', currency:D.currency, maximumFractionDigits:0, minimumFractionDigits:0});
+const kr = (m, whole) => (whole ? nf0 : nf2).format(m / 100).replace('-', '−');
+const plus = (m, whole) => '+' + kr(m, whole);
+const dUTC = s => new Date(s + 'T00:00:00Z');
+const fDay = new Intl.DateTimeFormat(D.locale, {weekday:'short', day:'numeric', month:'short', timeZone:'UTC'});
+const fShort = new Intl.DateTimeFormat(D.locale, {day:'numeric', month:'short', timeZone:'UTC'});
+const fTime = s => fShort.format(dUTC(s));
+function dayLabel(s){
+  const diff = (Date.parse(today + 'T00:00:00Z') - Date.parse(s + 'T00:00:00Z')) / DAY;
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Yesterday';
+  const p = fDay.formatToParts(dUTC(s)); const g = t => p.find(x => x.type === t).value;
+  return g('weekday') + ' ' + g('day') + ' ' + g('month');
+}
+const addDays = (s, n) => new Date(Date.parse(s + 'T00:00:00Z') + n * DAY).toISOString().slice(0, 10);
+const cycleEnd = addDays(D.cycle.next_payday, -1);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function model(T){
+  const exp = T.filter(t => t.kind === 'expense');
+  const by = {}; budgets.forEach(c => by[c.id] = 0);
+  exp.forEach(t => by[t.category] = (by[t.category] || 0) + t.amount_minor);
+  const spent = exp.reduce((a, t) => a + t.amount_minor, 0);
+  const budget = budgets.reduce((a, c) => a + c.budget_minor, 0);
+  // pace uses flexible spending only: fixed costs (rent, bills) land on day one and would raise a false alarm
+  const FIXED = ['home', 'bills'];
+  const flexBudget = budgets.filter(c => !FIXED.includes(c.id)).reduce((a, c) => a + c.budget_minor, 0);
+  const flexSpent = exp.filter(t => !FIXED.includes(t.category)).reduce((a, t) => a + t.amount_minor, 0);
+  const daily = Array.from({length:NDAYS}, () => ({mine:0, shared:0}));
+  exp.forEach(t => { const i = (Date.parse(t.date + 'T00:00:00Z') - t0) / DAY; if (i >= 0 && i < NDAYS) daily[i][t.shared ? 'shared' : 'mine'] += t.amount_minor; });
+  const tops = T.filter(t => t.kind === 'topup');
+  const mineTop = tops.filter(t => t.paid_by === 'me').reduce((a, t) => a + t.amount_minor, 0);
+  const annaTop = tops.filter(t => t.paid_by !== 'me').reduce((a, t) => a + t.amount_minor, 0);
+  const sharedSpend = exp.filter(t => t.shared).reduce((a, t) => a + t.amount_minor, 0);
+  const allTop = mineTop + annaTop;
+  const myPart = allTop ? Math.round(sharedSpend * mineTop / allTop) : 0;
+  return {exp, by, spent, budget, flexBudget, flexSpent, left: budget - spent, daily, mineTop, annaTop, sharedSpend, pot: allTop - sharedSpend, myPart,
+    myPct: allTop ? Math.round(100 * mineTop / allTop) : 0,
+    over: budgets.filter(c => by[c.id] > c.budget_minor).map(c => ({c, over: by[c.id] - c.budget_minor})).sort((a, b) => b.over - a.over),
+    toSavings: T.filter(t => t.kind === 'transfer').reduce((a, t) => a + t.amount_minor, 0)};
+}
+const lastBy = {}; D.last_cycle_transactions.filter(t => t.kind === 'expense').forEach(t => lastBy[t.category] = (lastBy[t.category] || 0) + t.amount_minor);
+const lastTotal = Object.values(lastBy).reduce((a, b) => a + b, 0);
+const curT = () => state === 'empty' ? [] : txs;
+
+/* one icon family, drawn here: 24 grid, 1.6 line, round ends */
+const P = {
+  basket:'<path d="M3.5 10h17l-1.8 9.2a1 1 0 0 1-1 .8H6.3a1 1 0 0 1-1-.8z"/><path d="M8 10l3-5.5M16 10l-3-5.5M9.5 14v2.5M14.5 14v2.5"/>',
+  cup:'<path d="M5 9h11v4.5A5.5 5.5 0 0 1 10.5 19h0A5.5 5.5 0 0 1 5 13.5z"/><path d="M16 10.5h1.5a2.5 2.5 0 0 1 0 5H15.5M8.5 3.5c-.8 1 .8 2 0 3M12.5 3.5c-.8 1 .8 2 0 3"/>',
+  train:'<rect x="6" y="3" width="12" height="13" rx="3"/><path d="M6 10h12M8.5 20l1.5-4M15.5 20L14 16"/><circle cx="9.5" cy="13" r=".6"/><circle cx="14.5" cy="13" r=".6"/>',
+  house:'<path d="M3.5 11L12 4l8.5 7"/><path d="M6 9.5V20h12V9.5M10 20v-5h4v5"/>',
+  bolt:'<path d="M13 3L5.5 13H11l-1 8 7.5-10H12z"/>',
+  bag:'<path d="M5 8h14l-1.1 12H6.1z"/><path d="M9 10V6.5a3 3 0 0 1 6 0V10"/>',
+  ticket:'<path d="M4 7h16v3a2 2 0 0 0 0 4v3H4v-3a2 2 0 0 0 0-4z"/><path d="M14.5 7.5v2M14.5 11v2M14.5 14.5v2"/>',
+  cross:'<path d="M9.5 4h5v5.5H20v5h-5.5V20h-5v-5.5H4v-5h5.5z"/>',
+  gift:'<path d="M4 9.5h16v4H4zM6 13.5V20h12v-6.5M12 9.5V20"/><path d="M12 9.5C10.5 6 6.5 5.5 6.5 7.8 6.5 9.5 10 9.5 12 9.5c2 0 5.5 0 5.5-1.7C17.5 5.5 13.5 6 12 9.5z"/>',
+  'arrow-in':'<path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 20h14"/>',
+  back:'<path d="M15 5l-7 7 7 7"/>', close:'<path d="M6 6l12 12M18 6L6 18"/>', search:'<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/>',
+  chev:'<path d="M9.5 6l6 6-6 6"/>', cal:'<rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M4 10h16M8.5 3v4M15.5 3v4"/>',
+  note:'<path d="M6 4h8.5L19 8.5V20H6z"/><path d="M14 4v5h5M9 13h6M9 16.5h4"/>', del:'<path d="M9 6h11v12H9l-6-6z"/><path d="M12 9.5l5 5M17 9.5l-5 5"/>',
+  swap:'<path d="M7 4L4 7l3 3M4 7h13M17 20l3-3-3-3M20 17H7"/>', check:'<path d="M5 12.5l4.5 4.5L19 7"/>'
+};
+const ic = (n, cls) => `<svg class="i ${cls||''}" viewBox="0 0 24 24" aria-hidden="true">${P[n] || ''}</svg>`;
+/* who-marks: one column that says whose money it is */
+const WHO = {
+  mine:'<svg viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="7" fill="var(--you-mark)"/></svg>',
+  shared:'<svg viewBox="0 0 26 26" aria-hidden="true"><circle cx="9.5" cy="13" r="6.5" fill="var(--anna)"/><circle cx="16.5" cy="13" r="6.5" fill="var(--you-mark)" stroke="var(--surface)" stroke-width="2"/></svg>',
+  moved:'<svg viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="8" fill="none" stroke="var(--anna)" stroke-width="2"/><path d="M5 13h7M9.5 10l3 3-3 3" fill="none" stroke="var(--ink-2)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  annain:'<svg viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="8" fill="var(--anna)"/><path d="M13 9v8M9.5 13.5L13 17l3.5-3.5" fill="none" stroke="var(--on-anna)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  income:'<svg viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="8" fill="none" stroke="var(--in)" stroke-width="1.8"/><path d="M13 9.5v7M9.5 13h7" stroke="var(--in)" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  savings:'<svg viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="8" fill="none" stroke="var(--ink-3)" stroke-width="1.6"/><path d="M5 13h7M9.5 10l3 3-3 3" fill="none" stroke="var(--ink-2)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+};
+function whoOf(t){
+  if (t.kind === 'topup') return t.paid_by === 'me' ? 'moved' : 'annain';
+  if (t.kind === 'income') return 'income';
+  if (t.kind === 'transfer') return 'savings';
+  return t.shared ? 'shared' : 'none';
+}
+function txRow(t, attrs){
+  const w = whoOf(t); let meta, amt;
+  if (t.kind === 'expense'){
+    const c = cats[t.category];
+    meta = `${ic(c.mark)}<span>${c.name}${t.shared ? ', shared with Anna' : ''}</span>`;
+    amt = `<div class="amt">${kr(t.amount_minor)}</div>`;
+  } else if (t.kind === 'income'){
+    meta = `${ic('arrow-in')}<span>${cats[t.category].name}</span>`;
+    amt = `<div class="amt in">${plus(t.amount_minor)}<small>In</small></div>`;
+  } else if (t.kind === 'topup'){
+    meta = t.paid_by === 'me' ? '<span>Moved to the shared pot</span>' : '<span>Anna, into the shared pot</span>';
+    amt = `<div class="amt moved">${kr(t.amount_minor)}<small>Moved</small></div>`;
+  } else {
+    meta = '<span>Moved to savings</span>';
+    amt = `<div class="amt moved">${kr(t.amount_minor)}<small>Moved</small></div>`;
+  }
+  const label = t.kind === 'topup' ? (t.paid_by === 'me' ? 'Moved to shared pot' : 'Anna moved into shared pot') : t.name;
+  return `<button class="row" data-tx="${t.id}" ${attrs||''}><span class="who" title="${{none:'',shared:'Shared with Anna',moved:'Moved to shared',annain:'From Anna',income:'Money in',savings:'Moved to savings'}[w]}">${WHO[w] || ''}</span><span style="min-width:0"><div class="nm">${esc(label)}</div><div class="meta">${meta}</div></span>${amt}</button>`;
+}
+const skRows = n => Array.from({length:n}, (_, i) => `<div class="row"><span class="sk" style="width:22px;height:22px;border-radius:50%"></span><span><span class="sk" style="width:${50 + (i * 37) % 40}%;height:12px;margin-bottom:6px"></span><span class="sk" style="width:30%;height:10px"></span></span><span class="sk" style="width:64px;height:12px"></span></div>`).join('');
+const emptyBox = (b, s) => `<div class="empty"><b>${b}</b>${s ? s + '<br>' : ''}<button class="btn" data-act="add">${ic('chev') && ''}Add a transaction</button></div>`;
+const errBar = what => `<div class="err" role="alert"><span>${what} Showing what was saved at 08:14.</span><button data-state-to="content">Retry</button></div>`;
+
+function header(title, opts){
+  opts = opts || {};
+  const back = stack.length ? `<button class="iconbtn" data-act="back" aria-label="Back">${ic('back')}</button>` : '<span></span>';
+  return `<div class="bar">${back}<h1>${title}</h1>${opts.right || '<span></span>'}</div>
+  <div class="pagehead"><div>${stack.length ? `<button class="back" data-act="back">${ic('back')} Back</button>` : ''}<h1>${opts.big || title}</h1></div>${opts.aside ? `<p>${opts.aside}</p>` : ''}</div>`;
+}
+
+/* the month as a row of days: personal in white, shared in saffron, the days still to come drawn open */
+function daysSvg(m, loading){
+  const W = 310, H = 72, step = W / NDAYS, bw = 6, cap = 180000;
+  let s = `<svg viewBox="0 -2 ${W} ${H + 18}" role="img" aria-label="Spending per day this cycle">`;
+  for (let i = 0; i < NDAYS; i++){
+    const x = i * step + (step - bw) / 2, d = m.daily[i];
+    if (i > todayIdx || loading){
+      s += `<rect x="${x}" y="${H - 8}" width="${bw}" height="8" rx="3" fill="none" stroke="var(--on-you-line)" stroke-width="1.2"/>`;
+      continue;
+    }
+    const tot = d.mine + d.shared;
+    if (!tot){ s += `<rect x="${x}" y="${H - 2}" width="${bw}" height="2" rx="1" fill="var(--on-you-line)"/>`; continue; }
+    const h = Math.max(4, Math.min(1, tot / cap) * (H - 4));
+    const hs = h * d.shared / tot, hm = h - hs;
+    const g = (justSaved && i === todayIdx) ? ' class="grow"' : '';
+    s += `<g${g}>`;
+    if (hm > 0) s += `<rect x="${x}" y="${H - hm}" width="${bw}" height="${hm}" rx="3" fill="var(--on-you)"/>`;
+    if (hs > 0) s += `<rect x="${x}" y="${H - h}" width="${bw}" height="${Math.max(2, hs - (hm ? 1.5 : 0))}" rx="3" fill="var(--anna)"/>`;
+    if (tot > cap) s += `<path d="M${x - 1} ${H - h + 12}l${bw + 2} -3M${x - 1} ${H - h + 16}l${bw + 2} -3" stroke="var(--you)" stroke-width="1.6"/>`;
+    s += '</g>';
+  }
+  const tx = todayIdx * step + step / 2;
+  s += `<circle cx="${tx}" cy="${H + 7}" r="2.4" fill="var(--on-you)"/>`;
+  // money line against the days: how far the budgets have gone vs how far the cycle has
+  const used = Math.min(1, m.flexSpent / m.flexBudget);
+  s += `<line x1="0" x2="${W}" y1="${H + 14}" y2="${H + 14}" stroke="var(--on-you-line)" stroke-width="2" stroke-linecap="round"/>`;
+  if (!loading) s += `<line x1="0" x2="${(W * used).toFixed(1)}" y1="${H + 14}" y2="${H + 14}" stroke="var(--on-you)" stroke-width="2" stroke-linecap="round"/>`;
+  s += `<line x1="${todayIdx * step}" x2="${todayIdx * step}" y1="${H + 10}" y2="${H + 18}" stroke="var(--anna)" stroke-width="2" stroke-linecap="round"/>`;
+  return s + '</svg>';
+}
+
+function heroCard(m){
+  const loading = state === 'loading';
+  const daysLeft = D.cycle.days_left;
+  const perDay = Math.max(0, Math.round(m.left / daysLeft));
+  const usedPct = Math.round(100 * m.flexSpent / m.flexBudget), gonePct = Math.round(100 * (NDAYS - daysLeft) / NDAYS);
+  const pace = m.spent === 0 ? 'Nothing spent yet this cycle'
+    : usedPct > gonePct + 2 ? 'Flexible spending is ahead of the days' : usedPct < gonePct - 2 ? 'Flexible spending is behind the days' : 'Flexible spending keeps pace with the days';
+  const pos = p => `left:${(100 * p).toFixed(2)}%`;
+  return `<section class="hero" aria-label="This cycle">
+    <div class="top"><span>${fTime(D.cycle.start)} <span class="dash">–</span> ${fTime(cycleEnd)}</span><span>Payday ${dayLabel(D.cycle.next_payday)}</span></div>
+    <div class="big ${loading ? 'updating' : ''}">${kr(m.left, true)}</div>
+    <div class="sub">left to spend, <em>${daysLeft} days to payday</em>${m.left > 0 ? `<br>About ${kr(perDay, true)} a day` : ''}</div>
+    ${loading ? '<div style="margin-top:10px"><span class="chip">Updating…</span></div>' : ''}
+    <div class="days">${daysSvg(m, loading)}
+      <div class="axis"><span style="left:0">${fTime(D.cycle.start)}</span><span style="right:${(100 * (NDAYS - todayIdx - .5) / NDAYS).toFixed(2)}%;transform:translateX(50%)">Today</span></div>
+    </div>
+    <div class="pace"><span>${pace}</span><span class="num"><b>${usedPct}%</b> used, <b>${gonePct}%</b> of days gone</span></div>
+    <div class="key" style="margin-top:8px"><span><i style="background:var(--on-you)"></i>Yours</span><span><i style="background:var(--anna)"></i>Shared with Anna</span><span><i style="border:1.2px solid var(--on-you-2)"></i>Days to come</span></div>
+  </section>`;
+}
+
+function potPanel(m){
+  const all = m.mineTop + m.annaTop;
+  if (!all && !m.sharedSpend) return `<div class="panel"><div class="empty"><b>Nothing in the shared pot yet</b>Top-ups and shared spending with Anna will show here.</div></div>`;
+  return `<div class="panel"><button class="pot" data-act="shared">
+    <span class="pair" aria-hidden="true"><span class="a">A</span><span class="y">You</span></span>
+    <span><span class="v num">${kr(m.pot)}</span><p>left in the pot you share with Anna</p></span>
+    <span class="potlines">
+      <div><span>Anna moved in</span><b class="num">${kr(m.annaTop, true)}</b></div>
+      <div><span>You moved in</span><b class="num">${kr(m.mineTop, true)}</b></div>
+      <div><span>Spent together</span><b class="num">${kr(m.sharedSpend, true)}</b></div>
+      <div><span>Your part, from what you put in</span><b class="num">${kr(m.myPart, true)}</b></div>
+    </span></button></div>
+    <p class="note">Money moved into the pot is not your spending. It counts once you spend it together.</p>`;
+}
+
+function home(){
+  const m = model(curT());
+  const T = curT();
+  const ovRow = o => `<button class="row" data-cat="${o.c.id}"><span class="who cat">${ic(o.c.mark)}</span><span><div class="nm">${o.c.name}</div><div class="meta num">${kr(m.by[o.c.id], true)} of ${kr(o.c.budget_minor, true)}</div></span><span class="amt ovq"><i class="ovdot"></i>${kr(o.over, true)} over</span></button>`;
+  const look = m.over.length ? `<h2 class="sec">Needs a look</h2><div class="alert">${ovRow(m.over[0])}</div>${m.over.length > 1 ? `<div class="panel" style="margin-top:8px">${m.over.slice(1).map(ovRow).join('')}</div>` : ''}` : '';
+  const latest = state === 'loading' ? `<div class="panel">${skRows(4)}</div>`
+    : T.length ? `<div class="panel">${T.slice(0, 5).map(t => txRow(t)).join('')}</div>`
+    : `<div class="panel">${emptyBox('No spending yet this cycle', '')}</div>`;
+  return `${header(D.cycle.label + ' cycle', {big: 'Your ' + D.cycle.label + ' cycle', aside: `${D.cycle.days_left} days to payday, ${dayLabel(D.cycle.next_payday)}`})}
+  ${state === 'error' ? errBar('Couldn’t refresh.') : ''}
+  <div class="cols"><div>${heroCard(m)}${look}</div>
+  <div><h2 class="sec">With Anna</h2>${state === 'loading' ? `<div class="panel">${skRows(2)}</div>` : potPanel(m)}
+  <h2 class="sec">Latest <button data-go="transactions">All transactions</button></h2>${latest}</div></div>`;
+}
+
+/* transactions */
+function txList(T){
+  let L = T;
+  if (filter === 'mine') L = L.filter(t => !t.shared && t.kind === 'expense');
+  if (filter === 'shared') L = L.filter(t => t.shared);
+  if (query) L = L.filter(t => (t.name + ' ' + (cats[t.category] ? cats[t.category].name : '')).toLowerCase().includes(query.toLowerCase()));
+  return L;
+}
+function transactions(){
+  const T = curT(), m = model(T);
+  const seg = `<div class="seg" role="group" aria-label="Show">
+    <button data-filter="all" aria-pressed="${filter === 'all'}">All</button>
+    <button data-filter="mine" aria-pressed="${filter === 'mine'}">Yours</button>
+    <button data-filter="shared" aria-pressed="${filter === 'shared'}"><svg viewBox="0 0 26 26" aria-hidden="true" style="width:18px">${WHO.shared.replace(/^<svg[^>]*>|<\/svg>$/g, '')}</svg>Shared</button></div>`;
+  let body;
+  if (state === 'loading') body = `<div class="dayh"><span class="sk" style="width:60px;height:12px"></span></div><div class="panel">${skRows(3)}</div><div class="dayh"><span class="sk" style="width:80px;height:12px"></span></div><div class="panel">${skRows(4)}</div>`;
+  else {
+    const L = txList(T);
+    if (!T.length) body = `<div class="panel" style="margin-top:12px">${emptyBox('No transactions yet this cycle', 'Your spending, what comes in and what you move to the pot will show here, day by day.')}</div>`;
+    else if (!L.length) body = `<div class="panel" style="margin-top:12px"><div class="empty"><b>Nothing matches</b>Try another name or show all.</div></div>`;
+    else {
+      const days = [...new Set(L.map(t => t.date))];
+      body = (filter === 'shared' && !query ? sharedHead(m) : '') + days.map(d => {
+        const items = L.filter(t => t.date === d);
+        const tot = items.filter(t => t.kind === 'expense').reduce((a, t) => a + t.amount_minor, 0);
+        return `<div class="dayh"><span>${dayLabel(d)}</span>${tot ? `<span class="num">${kr(tot)}</span>` : ''}</div><div class="panel">${items.map(t => txRow(t, selTx === t.id ? 'aria-current="true" style="background:var(--surface-2)"' : '')).join('')}</div>`;
+      }).join('');
+    }
+  }
+  const right = `<button class="iconbtn" data-act="search" aria-label="Search" aria-expanded="${searchOpen}">${ic('search')}</button>`;
+  const det = selTx && txs.find(t => t.id === selTx) || txList(T)[0];
+  return `${header('Transactions', {right, big: 'Transactions', aside: `${D.cycle.label} cycle, ${fTime(D.cycle.start)} <span class="dash">–</span> ${fTime(cycleEnd)}`})}
+  ${state === 'error' ? errBar('Couldn’t load new transactions.') : ''}
+  <div class="cols"><div>
+  <div class="filters">${seg}<span class="spacer"></span><button class="iconbtn deskonly" data-act="search" aria-label="Search">${ic('search')}</button></div>
+  ${searchOpen ? `<label class="search">${ic('search')}<span class="sr">Search</span><input id="q" placeholder="Search" value="${esc(query)}" autocomplete="off"></label>` : ''}
+  ${body}</div>
+  <div class="deskdetail">${state !== 'loading' && det && T.length ? `<h2 class="sec" style="margin-top:0">Detail</h2>${detailBody(det)}` : ''}</div></div>`;
+}
+function sharedHead(m){
+  const tops = curT().filter(t => t.kind === 'topup').slice().reverse();
+  return `<h2 class="sec" style="margin-top:12px">The pot with Anna</h2><div class="panel"><div class="bubbles">${tops.map(t => `<div class="bub ${t.paid_by === 'me' ? 'y' : 'a'}"><b class="num">${kr(t.amount_minor, true)}</b><span>${t.paid_by === 'me' ? 'You moved in' : 'Anna moved in'}, ${fTime(t.date)}</span></div>`).join('')}</div>
+  <div class="potlines" style="margin:0"><div><span>Spent together</span><b class="num">${kr(m.sharedSpend)}</b></div><div><span>Left in the pot</span><b class="num">${kr(m.pot)}</b></div></div></div>`;
+}
+function detailBody(t){
+  const w = whoOf(t);
+  const amt = t.kind === 'income' ? `<span style="color:var(--in)">${plus(t.amount_minor)}</span>` : kr(t.amount_minor);
+  const kind = {none:'Yours', shared:'Shared with Anna', moved:'Moved to the shared pot', annain:'Anna, into the shared pot', income:'Money in', savings:'Moved to savings'}[w];
+  const m = model(txs);
+  return `<div class="dhero"><div class="big serif num">${amt}</div><p>${esc(t.name)}</p></div>
+  <dl class="dl">
+    <div><dt>Date</dt><dd>${dayLabel(t.date)}${dayLabel(t.date).includes(' ') ? '' : ', ' + fTime(t.date)}</dd></div>
+    ${t.category ? `<div><dt>Category</dt><dd>${cats[t.category].name}</dd></div>` : ''}
+    <div><dt>Whose</dt><dd>${kind}</dd></div>
+    ${t.shared && t.kind === 'expense' ? `<div><dt>Your part</dt><dd class="num">${kr(Math.round(t.amount_minor * m.mineTop / (m.mineTop + m.annaTop)))}</dd></div>` : ''}
+    ${t.kind === 'topup' || t.kind === 'transfer' ? `<div><dt>Counts as spending</dt><dd>No</dd></div>` : ''}
+    ${t.note ? `<div><dt>Note</dt><dd>${esc(t.note)}</dd></div>` : ''}
+  </dl>`;
+}
+
+/* budgets */
+function paceSvg(cid, T){
+  const c = cats[cid];
+  const cum = (list, start, n) => { const a = new Array(n).fill(0); list.forEach(t => { const i = Math.round((Date.parse(t.date + 'T00:00:00Z') - start) / DAY); if (i >= 0 && i < n) a[i] += t.amount_minor; }); for (let i = 1; i < n; i++) a[i] += a[i - 1]; return a; };
+  const now = cum(T.filter(t => t.kind === 'expense' && t.category === cid), t0, todayIdx + 1);
+  const lastN = (t0 - lastStart) / DAY;
+  const last = cum(D.last_cycle_transactions.filter(t => t.kind === 'expense' && t.category === cid), lastStart, lastN);
+  const W = 320, H = 150, L = 0, R = 316, top = 10;
+  const max = Math.max(c.budget_minor, now[now.length - 1] || 0, last[last.length - 1] || 0) * 1.08 || 1;
+  const X = i => L + (R - L) * (i + 1) / NDAYS, Y = v => top + (H - top) * (1 - v / max);
+  const path = a => a.map((v, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)} ${Y(v).toFixed(1)}`).join('');
+  const by = Y(c.budget_minor);
+  const n = now[now.length - 1];
+  return `<svg viewBox="0 0 ${W} ${H + 22}" role="img" aria-label="${c.name}: spent by day this cycle against last cycle and the budget">
+    <line x1="${L}" x2="${R}" y1="${H}" y2="${H}" stroke="var(--line-2)"/>
+    <line x1="${L}" x2="${R}" y1="${by}" y2="${by}" stroke="var(--over-fill)" stroke-width="1.2"/>
+    <path d="${path(last)}" fill="none" stroke="var(--ink-3)" stroke-width="1.6" stroke-linejoin="round" opacity=".7"/>
+    <path d="${path(now)}" fill="none" stroke="var(--you-text)" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="${X(todayIdx)}" cy="${Y(n)}" r="4" fill="var(--you-text)" stroke="var(--surface)" stroke-width="2"/>
+    <text x="${L}" y="${H + 16}" font-size="10" fill="var(--ink-3)">${fTime(D.cycle.start)}</text>
+    <text x="${X(todayIdx)}" y="${H + 16}" font-size="10" fill="var(--ink-3)" text-anchor="middle">Today</text>
+  </svg>`;
+}
+function bRow(c, m){
+  const s = m.by[c.id] || 0, b = c.budget_minor, ov = s > b;
+  const pill = ov ? `<span class="pill ov">${kr(s - b, true)} over</span>` : s === b ? `<span class="pill zero">Used up</span>` : `<span class="pill">${kr(b - s, true)} left</span>`;
+  return `<button class="brow" data-cat="${c.id}" ${selCat === c.id ? 'aria-current="true"' : ''}><span class="who cat">${ic(c.mark)}</span><span class="nm">${c.name}</span>
+    <span class="dcol">${kr(s, true)}</span><span class="dcol">${kr(b, true)}</span>${pill}
+    <span class="meter"><i class="${ov ? 'ov' : ''}" style="width:${Math.min(100, 100 * s / b).toFixed(1)}%"></i></span>
+    <span class="cap num">${kr(s, true)} of ${kr(b, true)}</span></button>`;
+}
+function budget(){
+  const T = curT(), m = model(T), c = cats[selCat];
+  const s = m.by[c.id] || 0, b = c.budget_minor, ov = s > b, last = lastBy[c.id] || 0;
+  const loading = state === 'loading';
+  const inCat = T.filter(t => t.kind === 'expense' && t.category === c.id);
+  const lastName = D.last_cycle.label;
+  const card = `<section class="hero ${ov ? 'over' : ''}" aria-label="${c.name}">
+    <div class="top"><b style="display:flex;gap:8px;align-items:center">${ic(c.mark)}${c.name}</b><span>${D.cycle.label} cycle</span></div>
+    <div class="big num ${loading ? 'updating' : ''}">${kr(s, true)}</div>
+    <div class="sub">spent of <em>${kr(b, true)}</em></div>
+    <div class="pace"><span>${s === 0 ? 'Nothing spent here yet' : ov ? `<b>${kr(s - b, true)} over</b> with ${D.cycle.days_left} days to payday` : `<b>${kr(b - s, true)} left</b> for ${D.cycle.days_left} days`}</span><span class="num">${lastName}: ${kr(last, true)}</span></div>
+  </section>`;
+  const chart = loading ? `<div class="chart"><span class="sk" style="height:150px"></span></div>`
+    : !inCat.length ? `<div class="chart"><div class="empty"><b>No ${c.name.toLowerCase()} yet this cycle</b>The pace line starts with the first one.</div></div>`
+    : `<div class="chart">${paceSvg(c.id, T)}<div class="legend"><span><i style="background:var(--you-text)"></i>This cycle <b>${kr(s, true)}</b></span><span><i style="background:var(--ink-3)"></i>${lastName} <b>${kr(last, true)}</b></span><span><i style="background:var(--over-fill)"></i>Budget <b>${kr(b, true)}</b></span></div></div>`;
+  const list = loading ? `<div class="panel">${skRows(3)}</div>` : inCat.length ? `<div class="panel">${inCat.map(t => txRow(t)).join('')}</div>` : `<div class="panel">${emptyBox('Nothing here yet', '')}</div>`;
+  const all = `<div class="thead deskonly"><span></span><span style="text-align:left">Category</span><span>Spent</span><span>Budget</span><span>Left</span></div><div class="panel">${loading ? skRows(9) : budgets.map(x => bRow(x, m)).join('')}</div>
+    <p class="note num" style="display:flex;justify-content:space-between"><span>All budgets</span><span>${kr(m.spent, true)} of ${kr(m.budget, true)}</span></p>`;
+  return `${header(stack.length ? c.name : 'Budgets', {big: 'Budgets', aside: `${kr(m.left, true)} left across all nine`})}
+  ${state === 'error' ? errBar('Couldn’t refresh budgets.') : ''}
+  <div class="cols even"><div class="deskonly"><h2 class="sec" style="margin-top:0">All budgets</h2>${all}</div>
+  <div>${card}<h2 class="sec">Pace through the cycle</h2>${chart}<h2 class="sec">In ${c.name.toLowerCase()} this cycle</h2>${list}
+  <div class="phoneonly"><h2 class="sec">All budgets</h2>${all}</div></div></div>`;
+}
+
+/* analytics: where did it go, and is it different from last cycle */
+function analytics(){
+  const T = curT(), m = model(T), loading = state === 'loading';
+  const last = D.last_cycle.label;
+  const fixed = 'home';
+  const rows = budgets.filter(c => c.id !== fixed).map(c => ({c, s: m.by[c.id] || 0, l: lastBy[c.id] || 0})).sort((a, b) => b.s - a.s);
+  const max = Math.max(...rows.map(r => Math.max(r.s, r.l)), 1);
+  const diff = m.spent - lastTotal;
+  const biggest = rows.slice().sort((a, b) => (b.s - b.l) - (a.s - a.l))[0];
+  const top2 = budgets.slice().sort((a, b) => (m.by[b.id] || 0) - (m.by[a.id] || 0)).slice(0, 2);
+  const word = v => v > 0 ? `${kr(v, true)} more` : v < 0 ? `${kr(-v, true)} less` : 'the same';
+  let body;
+  if (loading) body = `<div class="panel">${Array.from({length:8}, () => `<div class="hb"><span class="sk" style="width:40%;height:12px"></span><span class="sk" style="width:60px;height:12px"></span><span class="track"></span></div>`).join('')}</div>`;
+  else if (!m.spent) body = `<div class="panel">${emptyBox('Nothing spent yet this cycle', `The comparison with ${last} starts with your first transaction.`)}</div>`;
+  else body = `<div class="panel">
+    <div class="hb" style="background:var(--surface-2)"><span class="nm">${ic(cats[fixed].mark)}${cats[fixed].name}, fixed</span><span class="v">${kr(m.by[fixed], true)}</span><span class="d">${m.by[fixed] === (lastBy[fixed] || 0) ? `The same as ${last}` : `<b>${word(m.by[fixed] - (lastBy[fixed] || 0))}</b> than ${last}`}</span></div>
+    ${rows.map(r => `<div class="hb"><span class="nm">${ic(r.c.mark)}${r.c.name}</span><span class="v">${kr(r.s, true)}</span>
+      <span class="track" aria-hidden="true"><i style="width:${(100 * r.s / max).toFixed(1)}%"></i>${r.l ? `<u style="left:calc(${(100 * r.l / max).toFixed(1)}% - 1px)"></u>` : ''}</span>
+      <span class="d">${!r.l ? `Nothing in ${last}` : r.s === r.l ? `The same as ${last}` : `<b>${word(r.s - r.l)}</b> than ${last}, ${kr(r.l, true)}`}</span></div>`).join('')}
+  </div>
+  <div class="legend" style="margin:10px 4px 0"><span><i style="background:var(--you)"></i>This cycle</span><span><i style="background:var(--ink);width:3px;height:12px"></i>${last}</span></div>
+  <p class="note">Not counted as spending: ${kr(m.mineTop, true)} you moved to the shared pot and ${kr(m.toSavings, true)} moved to savings.</p>`;
+  const answer = m.spent ? `<p class="answer ${loading ? 'updating' : ''}">${top2.map((c, i) => i ? c.name.toLowerCase() : c.name).join(' and ')} took most of it. <em>${kr(Math.abs(diff), true)} ${diff >= 0 ? 'more' : 'less'}</em> than ${last} in all.</p>
+    <p class="lede">${kr(m.spent, true)} spent this cycle, ${kr(lastTotal, true)} in ${last}. ${biggest && biggest.s > biggest.l ? `${biggest.c.name} grew the most: ${word(biggest.s - biggest.l)}.` : ''}</p>` : '';
+  return `${header('Where it went', {big: 'Where it went', aside: `${D.cycle.label} cycle against ${last}`})}
+  ${state === 'error' ? errBar('Couldn’t refresh.') : ''}
+  <div style="max-width:760px">${answer}${body}</div>`;
+}
+
+/* add: amount, category, name, saved */
+let A;
+function resetAdd(){ A = {step:1, amt:'', kind:'expense', shared:false, dOff:0, note:null, cat:null, name:''}; }
+const amtMinor = () => { if (!A.amt) return 0; const [w, f = ''] = A.amt.split(','); return parseInt(w || '0', 10) * 100 + parseInt((f + '00').slice(0, 2), 10); };
+const intf = new Intl.NumberFormat(D.locale);
+function amtText(){
+  if (!A.amt) return kr(0);
+  const [w, f] = A.amt.split(',');
+  return intf.format(parseInt(w || '0', 10)) + (f !== undefined ? ',' + f : '') + ' kr.';
+}
+function catsFor(){
+  if (A.kind === 'income') return {recent: D.categories.filter(c => c.kind === 'income'), rest: []};
+  const r = D.suggestions.last_used_categories.map(id => cats[id]);
+  return {recent: r, rest: budgets.filter(c => !r.includes(c))};
+}
+function namesFor(cid){
+  const f = {}; D.suggestions.name_suggestions[cid] && D.suggestions.name_suggestions[cid].forEach((n, i) => f[n] = 100 - i);
+  txs.concat(D.last_cycle_transactions).filter(t => t.category === cid).forEach(t => f[t.name] = (f[t.name] || 0) + 1);
+  return Object.keys(f).sort((a, b) => f[b] - f[a]).slice(0, 5);
+}
+function renderAdd(){
+  const steps = ['Amount', 'Category', 'Name'];
+  const stepNav = `<div class="steps" role="list">${steps.map((s, i) => `<button role="listitem" data-step="${i + 1}" ${A.step === i + 1 ? 'aria-current="step"' : ''} class="${A.step > i + 1 ? 'done' : ''}" ${i + 1 > A.step ? 'disabled' : ''}>${s}</button>`).join('')}</div>`;
+  const head = `<div class="bar" style="display:grid"><button class="iconbtn" data-act="close" aria-label="Close">${ic('close')}</button><h1>${A.kind === 'income' ? 'Money in' : 'New expense'}</h1><span></span></div>`;
+  let b = '';
+  if (A.step === 1){
+    const date = addDays(today, -A.dOff);
+    b = `<div class="amountbox"><label class="sr" for="amt">Amount</label><div id="amt" class="big serif ${A.amt ? '' : 'zero'}" role="textbox" aria-label="Amount" tabindex="0" inputmode="decimal">${amtText()}</div>
+      <p>${A.kind === 'income' ? 'Coming in' : A.shared ? 'Shared with Anna, from the pot' : 'Yours'}</p></div>
+      <div class="off">
+        <button data-act="date">${ic('cal')}${dayLabel(date)}</button>
+        <button data-act="note" aria-pressed="${A.note !== null}">${ic('note')}Note</button>
+        ${A.kind === 'expense' ? `<button data-act="share" aria-pressed="${A.shared}"><span class="shmark"><svg viewBox="0 0 26 20" aria-hidden="true"><circle cx="9" cy="10" r="6" fill="var(--anna)"/><circle cx="16" cy="10" r="6" fill="var(--you)" stroke="var(--surface)" stroke-width="2"/></svg></span>With Anna</button>` : ''}
+        <button data-act="kind">${ic('swap')}${A.kind === 'expense' ? 'Income' : 'Expense'}</button>
+      </div>
+      ${A.note !== null ? `<input class="notein" id="note" placeholder="Note" aria-label="Note" value="${esc(A.note)}">` : ''}
+      <div class="keys">${['1','2','3','4','5','6','7','8','9',',','0','del'].map(k => `<button data-key="${k}" aria-label="${k === 'del' ? 'Delete' : k === ',' ? 'Decimal comma' : k}">${k === 'del' ? ic('del') : k}</button>`).join('')}</div>
+      <button class="btn next" data-act="next" ${amtMinor() > 0 ? '' : 'disabled'}>Next</button>`;
+  } else if (A.step === 2){
+    const {recent, rest} = catsFor();
+    const r = c => `<button class="row" data-pick="${c.id}"><span class="who cat">${ic(c.mark)}</span><span class="nm">${c.name}</span>${(() => { if (!c.budget_minor) return '<span></span>'; const r = c.budget_minor - (model(txs).by[c.id] || 0); return r < 0 ? `<span class="amt" style="color:var(--over-text);font-weight:500">${kr(-r, true)} over</span>` : `<span class="amt" style="color:var(--ink-3);font-weight:400">${kr(r, true)} left</span>`; })()}</button>`;
+    b = `<div class="summary"><span class="serif num">${kr(amtMinor())}</span><span style="color:var(--ink-2)">${A.shared ? 'Shared with Anna' : A.kind === 'income' ? 'Money in' : 'Yours'}</span></div>
+      <div class="catlist"><div class="lbl">${A.kind === 'income' ? 'Income' : 'Recent'}</div><div class="panel recent">${recent.map(r).join('')}</div>
+      ${rest.length ? `<div class="lbl">All categories</div><div class="panel">${rest.map(r).join('')}</div>` : ''}</div>`;
+  } else {
+    const c = cats[A.cat];
+    b = `<div class="summary"><span class="serif num">${kr(amtMinor())}</span><span style="display:flex;gap:6px;align-items:center;color:var(--ink-2)">${ic(c.mark)}${c.name}</span></div>
+      <div class="namebox"><label for="nm">Name</label><input id="nm" value="${esc(A.name)}" autocomplete="off" enterkeyhint="done" placeholder="Name"></div>
+      <div class="sugs" aria-label="Suggested names">${namesFor(c.id).map(n => `<button data-name="${esc(n)}">${esc(n)}</button>`).join('')}</div>
+      <span class="spacer"></span>
+      <button class="btn next" data-act="save" ${A.name.trim() ? '' : 'disabled'}>Save</button>`;
+  }
+  document.getElementById('addin').innerHTML = head + stepNav + b;
+  if (A.step === 3){ const i = document.getElementById('nm'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
+  if (A.step === 1 && !document.getElementById('note')) document.getElementById('amt').focus({preventScroll:true});
+}
+function openAdd(){
+  if (!document.getElementById('add').classList.contains('on')){ under = screen === 'add' ? under : screen; resetAdd(); }
+  screen = 'add'; renderAdd();
+  document.getElementById('add').classList.add('on'); document.getElementById('scrim').classList.add('on');
+  syncChrome(); post();
+}
+function closeAdd(){
+  document.getElementById('add').classList.remove('on'); document.getElementById('scrim').classList.remove('on');
+  screen = under; render(); post();
+}
+function save(){
+  const t = {id:'n' + Date.now(), date: addDays(today, -A.dOff), amount_minor: amtMinor(), kind: A.kind, category: A.cat, name: A.name.trim(), shared: A.kind === 'expense' && A.shared, paid_by:'me'};
+  if (A.note) t.note = A.note;
+  txs = [t].concat(txs).sort((a, b) => b.date.localeCompare(a.date));
+  justSaved = t.id; state = 'content';
+  closeAdd();
+  toast(`Saved ${kr(t.amount_minor)}, ${esc(t.name)}`, t.id);
+  setTimeout(() => { justSaved = null; }, 900);
+}
+let tt;
+function toast(msg, id){
+  const el = document.getElementById('toast');
+  el.innerHTML = `<span>${msg}</span>${id ? `<button data-undo="${id}">Undo</button>` : ''}`;
+  el.classList.add('on'); clearTimeout(tt); tt = setTimeout(() => el.classList.remove('on'), 4200);
+}
+
+/* detail sheet (phone) */
+function openDetail(id){
+  const t = txs.find(x => x.id === id); if (!t) return;
+  if (matchMedia('(min-width:960px)').matches && screen === 'transactions'){ selTx = id; render(); return; }
+  document.getElementById('detailin').innerHTML = `<div class="bar" style="display:grid"><button class="iconbtn" data-act="closedetail" aria-label="Close">${ic('close')}</button><h1>${t.kind === 'expense' ? 'Expense' : t.kind === 'income' ? 'Money in' : 'Moved'}</h1><span></span></div>${detailBody(t)}`;
+  document.getElementById('detail').classList.add('on'); document.getElementById('scrim').classList.add('on');
+  document.getElementById('detailin').focus();
+}
+function closeDetail(){ document.getElementById('detail').classList.remove('on'); if (!document.getElementById('add').classList.contains('on')) document.getElementById('scrim').classList.remove('on'); }
+
+/* routing */
+function post(){ try { parent.postMessage({type:'at', screen}, '*'); } catch(e){} }
+function syncChrome(){
+  const s = screen === 'add' ? under : screen;
+  document.querySelectorAll('.tab').forEach(b => b.toggleAttribute('aria-current', false) || (b.dataset.go === s && b.setAttribute('aria-current', 'page')));
+  const pr = document.getElementById('proto'); pr.hidden = screen === 'add';
+  pr.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.state === state));
+}
+function render(){
+  const s = screen === 'add' ? under : screen;
+  document.getElementById('view').innerHTML = ({home, transactions, budget, analytics})[s]();
+  syncChrome();
+}
+function go(s, push){
+  if (!SCREENS.includes(s)) return;
+  if (s === 'add') return openAdd();
+  if (document.getElementById('add').classList.contains('on')){ document.getElementById('add').classList.remove('on'); document.getElementById('scrim').classList.remove('on'); }
+  if (push) stack.push(screen); else stack = [];
+  screen = s; render(); window.scrollTo(0, 0); post();
+}
+
+document.addEventListener('click', e => {
+  const el = e.target.closest('button,[data-go]'); if (!el) return;
+  const d = el.dataset;
+  if (d.go) return go(d.go);
+  if (d.state) { state = d.state; return render(); }
+  if (d.stateTo) { state = d.stateTo; return render(); }
+  if (d.cat) { selCat = d.cat; if (screen === 'budget') { render(); window.scrollTo({top:0, behavior:'smooth'}); } else go('budget', true); return; }
+  if (d.tx) return openDetail(d.tx);
+  if (d.filter) { filter = d.filter; return render(); }
+  if (d.undo) { txs = txs.filter(t => t.id !== d.undo); document.getElementById('toast').classList.remove('on'); return render(); }
+  if (d.key) { key(d.key); return; }
+  if (d.pick) { A.cat = d.pick; A.step = 3; A.name = ''; return renderAdd(); }
+  if (d.name) { A.name = d.name; return renderAdd(); }
+  if (d.step) { A.step = +d.step; return renderAdd(); }
+  switch (d.act){
+    case 'add': return openAdd();
+    case 'close': return closeAdd();
+    case 'closedetail': return closeDetail();
+    case 'back': { const p = stack.pop() || 'home'; screen = p; render(); post(); return; }
+    case 'shared': filter = 'shared'; return go('transactions', true);
+    case 'search': searchOpen = !searchOpen; if (!searchOpen) query = ''; render(); if (searchOpen) document.getElementById('q').focus(); return;
+    case 'next': if (amtMinor() > 0) { A.step = 2; renderAdd(); } return;
+    case 'save': if (A.name.trim()) save(); return;
+    case 'date': A.dOff = (A.dOff + 1) % 3; return renderAdd();
+    case 'note': A.note = A.note === null ? '' : A.note; renderAdd(); document.getElementById('note').focus(); return;
+    case 'share': A.shared = !A.shared; return renderAdd();
+    case 'kind': A.kind = A.kind === 'expense' ? 'income' : 'expense'; A.shared = false; return renderAdd();
+  }
+});
+function key(k){
+  if (k === 'del') A.amt = A.amt.slice(0, -1);
+  else if (k === ',') { if (!A.amt.includes(',')) A.amt = (A.amt || '0') + ','; }
+  else { const f = A.amt.split(',')[1]; if ((f && f.length >= 2) || (!A.amt.includes(',') && A.amt.length >= 7)) return; A.amt = (A.amt === '0' ? '' : A.amt) + k; }
+  renderAdd();
+}
+document.addEventListener('input', e => {
+  if (e.target.id === 'q') { query = e.target.value; const pos = e.target.selectionStart; render(); const q = document.getElementById('q'); q.focus(); q.setSelectionRange(pos, pos); }
+  if (e.target.id === 'nm') { A.name = e.target.value; document.querySelector('[data-act="save"]').disabled = !A.name.trim(); }
+  if (e.target.id === 'note') A.note = e.target.value;
+});
+document.addEventListener('keydown', e => {
+  const addOn = document.getElementById('add').classList.contains('on');
+  if (e.key === 'Escape') { if (document.getElementById('detail').classList.contains('on')) return closeDetail(); if (addOn) return closeAdd(); }
+  if (addOn && A.step === 1 && e.target.tagName !== 'INPUT'){
+    if (/^[0-9]$/.test(e.key)) { key(e.key); e.preventDefault(); }
+    else if (e.key === ',' || e.key === '.') { key(','); e.preventDefault(); }
+    else if (e.key === 'Backspace') { key('del'); e.preventDefault(); }
+    else if (e.key === 'Enter' && amtMinor() > 0) { A.step = 2; renderAdd(); }
+  }
+  if (addOn && A.step === 3 && e.key === 'Enter' && A.name.trim()) save();
+  if (addOn && e.key === 'Tab'){ // keep focus inside the sheet
+    const f = [...document.querySelectorAll('#add button:not([disabled]),#add input,#add [tabindex="0"]')]; if (!f.length) return;
+    const i = f.indexOf(document.activeElement);
+    if (e.shiftKey && i <= 0) { f[f.length - 1].focus(); e.preventDefault(); } else if (!e.shiftKey && i === f.length - 1) { f[0].focus(); e.preventDefault(); }
+  }
+});
+document.getElementById('scrim').addEventListener('click', () => { if (document.getElementById('detail').classList.contains('on')) closeDetail(); else closeAdd(); });
+window.addEventListener('message', e => {
+  const m = e.data || {};
+  if (m.type === 'go') go(m.screen);
+  if (m.type === 'theme') document.documentElement.dataset.theme = m.theme === 'dark' ? 'dark' : 'light';
+});
+
+/* start */
+const Q = new URLSearchParams(location.search), PR = window.PROTO || {};
+document.documentElement.dataset.theme = (PR.theme || Q.get('theme')) === 'dark' ? 'dark' : 'light';
+const start = PR.screen || Q.get('screen') || 'home';
+if (start === 'add') { screen = 'home'; render(); openAdd(); } else go(SCREENS.includes(start) ? start : 'home');
+})();
+</script>
+</body>
+</html>
