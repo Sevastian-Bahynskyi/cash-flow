@@ -11,7 +11,7 @@
 .mka-lines .row{min-height:64px}
 .mka-lines .row .mk-meter{margin:8px 0 6px}
 
-/* Budget hero: ahead keeps the indigo card, said in words. Past cycles: kept, checked. */
+/* Budget hero: ahead keeps the blue card, said in words. Past cycles: kept, checked. */
 .mka-aheadline,.mka-kept{display:inline-flex;align-items:center;gap:4px 8px;flex-wrap:wrap}
 .mka-aheadline .pill{font-size:13px;padding:3px 10px;border-radius:99px;background:rgba(255,255,255,.16);color:var(--on-you)}
 .mka-kept .mk-check{color:var(--on-you);flex:none}

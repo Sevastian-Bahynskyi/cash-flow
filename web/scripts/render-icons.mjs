@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs'
 import sharp from 'sharp'
 
 const svg = readFileSync(new URL('../branding/cashflow-icon.svg', import.meta.url))
-const TILE = '#2D2F8F'
+const TILE = '#1F3A5C'
 const SUPERSAMPLE = 4
 const OUTPUTS = [
   ['public/apple-touch-icon.png', 180],
@@ -31,7 +31,7 @@ async function render(source, size, output) {
 for (const [output, size] of OUTPUTS) await render(svg, size, output)
 
 const source = svg.toString()
-const BG = '<rect width="1024" height="1024" fill="#2D2F8F"/>'
+const BG = '<rect width="1024" height="1024" fill="#1F3A5C"/>'
 if (!source.includes(BG)) throw new Error('render-icons: the tile rect changed; update the maskable step')
 const maskable = Buffer.from(source.replace(BG, `${BG}<g transform="translate(102.4 102.4) scale(.8)">`).replace('</svg>', '</g></svg>'))
 await render(maskable, 512, 'public/icon-maskable-512.png')

@@ -1,46 +1,46 @@
 /* Cashflow, soft: calm surfaces, round shapes, one sans for words and numbers (.agents/skills/ui-ux/brand.md).
    The one visual source of truth: every colour is a token here. */
 
-/* Colour rule: two people, two colours. Indigo is you, saffron is Anna; anything shared carries both.
+/* Colour rule: two people, two colours. Ink blue is you, saffron is Anna; anything shared carries both.
    Green only for money coming in. Over a budget is said in words on a calm grey bar, never shouted in red. */
 :root{
-  --ground:#F2F3F7; --surface:#FFFFFF; --surface-2:#EDEFF4; --surface-3:#E3E6EE; --line:rgba(22,26,48,.07); --line-2:rgba(22,26,48,.14);
-  --ink:#151829; --ink-2:#4D5267; --ink-3:#62677D;
-  --you:#4A4ED6; --you-2:#3C40BE; --you-text:#3D41C4; --you-soft:#E7E8FB; --you-mark:#4A4ED6; --on-you:#FFFFFF; --on-you-2:rgba(255,255,255,.86); --on-you-line:rgba(255,255,255,.24);
+  --ground:#F2F3F4; --surface:#FFFFFF; --surface-2:#ECEDEF; --surface-3:#E2E4E7; --line:rgba(20,22,26,.08); --line-2:rgba(20,22,26,.15);
+  --ink:#16181C; --ink-2:#4A4E57; --ink-3:#5F636C;
+  --you:#1F3A5C; --you-text:#23497A; --you-soft:#E2E9F2; --you-mark:#2C5A92; --on-you:#FFFFFF; --on-you-2:rgba(255,255,255,.8); --on-you-line:rgba(255,255,255,.24);
   --anna:#EFA83F; --anna-text:#875600; --on-anna:#2A1A00;
-  --over-bar:#80869A; --over-text:#9C4A3E; --over-soft:#F6EDEB;
-  --in:#1B7A4B; --in-soft:#E3F3EA;
+  --over-bar:#80858F; --over-text:#9C4A3E; --over-soft:#F6EDEB;
+  --in:#1B7A4B;
   --ahead-text:#9A5414;
-  --focus:#4A4ED6; --scrim:rgba(18,20,34,.36); --shadow:0 1px 2px rgba(20,24,48,.04),0 6px 20px rgba(20,24,48,.06); --hero-shadow:0 12px 32px rgba(58,62,190,.22);
+  --focus:#2C5A92; --scrim:rgba(16,18,22,.36); --shadow:0 1px 2px rgba(16,18,22,.05);
   --raised:#FFFFFF; --ahead-soft:#FBF1E4;
-  /* categories in the Where-it-went square only: five calm hues, none of them saffron or green */
-  --cat1:#4A4ED6; --cat2:#2F8FCC; --cat3:#1F6E80; --cat4:#B25CC7; --cat5:#7F869C;
-  --skel:rgba(22,26,48,.07);
+  /* categories in the Where-it-went square only: five hues told apart by lightness too, none of them saffron, green or purple */
+  --cat1:#2C5A92; --cat2:#4FA3C9; --cat3:#B0506F; --cat4:#5E6B7E; --cat5:#AEB5C0;
+  --skel:rgba(20,22,26,.07);
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --ground:#0C0D12; --surface:#191A22; --surface-2:#23252F; --surface-3:#2C2E3A; --line:rgba(255,255,255,.06); --line-2:rgba(255,255,255,.13);
-  --ink:#F1F2F7; --ink-2:#B9BBCB; --ink-3:#9194A8;
-  --you:#5155D8; --you-2:#3E41B4; --you-text:#AFB2FF; --you-soft:#2A2C52; --you-mark:#8487F7; --on-you:#FFFFFF; --on-you-2:rgba(255,255,255,.86); --on-you-line:rgba(255,255,255,.24);
+  --ground:#17181B; --surface:#212226; --surface-2:#2B2D32; --surface-3:#35373D; --line:rgba(255,255,255,.07); --line-2:rgba(255,255,255,.14);
+  --ink:#F2F2F3; --ink-2:#BDBFC5; --ink-3:#9A9DA5;
+  --you:#22406A; --you-text:#9EBEE8; --you-soft:#25313F; --you-mark:#6E9BD6; --on-you:#FFFFFF; --on-you-2:rgba(255,255,255,.82); --on-you-line:rgba(255,255,255,.24);
   --anna:#F2B455; --anna-text:#F5C67A; --on-anna:#2A1A00;
-  --over-bar:#6A6F84; --over-text:#EBAA9F; --over-soft:#2E2324;
-  --in:#7AD7A4; --in-soft:#1C2E25;
+  --over-bar:#70747D; --over-text:#EBAA9F; --over-soft:#33282A;
+  --in:#7AD7A4;
   --ahead-text:#F0B27A;
-  --focus:#AFB2FF; --scrim:rgba(0,0,0,.6); --shadow:0 1px 2px rgba(0,0,0,.25); --hero-shadow:0 12px 32px rgba(0,0,0,.4);
-  --raised:#383B4C; --ahead-soft:#2E271D;
-  --cat1:#7175F0; --cat2:#4FADE6; --cat3:#2F8597; --cat4:#C77DDB; --cat5:#8F95AB;
+  --focus:#9EBEE8; --scrim:rgba(0,0,0,.6); --shadow:none;
+  --raised:#43464D; --ahead-soft:#33291E;
+  --cat1:#5E8FD0; --cat2:#9AD1EA; --cat3:#D9809E; --cat4:#8893A4; --cat5:#575D68;
   --skel:rgba(255,255,255,.07);
   color-scheme:dark}}
 :root[data-theme="dark"]{color-scheme:dark;
-  --ground:#0C0D12; --surface:#191A22; --surface-2:#23252F; --surface-3:#2C2E3A; --line:rgba(255,255,255,.06); --line-2:rgba(255,255,255,.13);
-  --ink:#F1F2F7; --ink-2:#B9BBCB; --ink-3:#9194A8;
-  --you:#5155D8; --you-2:#3E41B4; --you-text:#AFB2FF; --you-soft:#2A2C52; --you-mark:#8487F7; --on-you:#FFFFFF; --on-you-2:rgba(255,255,255,.86); --on-you-line:rgba(255,255,255,.24);
+  --ground:#17181B; --surface:#212226; --surface-2:#2B2D32; --surface-3:#35373D; --line:rgba(255,255,255,.07); --line-2:rgba(255,255,255,.14);
+  --ink:#F2F2F3; --ink-2:#BDBFC5; --ink-3:#9A9DA5;
+  --you:#22406A; --you-text:#9EBEE8; --you-soft:#25313F; --you-mark:#6E9BD6; --on-you:#FFFFFF; --on-you-2:rgba(255,255,255,.82); --on-you-line:rgba(255,255,255,.24);
   --anna:#F2B455; --anna-text:#F5C67A; --on-anna:#2A1A00;
-  --over-bar:#6A6F84; --over-text:#EBAA9F; --over-soft:#2E2324;
-  --in:#7AD7A4; --in-soft:#1C2E25;
+  --over-bar:#70747D; --over-text:#EBAA9F; --over-soft:#33282A;
+  --in:#7AD7A4;
   --ahead-text:#F0B27A;
-  --focus:#AFB2FF; --scrim:rgba(0,0,0,.6); --shadow:0 1px 2px rgba(0,0,0,.25); --hero-shadow:0 12px 32px rgba(0,0,0,.4);
-  --raised:#383B4C; --ahead-soft:#2E271D;
-  --cat1:#7175F0; --cat2:#4FADE6; --cat3:#2F8597; --cat4:#C77DDB; --cat5:#8F95AB;
+  --focus:#9EBEE8; --scrim:rgba(0,0,0,.6); --shadow:none;
+  --raised:#43464D; --ahead-soft:#33291E;
+  --cat1:#5E8FD0; --cat2:#9AD1EA; --cat3:#D9809E; --cat4:#8893A4; --cat5:#575D68;
   --skel:rgba(255,255,255,.07);
 }
 *{box-sizing:border-box}
@@ -57,7 +57,7 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.6;stro
 
 /* shell */
 #view{padding:47px 16px 120px;max-width:640px;margin:0 auto}
-.nav{position:fixed;left:0;right:0;bottom:0;z-index:20;background:color-mix(in srgb,var(--surface) 86%,transparent);-webkit-backdrop-filter:saturate(1.6) blur(18px);backdrop-filter:saturate(1.6) blur(18px);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(4,1fr);padding:6px 8px 34px;align-items:center}
+.nav{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(4,1fr);padding:6px 8px 34px;align-items:center}
 .brand{display:none}
 .tab{display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0;min-height:48px;color:var(--ink-3);font-size:11px;font-weight:500}
 .tab[aria-current="page"]{color:var(--ink)}
@@ -77,7 +77,7 @@ h2.sec a,h2.sec button{display:inline-flex;align-items:center;min-height:44px;pa
 .panel :focus-visible{outline-offset:-2px}
 
 /* hero: the month as an object you hold */
-.hero{position:relative;background:linear-gradient(160deg,var(--you),var(--you-2));color:var(--on-you);border-radius:28px;padding:20px 20px 18px;box-shadow:inset 0 1px 0 rgba(255,255,255,.12),var(--hero-shadow);overflow:hidden}
+.hero{position:relative;background:var(--you);color:var(--on-you);border-radius:28px;padding:20px 20px 18px;overflow:hidden}
 .hero .top{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;color:var(--on-you-2)}
 .hero .top b{color:var(--on-you);font-weight:600;font-size:14px}
 .big{font-family:inherit;font-weight:600;font-size:52px;line-height:1.05;letter-spacing:-.03em;margin:18px 0 6px}
@@ -98,7 +98,7 @@ h2.sec a,h2.sec button{display:inline-flex;align-items:center;min-height:44px;pa
 .days .base{stroke:var(--on-you-line);stroke-width:1.5}
 .axis .end{color:var(--on-you-2)}
 .days .budgetcap{position:absolute;right:0;transform:translateY(calc(-100% - 4px));font-size:12px;color:var(--on-you-2)}
-.days .todaydot{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:var(--on-you);box-shadow:0 0 0 3px var(--you-2)}
+.days .todaydot{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:var(--on-you);box-shadow:0 0 0 3px var(--you)}
 .axis{position:relative;height:16px;margin-top:8px;font-size:12px;color:var(--on-you-2)}
 .axis span{position:absolute;top:0;white-space:nowrap}
 .pace{display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px 12px;font-size:13px;color:var(--on-you-2);margin-top:10px;padding-top:10px;border-top:1px solid var(--on-you-line)}
@@ -127,8 +127,8 @@ button.row:hover{background:var(--surface-2)}
 .who{position:relative;width:40px;height:40px;border-radius:50%;background:var(--surface-2);color:var(--ink-2);display:grid;place-items:center;flex:none}
 .who:empty,.who:has(.avatar){background:none}
 .who > svg:not(.i){width:26px;height:26px}
-.who.in{background:var(--in-soft);color:var(--in)}
-/* a person's initial fills the disc; anyone but you is grey (indigo means you) */
+.who.in{color:var(--in)}
+/* a person's initial fills the disc; anyone but you is grey (blue means you) */
 .who > .avatar{width:40px;height:40px;font-size:15px;background:var(--surface-2);color:var(--ink-2)}
 .who .badge{position:absolute;right:-6px;bottom:-4px;width:24px;height:24px;display:grid;place-items:center;border-radius:50%;background:var(--surface)}
 .who .badge svg{width:22px;height:22px}
@@ -364,7 +364,7 @@ button.row:hover{background:var(--surface-2)}
 .selbar button.del{color:var(--over-text)}
 .offline{display:flex;align-items:center;gap:10px;background:var(--surface);border-radius:18px;padding:10px 14px;font-size:13px;color:var(--ink-2);margin:0 0 12px}
 .offline svg.i{color:var(--ink-3)}
-.newcard{background:linear-gradient(160deg,var(--you),var(--you-2));color:var(--on-you);border-radius:28px;padding:22px 20px;box-shadow:var(--hero-shadow)}
+.newcard{background:var(--you);color:var(--on-you);border-radius:28px;padding:22px 20px}
 .newcard h2{font-family:inherit;font-weight:600;font-size:28px;letter-spacing:-.02em;line-height:1.1;margin:0 0 8px}
 .newcard p{margin:0 0 16px;color:var(--on-you-2)}
 .newcard .btn{background:var(--surface);color:var(--you-text)}
@@ -394,7 +394,7 @@ button.row:hover{background:var(--surface-2)}
 .auth p{color:var(--ink-2);margin:0;font-size:16px}
 .gbtn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:54px;border-radius:99px;background:var(--ink);color:var(--ground);font-weight:600;font-size:16px}
 .gmark{width:20px;height:20px;border-radius:50%;background:var(--ground);color:var(--ink);display:grid;place-items:center;font-weight:700;font-size:13px}
-.mini{background:linear-gradient(160deg,var(--you),var(--you-2));color:var(--on-you);border-radius:28px;padding:18px;margin:28px 0}
+.mini{background:var(--you);color:var(--on-you);border-radius:28px;padding:18px;margin:28px 0}
 .mini .big{font-size:52px;margin:10px 0 2px}
 .scopes{display:grid;gap:0;background:var(--surface);border-radius:22px;margin:18px 0}
 .scopes div{display:grid;grid-template-columns:40px 1fr;gap:14px;padding:12px 16px;border-top:1px solid var(--line);align-items:center}
@@ -448,7 +448,7 @@ a{color:inherit;text-decoration:none}
 .gbtn{background:#fff;color:#1F1F1F;border:1px solid #747775;gap:12px;font-weight:500}
 .gbtn:disabled{opacity:.6}
 
-/* ===== budget meter: a round bar, indigo while within the budget, calm grey once over ===== */
+/* ===== budget meter: a round bar, blue while within the budget, calm grey once over ===== */
 .mk-meter{position:relative;display:block;height:8px;border-radius:99px;background:var(--surface-2)}
 .mk-meter .mk-fill{position:absolute;left:0;top:0;bottom:0;border-radius:99px;background:var(--you-mark)}
 .mk-meter.over .mk-fill{background:var(--over-bar)}
@@ -468,7 +468,7 @@ a{color:inherit;text-decoration:none}
 .syncline.amber button{color:var(--ahead-text)}
 .renew{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--ahead-soft);color:var(--ink);border-radius:18px;padding:12px 12px 12px 14px;font-size:14px;margin:0 0 12px}
 .unsure{display:inline-block;width:8px;height:8px;border-radius:50%;border:1.5px solid var(--ink-3);margin-left:6px;vertical-align:middle}
-.inboxask{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--you-soft);border-radius:18px;padding:10px 10px 10px 14px;margin:0 0 12px;font-size:14px}
+.inboxask{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--surface-2);border-radius:18px;padding:10px 10px 10px 14px;margin:0 0 12px;font-size:14px}
 .inboxask span{flex:1;min-width:150px}
 .inboxask .btn{min-height:44px}
 .why{padding:12px 4px 0}

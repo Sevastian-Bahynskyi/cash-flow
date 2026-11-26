@@ -1,14 +1,14 @@
 /* Marks applied to lists, analytics, shared and bank (agent B). Tokens only. */
 
 /* Lists: each day header carries a thin spend bar scaled to a heavy day in the list
-   (indigo yours, saffron your part of shared), so heavy days stand out. */
+   (blue yours, saffron your part of shared), so heavy days stand out. */
 .mkb-dayh{position:relative;padding-bottom:20px}
 .mkb-today{color:var(--ink)}
 .mkb-daybar{position:absolute;left:4px;right:4px;bottom:10px;height:4px;display:flex;gap:2px;border-radius:99px;background:var(--line)}
 .mkb-daybar i{display:block;height:100%;border-radius:99px;background:var(--you-mark);min-width:3px}
 .mkb-daybar i.sh{background:var(--anna)}
 
-/* Where it went: the part of a bar past last period's tick, a lighter indigo (more than last). */
+/* Where it went: the part of a bar past last period's tick, a lighter blue (more than last). */
 .hb .track i.mkb-more{opacity:.45;border-radius:0 99px 99px 0}
 .hb .d.mkb-quiet{opacity:.85}
 .answer.mkb-answer{margin-bottom:14px;line-height:1.28}

@@ -21,7 +21,7 @@ export function budgetState(spent: number, amount: number, daysGoneShare: number
 }
 
 /**
- * A budget meter: a round bar filled to what is spent. Within the budget it is indigo, with a short line at today;
+ * A budget meter: a round bar filled to what is spent. Within the budget it is blue, with a short line at today;
  * over the budget the bar turns a calm grey up to where the budget ended, then a darker grey for the part over. The words beside it say the rest.
  */
 export function Meter({ spent, amount, daysGoneShare }: { spent: number; amount: number; daysGoneShare: number }): React.JSX.Element | null {

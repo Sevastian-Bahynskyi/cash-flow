@@ -102,7 +102,7 @@ function Where({ m }: { m: Model }): React.JSX.Element {
           <div className="hb" key={x.cat!.id}>
             <span className="nm"><Icon name={x.cat!.icon} />{x.cat!.name}</span><span className="v">{kr(x.s, true)}</span>
             <span className="track" aria-hidden="true">
-              {/* Past last period's tick the bar is a lighter indigo: more than last. */}
+              {/* Past last period's tick the bar is a lighter blue: more than last. */}
               <i style={{ width: `${(100 * (cmp ? Math.min(x.s, x.l) : x.s) / max).toFixed(1)}%` }} />
               {cmp && x.s > x.l && <i className="mkb-more" style={{ left: `${(100 * x.l / max).toFixed(1)}%`, width: `${(100 * (x.s - x.l) / max).toFixed(1)}%` }} />}
               {x.l > 0 && <u style={{ left: `calc(${(100 * x.l / max).toFixed(1)}% - 1px)` }} />}
