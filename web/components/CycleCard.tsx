@@ -73,6 +73,11 @@ export function CycleCard({ m }: { m: Model }): React.JSX.Element | null {
           <span style={{ right: 0 }}>{shortDate(c.endInclusive)}</span>
         </div>
       </div>
+      {/* Bright shows the pace as two thick bars instead of the chart (bright.css); Soft hides them */}
+      {hasBudgets && <div className="race" aria-hidden="true">
+        <div><span>Money used</span><b>{usedPct}%</b></div><span className="rb"><i style={{ width: `${Math.min(100, usedPct)}%` }} /></span>
+        <div><span>Days gone</span><b>{gonePct}%</b></div><span className="rb d"><i style={{ width: `${gonePct}%` }} /></span>
+      </div>}
       {hasBudgets && <div className="pace"><span>{pace}</span><span className="num"><b>{usedPct}%</b> of budgets used, <b>{gonePct}%</b> of days gone</span></div>}
       <div className="key"><span><i style={{ background: 'var(--on-you)' }} />Yours</span><span><i style={{ background: 'var(--anna)' }} />Shared with {PARTNER}</span>{hasBudgets && <span><i className="dashed" />Even pace</span>}</div>
     </section>

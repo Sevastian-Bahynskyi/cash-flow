@@ -84,6 +84,7 @@ h2.sec a,h2.sec button{display:inline-flex;align-items:center;min-height:44px;pa
 .hero .sub{font-size:15px;color:var(--on-you-2)}
 .hero .sub em{font-style:normal;font-weight:600;color:var(--on-you)}
 .days{margin-top:20px;position:relative}
+.race{display:none}
 .dayslabel{display:block;font-size:13px;color:var(--on-you-2);margin:0 0 8px}
 .dayslabel b{color:var(--on-you);font-weight:600}
 /* the running total: one soft area that grows day by day, the budgets as a dashed ceiling, even pace as a dashed diagonal */

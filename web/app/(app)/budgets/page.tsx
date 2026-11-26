@@ -100,7 +100,7 @@ function Budgets({ m }: { m: Model }): React.JSX.Element {
   const all = (
     <>
       <div className="thead deskonly"><span /><span style={{ textAlign: 'left' }}>Category</span><span>Spent</span><span>Budget</span><span>Left</span></div>
-      <div className="panel">{b.list.map((x) => row(x.cat as CategoryRow))}{unbudgetedParents.map(row)}</div>
+      <div className="panel blist">{b.list.map((x) => row(x.cat as CategoryRow))}{unbudgetedParents.map(row)}</div>
       {b.list.length > 0 && <p className="note num" style={{ display: 'flex', justifyContent: 'space-between' }}><span>All budgets</span><span>{kr(b.used, true)} of {kr(b.total, true)}</span></p>}
     </>
   )

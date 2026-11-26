@@ -1,13 +1,17 @@
 import type { Metadata, Viewport } from 'next'
-import { Hanken_Grotesk } from 'next/font/google'
+import { Bricolage_Grotesque, Hanken_Grotesk } from 'next/font/google'
 import { PwaRegistration } from '@/components/PwaRegistration'
 import { APP_ICON_VERSION, appIconUrl } from '@/lib/app-icon'
+import { LOOK_BOOT } from '@/lib/look'
 import './globals.css'
 import './more.css'
 import './marks-a.css'
 import './marks-b.css'
+import './bright.css'
 
 const hanken = Hanken_Grotesk({ subsets: ['latin'], weight: ['400', '500', '600'], variable: '--font-hanken', display: 'swap' })
+// Bright's face; not preloaded, since Soft is the default.
+const bricolage = Bricolage_Grotesque({ subsets: ['latin'], variable: '--font-bricolage', display: 'swap', preload: false })
 
 export const metadata: Metadata = {
   title: 'Cashflow',
@@ -38,9 +42,10 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>): React.JSX.Element {
   return (
-    <html lang="en" className={hanken.variable}>
+    <html lang="en" className={`${hanken.variable} ${bricolage.variable}`} suppressHydrationWarning>
       <head>
         <link rel="manifest" href="/manifest.webmanifest" crossOrigin="use-credentials" />
+        <script dangerouslySetInnerHTML={{ __html: LOOK_BOOT }} />
       </head>
       <body>{children}<PwaRegistration /></body>
     </html>
