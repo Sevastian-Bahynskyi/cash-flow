@@ -7,6 +7,8 @@ export type SavingsAccountRow = {
   goal_minor: number | null;
   color: string;
   icon: string;
+  /** Bank sync (v2): the goal's balance comes from this synced savings account. */
+  bank_account_id?: string | null;
   created_at: string;
 };
 

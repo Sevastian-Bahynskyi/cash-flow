@@ -1,0 +1,467 @@
+{
+ "account": {
+  "uid": "aaaa0002-0000-4000-8000-000000000002",
+  "session_id": "00000000-5e55-4000-8000-000000000001",
+  "name": "Ivan Testov",
+  "product": null,
+  "iban": "LT000000000000000002",
+  "currency": "DKK",
+  "cash_account_type": "CACC",
+  "identification_hash": "FAKEHASH.aaaa0002"
+ },
+ "balances": [
+  {
+   "name": "Fake balance",
+   "balance_amount": {
+    "currency": "DKK",
+    "amount": "1234.56"
+   },
+   "balance_type": "ITAV",
+   "last_change_date_time": null,
+   "reference_date": null,
+   "last_committed_transaction": null
+  }
+ ],
+ "raw": [
+  {
+   "entry_reference": "20000000-0000-4000-8000-000000000013",
+   "merchant_category_code": null,
+   "transaction_amount": {
+    "currency": "DKK",
+    "amount": "1500.00"
+   },
+   "creditor": {},
+   "creditor_account": null,
+   "creditor_agent": null,
+   "debtor": null,
+   "debtor_account": null,
+   "debtor_agent": null,
+   "bank_transaction_code": {
+    "description": null,
+    "code": "TOPUP",
+    "sub_code": null
+   },
+   "credit_debit_indicator": "CRDT",
+   "status": "BOOK",
+   "booking_date": "2026-11-05",
+   "value_date": "2026-11-05",
+   "transaction_date": null,
+   "balance_after_transaction": null,
+   "reference_number": null,
+   "reference_number_schema": null,
+   "remittance_information": [
+    "Apple Pay Top-Up by *9001"
+   ],
+   "debtor_account_additional_identification": null,
+   "creditor_account_additional_identification": null,
+   "exchange_rate": null,
+   "note": null,
+   "transaction_id": null
+  },
+  {
+   "entry_reference": "20000000-0000-4000-8000-000000000014",
+   "merchant_category_code": null,
+   "transaction_amount": {
+    "currency": "DKK",
+    "amount": "89.00"
+   },
+   "creditor": {
+    "name": "Streamflix Fake",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "creditor_account": null,
+   "creditor_agent": null,
+   "debtor": {
+    "name": "IVAN TESTOV",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "debtor_account": null,
+   "debtor_agent": null,
+   "bank_transaction_code": {
+    "description": null,
+    "code": "CARD_PAYMENT",
+    "sub_code": null
+   },
+   "credit_debit_indicator": "DBIT",
+   "status": "BOOK",
+   "booking_date": "2026-11-12",
+   "value_date": "2026-11-12",
+   "transaction_date": null,
+   "balance_after_transaction": null,
+   "reference_number": null,
+   "reference_number_schema": null,
+   "remittance_information": [
+    "Streamflix Fake"
+   ],
+   "debtor_account_additional_identification": [
+    {
+     "identification": "1111",
+     "scheme_name": "CPAN",
+     "issuer": "VISA"
+    }
+   ],
+   "creditor_account_additional_identification": null,
+   "exchange_rate": null,
+   "note": null,
+   "transaction_id": null
+  },
+  {
+   "entry_reference": "20000000-0000-4000-8000-000000000015",
+   "merchant_category_code": null,
+   "transaction_amount": {
+    "currency": "DKK",
+    "amount": "74.60"
+   },
+   "creditor": {
+    "name": "Museum Placebo",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "creditor_account": null,
+   "creditor_agent": null,
+   "debtor": {
+    "name": "IVAN TESTOV",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "debtor_account": null,
+   "debtor_agent": null,
+   "bank_transaction_code": {
+    "description": null,
+    "code": "CARD_PAYMENT",
+    "sub_code": null
+   },
+   "credit_debit_indicator": "DBIT",
+   "status": "BOOK",
+   "booking_date": "2026-10-29",
+   "value_date": "2026-10-30",
+   "transaction_date": null,
+   "balance_after_transaction": null,
+   "reference_number": null,
+   "reference_number_schema": null,
+   "remittance_information": [
+    "Museum Placebo"
+   ],
+   "debtor_account_additional_identification": [
+    {
+     "identification": "1111",
+     "scheme_name": "CPAN",
+     "issuer": "VISA"
+    }
+   ],
+   "creditor_account_additional_identification": null,
+   "exchange_rate": {
+    "unit_currency": "DKK",
+    "exchange_rate": "7.4600000000000000",
+    "instructed_amount": {
+     "currency": "DKK",
+     "amount": "74.60"
+    }
+   },
+   "note": null,
+   "transaction_id": null
+  },
+  {
+   "entry_reference": "20000000-0000-4000-8000-000000000016",
+   "merchant_category_code": null,
+   "transaction_amount": {
+    "currency": "DKK",
+    "amount": "2000.00"
+   },
+   "creditor": {
+    "name": "MARA PROBOVA & IVAN TESTOV",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "creditor_account": {
+    "iban": "LT000000000000000003"
+   },
+   "creditor_agent": null,
+   "debtor": {
+    "name": "Ivan Testov",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "debtor_account": {
+    "iban": "LT000000000000000002"
+   },
+   "debtor_agent": null,
+   "bank_transaction_code": {
+    "description": null,
+    "code": "TRANSFER",
+    "sub_code": null
+   },
+   "credit_debit_indicator": "DBIT",
+   "status": "BOOK",
+   "booking_date": "2026-11-05",
+   "value_date": "2026-11-05",
+   "transaction_date": null,
+   "balance_after_transaction": null,
+   "reference_number": null,
+   "reference_number_schema": null,
+   "remittance_information": [
+    "To MARA PROBOVA & IVAN TESTOV"
+   ],
+   "debtor_account_additional_identification": null,
+   "creditor_account_additional_identification": null,
+   "exchange_rate": null,
+   "note": null,
+   "transaction_id": null
+  },
+  {
+   "entry_reference": "20000000-0000-4000-8000-000000000017",
+   "merchant_category_code": null,
+   "transaction_amount": {
+    "currency": "DKK",
+    "amount": "100.00"
+   },
+   "creditor": {
+    "name": "Ivan Testov",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "creditor_account": null,
+   "creditor_agent": null,
+   "debtor": {
+    "name": "Ivan Testov",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "debtor_account": null,
+   "debtor_agent": null,
+   "bank_transaction_code": {
+    "description": null,
+    "code": "TRANSFER",
+    "sub_code": null
+   },
+   "credit_debit_indicator": "DBIT",
+   "status": "BOOK",
+   "booking_date": "2026-11-13",
+   "value_date": "2026-11-13",
+   "transaction_date": null,
+   "balance_after_transaction": null,
+   "reference_number": null,
+   "reference_number_schema": null,
+   "remittance_information": [
+    "To DKK"
+   ],
+   "debtor_account_additional_identification": null,
+   "creditor_account_additional_identification": null,
+   "exchange_rate": null,
+   "note": null,
+   "transaction_id": null
+  },
+  {
+   "entry_reference": "20000000-0000-4000-8000-000000000018",
+   "merchant_category_code": null,
+   "transaction_amount": {
+    "currency": "DKK",
+    "amount": "12.34"
+   },
+   "creditor": {},
+   "creditor_account": null,
+   "creditor_agent": null,
+   "debtor": null,
+   "debtor_account": null,
+   "debtor_agent": null,
+   "bank_transaction_code": {
+    "description": null,
+    "code": "REWARD",
+    "sub_code": null
+   },
+   "credit_debit_indicator": "CRDT",
+   "status": "BOOK",
+   "booking_date": "2026-11-14",
+   "value_date": "2026-11-14",
+   "transaction_date": null,
+   "balance_after_transaction": null,
+   "reference_number": null,
+   "reference_number_schema": null,
+   "remittance_information": [
+    "Cashback reward"
+   ],
+   "debtor_account_additional_identification": null,
+   "creditor_account_additional_identification": null,
+   "exchange_rate": null,
+   "note": null,
+   "transaction_id": null
+  },
+  {
+   "entry_reference": "20000000-0000-4000-8000-000000000019",
+   "merchant_category_code": null,
+   "transaction_amount": {
+    "currency": "DKK",
+    "amount": "0.00"
+   },
+   "creditor": {
+    "name": "Google *temporary Hold",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "creditor_account": null,
+   "creditor_agent": null,
+   "debtor": {
+    "name": "IVAN TESTOV",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "debtor_account": null,
+   "debtor_agent": null,
+   "bank_transaction_code": {
+    "description": null,
+    "code": "CARD_PAYMENT",
+    "sub_code": null
+   },
+   "credit_debit_indicator": "DBIT",
+   "status": "BOOK",
+   "booking_date": "2026-11-15",
+   "value_date": "2026-11-15",
+   "transaction_date": null,
+   "balance_after_transaction": null,
+   "reference_number": null,
+   "reference_number_schema": null,
+   "remittance_information": [
+    "Google *temporary Hold"
+   ],
+   "debtor_account_additional_identification": [
+    {
+     "identification": "1111",
+     "scheme_name": "CPAN",
+     "issuer": "VISA"
+    }
+   ],
+   "creditor_account_additional_identification": null,
+   "exchange_rate": null,
+   "note": null,
+   "transaction_id": null
+  },
+  {
+   "entry_reference": "20000000-0000-4000-8000-000000000020",
+   "merchant_category_code": null,
+   "transaction_amount": {
+    "currency": "DKK",
+    "amount": "0.00"
+   },
+   "creditor": {
+    "name": "Fakeshop Online",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "creditor_account": null,
+   "creditor_agent": null,
+   "debtor": {
+    "name": "IVAN TESTOV",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "debtor_account": null,
+   "debtor_agent": null,
+   "bank_transaction_code": {
+    "description": null,
+    "code": "CARD_PAYMENT",
+    "sub_code": null
+   },
+   "credit_debit_indicator": "DBIT",
+   "status": "BOOK",
+   "booking_date": "2026-11-16",
+   "value_date": "2026-11-16",
+   "transaction_date": null,
+   "balance_after_transaction": null,
+   "reference_number": null,
+   "reference_number_schema": null,
+   "remittance_information": [
+    "Fakeshop Online"
+   ],
+   "debtor_account_additional_identification": [
+    {
+     "identification": "1111",
+     "scheme_name": "CPAN",
+     "issuer": "VISA"
+    }
+   ],
+   "creditor_account_additional_identification": null,
+   "exchange_rate": null,
+   "note": null,
+   "transaction_id": null
+  },
+  {
+   "entry_reference": "20000000-0000-4000-8000-000000000021",
+   "merchant_category_code": null,
+   "transaction_amount": {
+    "currency": "DKK",
+    "amount": "45.00"
+   },
+   "creditor": {
+    "name": "Bakery Imaginary",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "creditor_account": null,
+   "creditor_agent": null,
+   "debtor": {
+    "name": "IVAN TESTOV",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "debtor_account": null,
+   "debtor_agent": null,
+   "bank_transaction_code": {
+    "description": null,
+    "code": "CARD_PAYMENT",
+    "sub_code": null
+   },
+   "credit_debit_indicator": "DBIT",
+   "status": "PDNG",
+   "booking_date": "2026-11-20",
+   "value_date": null,
+   "transaction_date": null,
+   "balance_after_transaction": null,
+   "reference_number": null,
+   "reference_number_schema": null,
+   "remittance_information": [
+    "Bakery Imaginary"
+   ],
+   "debtor_account_additional_identification": [
+    {
+     "identification": "1111",
+     "scheme_name": "CPAN",
+     "issuer": "VISA"
+    }
+   ],
+   "creditor_account_additional_identification": null,
+   "exchange_rate": null,
+   "note": null,
+   "transaction_id": null
+  }
+ ]
+}

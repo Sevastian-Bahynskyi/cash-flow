@@ -6,7 +6,6 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Header } from '@/components/Header'
 import { Icon } from '@/components/Icon'
 import { BudgetEditor, RichNote } from '@/components/BudgetEditor'
-import { useAdd } from '@/components/AddSheet'
 import { Check, Meter, StatePill } from '@/components/Marks'
 import { goneShare, stateOf } from '@/components/marks-a/pace'
 import { Gate, NavRow, SkRows, StatusLine, TxRow, useDetail } from '@/components/ui'
@@ -57,7 +56,6 @@ function Budgets({ m }: { m: Model }): React.JSX.Element {
   const params = useSearchParams()
   const router = useRouter()
   const open = useDetail()
-  const add = useAdd()
   const cycleIdx = (() => { const id = params.get('cycle'); const i = m.cycles.findIndex((c) => c.id === id); return i >= 0 ? i : m.cycles.findIndex((c) => c.id === m.current?.id) })()
   const c = m.cycles[cycleIdx] ?? null
   const b = useMemo(() => m.budgetsOf(c), [m, c])
@@ -69,7 +67,7 @@ function Budgets({ m }: { m: Model }): React.JSX.Element {
 
   if (!c || !m.hasSalary) {
     const salary = findSalaryCategoryOption(m.options)
-    return <><Header title="Budgets" /><StatusLine /><div className="panel"><div className="empty"><b>No salary yet</b>Budgets run from payday to payday. Log your salary to start the first cycle.<br /><button className="btn" onClick={() => add({ kind: 'income', category_id: salary?.id ?? null, name: 'Salary' })}><Icon name="in" />Log your salary</button></div></div></>
+    return <><Header title="Budgets" /><StatusLine /><div className="panel"><div className="empty"><b>No salary yet</b>Budgets run from payday to payday. The first cycle starts when your salary arrives from the bank.</div></div></>
   }
   const item = sel ? b.list.find((x) => x.id === sel.id) : undefined
   const spentSel = sel ? b.spent.get(sel.id) ?? 0 : 0

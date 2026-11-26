@@ -29,6 +29,10 @@ export function demoTables(): Tables {
       shared_participant: participant, is_salary: t.category === 'salary', is_shared_topup: topup, currency_code: 'DKK',
       original_amount_minor: t.amount_minor, converted_amount_minor: t.amount_minor, fx_rate: 1, personal_effect_minor: personal,
       created_at: `${t.date}T12:00:${String(i % 60).padStart(2, '0')}Z`, updated_at: `${t.date}T12:00:${String(i % 60).padStart(2, '0')}Z`,
+      source: 'bank', status: 'booked', movement: topup ? 'topup' : transfer ? 'moved' : income ? 'income' : 'spend', merchant_key: t.name.toLowerCase(),
+      reason: topup ? 'Top-up into the joint account' : `Your rule: ${t.name}`, reason_source: topup ? 'transfer' : 'rule', confidence: 0.9,
+      // A few recent unsure rows fill the demo Inbox.
+      needs_review: !topup && !income && i % 9 === 4 && t.date >= '2026-11-01',
     } as TransactionRow
   }).sort((a, b) => a.occurred_on.localeCompare(b.occurred_on) || a.created_at.localeCompare(b.created_at))
   const salaries = transactions.filter((t) => t.is_salary).map((t) => t.id)
@@ -51,7 +55,15 @@ export function demoTables(): Tables {
       { id: 'r1', user_id: u, match_target: 'normalized_merchant', match_type: 'prefix', pattern: 'rema 1000', kind: 'expense', canonical_merchant: 'Rema 1000', category_id: 'c-groceries', is_shared_topup: false, is_blocked: false, priority: 300, source: 'manual', notes: null, updated_at: at },
       { id: 'r2', user_id: u, match_target: 'normalized_merchant', match_type: 'exact', pattern: 'mobilepay', kind: 'income', canonical_merchant: null, category_id: null, is_shared_topup: false, is_blocked: true, priority: 300, source: 'manual', notes: null, updated_at: at },
     ],
-    transfer_people: [{ id: 'p1', user_id: u, name: 'Jonas', normalized_name: 'jonas', created_at: at, updated_at: at }],
+    transfer_people: [{ id: 'p1', user_id: u, name: 'Jonas', normalized_name: 'jonas', kind: 'settle_up', opening_balance_minor: 60000, created_at: at, updated_at: at }],
     profile: { display_name: 'Seva', avatar_url: null },
+    bank_connections: [{ id: 'bc1', aspsp_name: 'Demo Bank', valid_until: '2027-05-25T00:00:00Z', status: 'AUTHORIZED' }],
+    bank_accounts: [
+      { id: 'ba1', connection_id: 'bc1', name: 'Everyday', currency: 'DKK', role: 'personal', balance_minor: 2188094, balance_at: '2026-11-26T08:12:00Z', last_synced_at: '2026-11-26T08:12:00Z', last_error: null },
+      { id: 'ba2', connection_id: 'bc1', name: 'Joint', currency: 'DKK', role: 'joint', balance_minor: 2228, balance_at: '2026-11-26T08:12:00Z', last_synced_at: '2026-11-26T08:12:00Z', last_error: null },
+      { id: 'ba3', connection_id: 'bc1', name: 'Savings', currency: 'DKK', role: 'savings', balance_minor: 520000, balance_at: '2026-11-26T08:12:00Z', last_synced_at: '2026-11-26T08:12:00Z', last_error: null },
+    ],
+    sync_runs: [{ id: 'sr1', trigger: 'cron', started_at: '2026-11-26T08:12:00Z', finished_at: '2026-11-26T08:12:09Z', ok: true, error: null }],
+    transaction_splits: [], paybacks: [],
   }
 }

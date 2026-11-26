@@ -5,16 +5,13 @@ import { Header } from '@/components/Header'
 import { Icon } from '@/components/Icon'
 import { useToast } from '@/components/Toast'
 import { Gate, NavRow, SkRows, StatusLine } from '@/components/ui'
-import { FormErr, Seg, Toggle, useSaver } from '@/components/settings/kit'
-import { budgetAlerts } from '@/components/settings/alerts'
+import { FormErr, Seg, useSaver } from '@/components/settings/kit'
 import { useStore } from '@/lib/data/store'
 import type { Model } from '@/lib/data/model'
 import { kr, shortDate, todayYmd } from '@/lib/fmt'
 import { PARTNER } from '@/lib/partner'
 import { supabase } from '@/lib/supabase/client'
-import { useWide } from '@/lib/useWide'
 
-const REMINDER_KEY = 'cashflow:reminder'
 type ExportRow = { occurred_on: string; name: string; kind: 'expense' | 'income'; converted_amount_minor: number; original_amount_minor: number; currency_code: string; shared: boolean; is_shared_topup: boolean; shared_participant: 'me' | 'gf' | null; categories: { name: string } | { name: string }[] | null }
 
 function Me(): React.JSX.Element {
@@ -55,19 +52,6 @@ function Me(): React.JSX.Element {
       <FormErr err={err} />
     </>
   )
-}
-
-function Reminder(): React.JSX.Element {
-  const toast = useToast()
-  const [on, setOn] = useState(false)
-  useEffect(() => { try { setOn(localStorage.getItem(REMINDER_KEY) === '1') } catch { setOn(false) /* storage blocked: shows off */ } }, [])
-  const change = (v: boolean): void => {
-    setOn(v)
-    // shortcut: only the preference is kept on this device; wire it to push once the web has a notification backend.
-    try { localStorage.setItem(REMINDER_KEY, v ? '1' : '0') } catch { toast('Couldn’t keep this on this device.'); return }
-    toast(v ? 'Reminder on, every day at 18:00' : 'Daily reminder off')
-  }
-  return <Toggle on={on} onChange={change} label="Daily reminder at 18:00" sub="A calm nudge to add today’s spending. Needs Cashflow on your Home Screen; reminders arrive once notifications are set up." />
 }
 
 const sharing = (r: ExportRow): string => r.is_shared_topup ? `Top-up (${r.shared_participant === 'gf' ? PARTNER : 'Me'})` : r.shared ? 'Shared' : 'Personal'
@@ -151,20 +135,15 @@ function Profile({ m }: { m: Model }): React.JSX.Element {
   const { signOut } = useStore()
   const toast = useToast()
   const [out, setOut] = useState(false)
-  const { over, close } = budgetAlerts(m)
   return (
     <div className="cols even">
       <div>
         <Me />
         <div className="panel phoneonly" style={{ marginBottom: 14 }}>
-          <NavRow href="/where" icon="where" name="Where it went" />
-          <NavRow href="/bank" icon="bank" name="Bank" sub="Savings, loans, owed to you" />
-          <NavRow href="/categories" icon="tag" name="Categories" sub="And the people you send money to" />
+          <NavRow href="/bank" icon="bank" name="Accounts & sync" sub="Banks, balances, savings goals" />
+          <NavRow href="/categories" icon="tag" name="Categories" />
           <NavRow href="/rules" icon="rule" name="Merchant rules" />
-          <NavRow href="/alerts" icon="bell" name="Alerts" end={over.length ? <span className="pill ov">{over.length} over</span> : close.length ? <span className="pill" aria-label={`${close.length} close to the line`}>{close.length}</span> : undefined} />
         </div>
-        <h2 className="sec">Reminders</h2>
-        <div className="panel"><Reminder /></div>
       </div>
       <div>
         <h2 className="sec">Export</h2>
@@ -180,8 +159,7 @@ function Profile({ m }: { m: Model }): React.JSX.Element {
 }
 
 export default function Page(): React.JSX.Element {
-  const wide = useWide()
-  const head = <Header title="Profile" big="Profile" back={!wide} />
+  const head = <Header title="Settings" big="Settings" />
   return (
     <Gate skeleton={<>{head}<div className="panel"><SkRows n={4} /></div></>}>
       {(m) => <>{head}<StatusLine /><Profile m={m} /></>}

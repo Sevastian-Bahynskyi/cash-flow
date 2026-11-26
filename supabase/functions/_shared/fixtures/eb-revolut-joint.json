@@ -1,0 +1,440 @@
+{
+ "account": {
+  "uid": "aaaa0004-0000-4000-8000-000000000004",
+  "session_id": "00000000-5e55-4000-8000-000000000001",
+  "name": "MARA PROBOVA & IVAN TESTOV",
+  "product": null,
+  "iban": "LT000000000000000003",
+  "currency": "DKK",
+  "cash_account_type": "CACC",
+  "identification_hash": "FAKEHASH.aaaa0004"
+ },
+ "balances": [
+  {
+   "name": "Fake balance",
+   "balance_amount": {
+    "currency": "DKK",
+    "amount": "2961.20"
+   },
+   "balance_type": "ITAV",
+   "last_change_date_time": null,
+   "reference_date": null,
+   "last_committed_transaction": null
+  }
+ ],
+ "raw": [
+  {
+   "entry_reference": "40000000-0000-4000-8000-000000000024",
+   "merchant_category_code": null,
+   "transaction_amount": {
+    "currency": "DKK",
+    "amount": "412.80"
+   },
+   "creditor": {
+    "name": "Grocer 42 Testby",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "creditor_account": null,
+   "creditor_agent": null,
+   "debtor": {
+    "name": "IVAN TESTOV",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "debtor_account": null,
+   "debtor_agent": null,
+   "bank_transaction_code": {
+    "description": null,
+    "code": "CARD_PAYMENT",
+    "sub_code": null
+   },
+   "credit_debit_indicator": "DBIT",
+   "status": "BOOK",
+   "booking_date": "2026-11-03",
+   "value_date": "2026-11-04",
+   "transaction_date": null,
+   "balance_after_transaction": null,
+   "reference_number": null,
+   "reference_number_schema": null,
+   "remittance_information": [
+    "Grocer 42 Testby"
+   ],
+   "debtor_account_additional_identification": [
+    {
+     "identification": "3333",
+     "scheme_name": "CPAN",
+     "issuer": "MASTERCARD"
+    }
+   ],
+   "creditor_account_additional_identification": null,
+   "exchange_rate": null,
+   "note": null,
+   "transaction_id": null
+  },
+  {
+   "entry_reference": "40000000-0000-4000-8000-000000000025",
+   "merchant_category_code": null,
+   "transaction_amount": {
+    "currency": "DKK",
+    "amount": "96.00"
+   },
+   "creditor": {
+    "name": "Grocer 42 Testby",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "creditor_account": null,
+   "creditor_agent": null,
+   "debtor": {
+    "name": "MARA PROBOVA",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "debtor_account": null,
+   "debtor_agent": null,
+   "bank_transaction_code": {
+    "description": null,
+    "code": "CARD_PAYMENT",
+    "sub_code": null
+   },
+   "credit_debit_indicator": "DBIT",
+   "status": "BOOK",
+   "booking_date": "2026-11-06",
+   "value_date": "2026-11-07",
+   "transaction_date": null,
+   "balance_after_transaction": null,
+   "reference_number": null,
+   "reference_number_schema": null,
+   "remittance_information": [
+    "Grocer 42 Testby"
+   ],
+   "debtor_account_additional_identification": [
+    {
+     "identification": "5555",
+     "scheme_name": "CPAN",
+     "issuer": "MASTERCARD"
+    }
+   ],
+   "creditor_account_additional_identification": null,
+   "exchange_rate": null,
+   "note": null,
+   "transaction_id": null
+  },
+  {
+   "entry_reference": "40000000-0000-4000-8000-000000000026",
+   "merchant_category_code": null,
+   "transaction_amount": {
+    "currency": "DKK",
+    "amount": "2000.00"
+   },
+   "creditor": {
+    "name": "MARA PROBOVA & IVAN TESTOV",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "creditor_account": {
+    "iban": "LT000000000000000003"
+   },
+   "creditor_agent": null,
+   "debtor": {
+    "name": "Ivan Testov",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "debtor_account": {
+    "iban": "LT000000000000000002"
+   },
+   "debtor_agent": null,
+   "bank_transaction_code": {
+    "description": null,
+    "code": "TRANSFER",
+    "sub_code": null
+   },
+   "credit_debit_indicator": "CRDT",
+   "status": "BOOK",
+   "booking_date": "2026-11-05",
+   "value_date": "2026-11-05",
+   "transaction_date": null,
+   "balance_after_transaction": null,
+   "reference_number": null,
+   "reference_number_schema": null,
+   "remittance_information": [
+    "To MARA PROBOVA & IVAN TESTOV"
+   ],
+   "debtor_account_additional_identification": null,
+   "creditor_account_additional_identification": null,
+   "exchange_rate": null,
+   "note": null,
+   "transaction_id": null
+  },
+  {
+   "entry_reference": "40000000-0000-4000-8000-000000000027",
+   "merchant_category_code": null,
+   "transaction_amount": {
+    "currency": "DKK",
+    "amount": "1000.00"
+   },
+   "creditor": {},
+   "creditor_account": null,
+   "creditor_agent": null,
+   "debtor": null,
+   "debtor_account": null,
+   "debtor_agent": null,
+   "bank_transaction_code": {
+    "description": null,
+    "code": "TOPUP",
+    "sub_code": null
+   },
+   "credit_debit_indicator": "CRDT",
+   "status": "BOOK",
+   "booking_date": "2026-11-02",
+   "value_date": "2026-11-02",
+   "transaction_date": null,
+   "balance_after_transaction": null,
+   "reference_number": null,
+   "reference_number_schema": null,
+   "remittance_information": [
+    "Apple Pay Top-Up by *9001"
+   ],
+   "debtor_account_additional_identification": null,
+   "creditor_account_additional_identification": null,
+   "exchange_rate": null,
+   "note": null,
+   "transaction_id": null
+  },
+  {
+   "entry_reference": "40000000-0000-4000-8000-000000000028",
+   "merchant_category_code": null,
+   "transaction_amount": {
+    "currency": "DKK",
+    "amount": "1500.00"
+   },
+   "creditor": {},
+   "creditor_account": null,
+   "creditor_agent": null,
+   "debtor": null,
+   "debtor_account": null,
+   "debtor_agent": null,
+   "bank_transaction_code": {
+    "description": null,
+    "code": "TOPUP",
+    "sub_code": null
+   },
+   "credit_debit_indicator": "CRDT",
+   "status": "BOOK",
+   "booking_date": "2026-11-02",
+   "value_date": "2026-11-02",
+   "transaction_date": null,
+   "balance_after_transaction": null,
+   "reference_number": null,
+   "reference_number_schema": null,
+   "remittance_information": [
+    "Apple Pay Top-Up by *7001"
+   ],
+   "debtor_account_additional_identification": null,
+   "creditor_account_additional_identification": null,
+   "exchange_rate": null,
+   "note": null,
+   "transaction_id": null
+  },
+  {
+   "entry_reference": "40000000-0000-4000-8000-000000000029",
+   "merchant_category_code": null,
+   "transaction_amount": {
+    "currency": "DKK",
+    "amount": "500.00"
+   },
+   "creditor": {},
+   "creditor_account": null,
+   "creditor_agent": null,
+   "debtor": null,
+   "debtor_account": null,
+   "debtor_agent": null,
+   "bank_transaction_code": {
+    "description": null,
+    "code": "TOPUP",
+    "sub_code": null
+   },
+   "credit_debit_indicator": "CRDT",
+   "status": "BOOK",
+   "booking_date": "2026-11-18",
+   "value_date": "2026-11-18",
+   "transaction_date": null,
+   "balance_after_transaction": null,
+   "reference_number": null,
+   "reference_number_schema": null,
+   "remittance_information": [
+    "Apple Pay Top-Up by *7002"
+   ],
+   "debtor_account_additional_identification": null,
+   "creditor_account_additional_identification": null,
+   "exchange_rate": null,
+   "note": null,
+   "transaction_id": null
+  },
+  {
+   "entry_reference": "40000000-0000-4000-8000-000000000030",
+   "merchant_category_code": null,
+   "transaction_amount": {
+    "currency": "DKK",
+    "amount": "35.00"
+   },
+   "creditor": {},
+   "creditor_account": null,
+   "creditor_agent": null,
+   "debtor": {
+    "name": "IVAN TESTOV",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "debtor_account": null,
+   "debtor_agent": null,
+   "bank_transaction_code": {
+    "description": null,
+    "code": "CARD_REFUND",
+    "sub_code": null
+   },
+   "credit_debit_indicator": "CRDT",
+   "status": "BOOK",
+   "booking_date": "2026-11-21",
+   "value_date": "2026-11-23",
+   "transaction_date": null,
+   "balance_after_transaction": null,
+   "reference_number": null,
+   "reference_number_schema": null,
+   "remittance_information": [
+    "Grocer 42 Testby refund -"
+   ],
+   "debtor_account_additional_identification": [
+    {
+     "identification": "3333",
+     "scheme_name": "CPAN",
+     "issuer": "MASTERCARD"
+    }
+   ],
+   "creditor_account_additional_identification": null,
+   "exchange_rate": null,
+   "note": null,
+   "transaction_id": null
+  },
+  {
+   "entry_reference": "40000000-0000-4000-8000-000000000031",
+   "merchant_category_code": null,
+   "transaction_amount": {
+    "currency": "DKK",
+    "amount": "50.00"
+   },
+   "creditor": {
+    "name": "PETER EXAMPLE",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "creditor_account": {
+    "iban": "DK0000000000000099"
+   },
+   "creditor_agent": null,
+   "debtor": {
+    "name": "MARA PROBOVA & IVAN TESTOV",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "debtor_account": {
+    "iban": "LT000000000000000003"
+   },
+   "debtor_agent": null,
+   "bank_transaction_code": {
+    "description": null,
+    "code": "TRANSFER",
+    "sub_code": null
+   },
+   "credit_debit_indicator": "DBIT",
+   "status": "BOOK",
+   "booking_date": "2026-11-22",
+   "value_date": "2026-11-22",
+   "transaction_date": null,
+   "balance_after_transaction": null,
+   "reference_number": null,
+   "reference_number_schema": null,
+   "remittance_information": [
+    "To PETER E"
+   ],
+   "debtor_account_additional_identification": null,
+   "creditor_account_additional_identification": null,
+   "exchange_rate": null,
+   "note": null,
+   "transaction_id": null
+  },
+  {
+   "entry_reference": "40000000-0000-4000-8000-000000000032",
+   "merchant_category_code": null,
+   "transaction_amount": {
+    "currency": "DKK",
+    "amount": "0.00"
+   },
+   "creditor": {
+    "name": "Hotel Nullpunkt",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "creditor_account": null,
+   "creditor_agent": null,
+   "debtor": {
+    "name": "IVAN TESTOV",
+    "postal_address": null,
+    "organisation_id": null,
+    "private_id": null,
+    "contact_details": null
+   },
+   "debtor_account": null,
+   "debtor_agent": null,
+   "bank_transaction_code": {
+    "description": null,
+    "code": "CARD_PAYMENT",
+    "sub_code": null
+   },
+   "credit_debit_indicator": "DBIT",
+   "status": "BOOK",
+   "booking_date": "2026-11-23",
+   "value_date": "2026-11-23",
+   "transaction_date": null,
+   "balance_after_transaction": null,
+   "reference_number": null,
+   "reference_number_schema": null,
+   "remittance_information": [
+    "Hotel Nullpunkt"
+   ],
+   "debtor_account_additional_identification": [
+    {
+     "identification": "3333",
+     "scheme_name": "CPAN",
+     "issuer": "MASTERCARD"
+    }
+   ],
+   "creditor_account_additional_identification": null,
+   "exchange_rate": null,
+   "note": null,
+   "transaction_id": null
+  }
+ ]
+}

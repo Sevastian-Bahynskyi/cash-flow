@@ -41,8 +41,24 @@ export type TransactionDraft = {
   country_iso?: string | null;
 };
 
+export type Movement = 'spend' | 'income' | 'moved' | 'topup' | 'person' | 'refund' | 'ignore';
+export type ReasonSource = 'transfer' | 'salary' | 'person' | 'rule' | 'memory' | 'mcc' | 'ai' | 'you' | 'manual';
+
 export type TransactionRow = TransactionInsert & {
   id: string;
+  /** Bank sync (v2): where the row came from, its bank status and why it got its labels. Manual history has nulls. */
+  source?: 'manual' | 'bank';
+  status?: 'booked' | 'pending' | 'void';
+  bank_transaction_id?: string | null;
+  merchant_key?: string | null;
+  movement?: Movement | null;
+  paid_by?: 'me' | 'partner' | null;
+  reason?: string | null;
+  reason_source?: ReasonSource | null;
+  confidence?: number | null;
+  needs_review?: boolean;
+  counterparty_person_id?: string | null;
+  budget_effect_minor?: number;
   personal_effect_minor?: number;
   shared_effect_minor?: number;
   is_neutral_display?: boolean;

@@ -3,9 +3,9 @@ import type { CategoryRow, CategoryOverrideRow } from '@/lib/domain/categories-t
 import type { SavingsAccountRow, SavingsEventRow } from '@/lib/domain/savings-types'
 import type { LoanRow, LoanEventRow } from '@/lib/domain/loans-types'
 import type { ReceivableRow, ReceivableEventRow } from '@/lib/domain/receivables-types'
-import type { BudgetRow, MerchantRuleRow, TransferPersonRow, ProfileRow } from '@/lib/domain/rows'
+import type { BudgetRow, MerchantRuleRow, TransferPersonRow, ProfileRow, BankConnectionRow, BankAccountRow, SyncRunRow, SplitRow, PaybackRow } from '@/lib/domain/rows'
 
-export type { TransactionRow, TransactionInsert, CategoryRow, CategoryOverrideRow, SavingsAccountRow, SavingsEventRow, LoanRow, LoanEventRow, ReceivableRow, ReceivableEventRow, BudgetRow, MerchantRuleRow, TransferPersonRow, ProfileRow }
+export type { TransactionRow, TransactionInsert, CategoryRow, CategoryOverrideRow, SavingsAccountRow, SavingsEventRow, LoanRow, LoanEventRow, ReceivableRow, ReceivableEventRow, BudgetRow, MerchantRuleRow, TransferPersonRow, ProfileRow, BankConnectionRow, BankAccountRow, SyncRunRow, SplitRow, PaybackRow }
 
 /** Everything the screens read, loaded once per session (docs/redesign/DATA.md § 3, "useOverview"). */
 export type Tables = {
@@ -22,5 +22,10 @@ export type Tables = {
   merchant_category_rules: MerchantRuleRow[]
   transfer_people: TransferPersonRow[]
   profile: ProfileRow | null
+  bank_connections: BankConnectionRow[]
+  bank_accounts: BankAccountRow[]
+  sync_runs: SyncRunRow[]
+  transaction_splits: SplitRow[]
+  paybacks: PaybackRow[]
 }
 export type TableName = keyof Tables
