@@ -421,3 +421,4 @@ a{color:inherit;text-decoration:none}
 .tab{min-width:0}
 .tab span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (min-width:960px){.big{font-size:min(88px,6.5vw)}.cols.even .hero .big{font-size:min(64px,4.6vw)}}
+.steps button{min-height:44px}

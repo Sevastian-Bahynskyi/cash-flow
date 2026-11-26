@@ -9,7 +9,7 @@ import { supabase } from '@/lib/supabase/client'
 import { supabasePublishableKey, supabaseUrl } from '@/lib/supabase/config'
 import { dayLabel, kr, todayYmd } from '@/lib/fmt'
 import { convertToDkk } from '@/lib/domain/currency'
-import { findSharedTopupCategoryOption, isAllowedIncomeCategoryOption, isSalaryCategoryOption } from '@/lib/domain/category-rules'
+import { findSharedTopupCategoryOption, isAllowedIncomeCategoryOption, isSalaryCategoryOption, normalizeIncomeCategoryOption } from '@/lib/domain/category-rules'
 import type { TransactionInsert } from '@/lib/data/types'
 
 type Parsed = { kind: 'expense' | 'income'; name: string; amount: number; currencyCode: string; categoryId: string | null; comment: string | null; occurredOn: string; suggestedSharedTopup?: boolean }
@@ -81,8 +81,10 @@ export function ImportFlow({ onDone }: { onDone: () => void }): React.JSX.Elemen
       const payload: TransactionInsert[] = []
       for (const r of rows) {
         const fx = r.ccy === 'DKK' ? { convertedMinor: r.minor, rate: 1 } : await convertToDkk(r.minor, r.ccy, r.date)
-        const opt = m.options.find((o) => o.id === (r.topup ? topupCat?.id : r.cat))
-        payload.push({ user_id: store.userId, kind: r.kind, amount_minor: fx.convertedMinor, occurred_on: r.date, name: r.name, comment: r.note, category_id: opt?.id ?? r.cat, country_iso: null, recurring: false, shared: false, shared_participant: r.topup ? 'me' : null, is_salary: r.kind === 'income' && isSalaryCategoryOption(opt), is_shared_topup: r.kind === 'expense' && r.topup, currency_code: r.ccy, original_amount_minor: r.minor, converted_amount_minor: fx.convertedMinor, fx_rate: fx.rate })
+        const raw = m.options.find((o) => o.id === (r.topup ? topupCat?.id : r.cat)) ?? null
+        const opt = r.kind === 'income' ? normalizeIncomeCategoryOption(raw, m.options) : raw
+        if (!opt) throw new Error(`${r.name} needs a category.`)
+        payload.push({ user_id: store.userId, kind: r.kind, amount_minor: fx.convertedMinor, occurred_on: r.date, name: r.name, comment: r.note, category_id: opt.id, country_iso: null, recurring: false, shared: false, shared_participant: r.topup ? 'me' : null, is_salary: r.kind === 'income' && isSalaryCategoryOption(opt), is_shared_topup: r.kind === 'expense' && r.topup, currency_code: r.ccy, original_amount_minor: r.minor, converted_amount_minor: fx.convertedMinor, fx_rate: fx.rate })
       }
       await store.addTransactions(payload)
       toast(`Saved ${payload.length}`)
@@ -106,7 +108,7 @@ export function ImportFlow({ onDone }: { onDone: () => void }): React.JSX.Elemen
     </>
   )
 
-  const need = rows.filter((r) => r.kind === 'expense' && !r.topup && !r.cat).length
+  const need = rows.filter((r) => !r.topup && !r.cat && (r.kind === 'expense' || !normalizeIncomeCategoryOption(null, m.options))).length
   return (
     <>
       <p className="note" style={{ padding: '4px 4px 12px' }}>{rows.length} found. Nothing saves until you do.</p>

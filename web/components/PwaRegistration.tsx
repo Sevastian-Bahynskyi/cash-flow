@@ -9,10 +9,12 @@ export function PwaRegistration(): null {
     let interval: number | undefined
     const hadController = Boolean(navigator.serviceWorker.controller)
     let reloading = false
+    // A new deploy reloads the page, but never under the person's hands: wait until the app is hidden.
+    const reloadWhenHidden = (): void => { if (document.visibilityState === 'hidden' && !reloading) { reloading = true; window.location.reload() } }
     const onControllerChange = (): void => {
       if (!hadController || reloading) return
-      reloading = true
-      window.location.reload()
+      if (document.visibilityState === 'hidden') reloadWhenHidden()
+      else document.addEventListener('visibilitychange', reloadWhenHidden)
     }
     navigator.serviceWorker.addEventListener('controllerchange', onControllerChange)
     const register = async (): Promise<void> => {
@@ -28,6 +30,7 @@ export function PwaRegistration(): null {
     return () => {
       window.removeEventListener('load', register)
       navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange)
+      document.removeEventListener('visibilitychange', reloadWhenHidden)
       if (interval) window.clearInterval(interval)
     }
   }, [])

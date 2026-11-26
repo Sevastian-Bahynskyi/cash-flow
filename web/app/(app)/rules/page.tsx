@@ -1,5 +1,6 @@
 'use client'
 
+import { normalizeMerchantLookupKey } from '@/lib/domain/merchant'
 import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Header } from '@/components/Header'
@@ -70,7 +71,8 @@ function RuleSheet({ m, rule, prefill, onClose }: { m: Model; rule: MerchantRule
   const options = m.options.filter((o) => d.kind === 'income' ? isAllowedIncomeCategoryOption(o) : !isIncomeCategoryOption(o))
 
   const go = async (): Promise<void> => {
-    const pattern = d.pattern.trim().toLowerCase()
+    // Rules match the normalized merchant key (DATA.md § 3), so store the pattern the same way.
+    const pattern = normalizeMerchantLookupKey(d.pattern) || d.pattern.trim().toLowerCase()
     const topupCat = topup ? findSharedTopupCategoryOption(m.options)?.id ?? null : null
     const cat = d.block ? null : topup ? topupCat : d.cat
     const next: typeof e = {}

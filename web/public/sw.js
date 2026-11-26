@@ -29,10 +29,13 @@ self.addEventListener('fetch', (event) => {
     event.respondWith((async () => {
       try {
         const res = await fetch(req)
-        if (res.ok && !res.redirected && !url.pathname.startsWith('/auth/')) (await caches.open(SHELL)).put(url.pathname, res.clone())
+        if (res.ok && !res.redirected && !url.pathname.startsWith('/auth/')) {
+          try { await (await caches.open(SHELL)).put(url.pathname, res.clone()) } catch { /* storage full or blocked: still serve the page */ }
+        }
         return res
       } catch {
-        return (await caches.match(url.pathname, { cacheName: SHELL })) || (await caches.match('/', { cacheName: SHELL })) || offlinePage()
+        const hit = await caches.match(url.pathname, { cacheName: SHELL }).catch(() => undefined)
+        return hit || (await caches.match('/', { cacheName: SHELL }).catch(() => undefined)) || offlinePage()
       }
     })())
     return
@@ -41,14 +44,19 @@ self.addEventListener('fetch', (event) => {
   const isStatic = url.pathname.startsWith('/_next/static/') || /\.(png|svg|woff2?)$/.test(url.pathname)
   if (!isStatic) return
   event.respondWith((async () => {
-    const hit = await caches.match(req, { cacheName: STATIC })
+    const hit = await caches.match(req, { cacheName: STATIC }).catch(() => undefined)
     if (hit) return hit
-    try {
-      const res = await fetch(req)
-      if (res.ok) (await caches.open(STATIC)).put(req, res.clone())
-      return res
-    } catch {
-      return new Response('', { status: 504 })
+    let res
+    try { res = await fetch(req) } catch { return new Response('', { status: 504 }) }
+    if (res.ok) {
+      try {
+        const cache = await caches.open(STATIC)
+        await cache.put(req, res.clone())
+        // Hashed assets pile up with every deploy: keep the newest 400.
+        const keys = await cache.keys()
+        for (const k of keys.slice(0, Math.max(0, keys.length - 400))) await cache.delete(k)
+      } catch { /* storage full or blocked */ }
     }
+    return res
   })())
 })

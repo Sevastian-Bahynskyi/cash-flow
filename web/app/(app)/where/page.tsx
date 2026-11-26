@@ -49,7 +49,8 @@ function Where({ m }: { m: Model }): React.JSX.Element {
     const days = Math.max(1, daysBetween(w.start, w.endEx < addDays(todayYmd(), 1) ? w.endEx : addDays(todayYmd(), 1)))
     const run: number[] = []; let acc = 0
     for (let i = 0; i < days; i++) { const d = addDays(w.start, i); for (const r of rows) if (r.occurred_on === d) acc += r.personal_effect_minor ?? (r.kind === 'income' ? r.amount_minor : -m.mine(r)); run.push(acc) }
-    return { list, spent, lastSpent, income, moved, run }
+    const sharedMine = rows.filter((r) => r.shared).reduce((a, r) => a + m.mine(r), 0)
+    return { list, spent, lastSpent, income, moved, run, sharedMine }
   }, [m, w])
 
   const seg = (
@@ -59,7 +60,9 @@ function Where({ m }: { m: Model }): React.JSX.Element {
     </div>
   )
   if (!w || !data) return <>{seg}<div className="panel"><EmptyAdd title="Nothing yet" /></div></>
-  const { list, spent, lastSpent, income, moved, run } = data
+  const { list, spent, lastSpent, income, moved, run, sharedMine } = data
+  // Your part of shared spending was paid from the pot you already moved money into: count it once.
+  const leftOver = income - (spent - sharedMine) - moved
   const diff = spent - lastSpent
   const max = Math.max(1, ...list.map((x) => Math.max(x.s, x.l)))
   const word = (v: number): string => v > 0 ? `${kr(v, true)} more` : v < 0 ? `${kr(-v, true)} less` : 'the same'
@@ -89,7 +92,7 @@ function Where({ m }: { m: Model }): React.JSX.Element {
         <div className="flowrow"><span>Money in</span><b style={{ color: 'var(--in)' }}>{plus(income, true)}</b></div>
         <div className="flowrow"><span>Your spending</span><b>{kr(spent, true)}</b></div>
         <div className="flowrow"><span>Moved, not spent</span><b style={{ color: 'var(--ink-2)', fontWeight: 400 }}>{kr(moved, true)}</b></div>
-        <div className="flowrow"><span>Left over</span><b>{income - spent - moved > 0 ? plus(income - spent - moved, true) : kr(income - spent - moved, true)}</b></div>
+        <div className="flowrow"><span>Left over</span><b>{leftOver > 0 ? plus(leftOver, true) : kr(leftOver, true)}</b></div>
       </div>
       {run.length > 1 && (
         <div className="chart" style={{ marginTop: 8 }}>

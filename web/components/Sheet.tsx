@@ -9,6 +9,9 @@ import { Icon } from './Icon'
  */
 export function Sheet({ open, onClose, title, label, right, children }: { open: boolean; onClose: () => void; title?: string; label?: string; right?: React.ReactNode; children: React.ReactNode }): React.JSX.Element | null {
   const ref = useRef<HTMLElement>(null)
+  // Parents pass a new onClose each render; keep the latest without re-running the focus effect.
+  const close = useRef(onClose)
+  close.current = onClose
   useEffect(() => {
     if (!open) return
     const prev = document.activeElement as HTMLElement | null
@@ -16,7 +19,7 @@ export function Sheet({ open, onClose, title, label, right, children }: { open: 
     const overflow = html.style.overflow
     html.style.overflow = 'hidden'
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') { e.stopPropagation(); onClose() }
+      if (e.key === 'Escape') { e.stopPropagation(); close.current() }
       if (e.key !== 'Tab' || !ref.current) return
       const f = [...ref.current.querySelectorAll<HTMLElement>('button:not([disabled]),input,textarea,select,[tabindex="0"]')]
       if (!f.length) return
@@ -26,7 +29,7 @@ export function Sheet({ open, onClose, title, label, right, children }: { open: 
     document.addEventListener('keydown', onKey)
     if (!ref.current?.contains(document.activeElement)) ref.current?.querySelector<HTMLElement>('[data-autofocus],input,button')?.focus({ preventScroll: true })
     return () => { document.removeEventListener('keydown', onKey); html.style.overflow = overflow; prev?.focus?.({ preventScroll: true }) }
-  }, [open, onClose])
+  }, [open])
   if (!open) return null
   return (
     <>

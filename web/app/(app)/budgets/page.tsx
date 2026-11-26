@@ -16,7 +16,7 @@ import type { CategoryRow, TransactionRow } from '@/lib/data/types'
 /** Spent by day in one category this cycle, against the cycle before and the budget line. */
 function Pace({ m, c, cat, budget }: { m: Model; c: Cycle; cat: CategoryRow; budget: number }): React.JSX.Element {
   const prev = m.prevOf(c)
-  const n = m.days || 31
+  const n = daysBetween(c.startOn, c.endInclusive) + 1
   const cum = (rows: TransactionRow[], start: string, len: number): number[] => {
     const a = new Array<number>(len).fill(0)
     for (const r of rows) { const i = daysBetween(start, r.occurred_on); if (i >= 0 && i < len && m.parentOf(r.category_id)?.id === cat.id) a[i]! += m.mine(r) }

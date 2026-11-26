@@ -24,11 +24,12 @@ export const useAdd = (): ((d?: Draft) => void) => useContext(Ctx)
 
 export function AddProvider({ children }: { children: React.ReactNode }): React.JSX.Element {
   const [draft, setDraft] = useState<Draft | null>(null)
-  const open = useCallback((d?: Draft) => setDraft(d ?? {}), [])
+  const [n, setN] = useState(0)
+  const open = useCallback((d?: Draft) => { setN((x) => x + 1); setDraft(d ?? {}) }, [])
   return (
     <Ctx.Provider value={open}>
       {children}
-      {draft && <Composer key={draft.id ?? 'new'} draft={draft} onClose={() => setDraft(null)} onAgain={(d) => setDraft({ ...d })} />}
+      {draft && <Composer key={`${draft.id ?? 'new'}-${n}`} draft={draft} onClose={() => setDraft(null)} onAgain={(d) => { setN((x) => x + 1); setDraft({ ...d }) }} />}
     </Ctx.Provider>
   )
 }
@@ -125,6 +126,7 @@ function Composer({ draft, onClose, onAgain }: { draft: Draft; onClose: () => vo
     setBusy(true); setErr(null)
     try {
       const fx = ccy === 'DKK' ? { convertedMinor: minor, rate: 1 } : await convertToDkk(minor, ccy, date)
+      if (fx.convertedMinor < 1) { setErr('That is less than 1 øre in kr. Check the amount.'); setStep(1); return }
       const kind = mode === 'income' ? 'income' : 'expense'
       const row: TransactionInsert = {
         user_id: store.userId, kind, amount_minor: fx.convertedMinor, occurred_on: date, name: name.trim(), comment: note?.trim() || null,
@@ -142,7 +144,7 @@ function Composer({ draft, onClose, onAgain }: { draft: Draft; onClose: () => vo
       } else {
         const [saved] = await store.addTransactions([row])
         toast(store.offline || !navigator.onLine ? `Saved on this device, ${row.name}. It syncs when you’re online.` : `Saved ${kr(row.amount_minor)}, ${row.name}`,
-          saved && !saved.id.startsWith('local-') ? () => { void supabase().from('transactions').delete().eq('id', saved.id).then(() => store.reload(['transactions'])) } : undefined)
+          saved && !store.pendingIds.has(saved.id) ? () => { void supabase().from('transactions').delete().eq('id', saved.id).then(({ error }) => { if (error) toast('Couldn’t undo. Delete it from the list.'); else void store.reload(['transactions']) }) } : undefined)
         if (navigator.onLine && mode !== 'topup') void remember(store.userId, row, opt)
       }
       if (again) onAgain({ kind: row.kind }); else onClose()
@@ -178,9 +180,9 @@ function Composer({ draft, onClose, onAgain }: { draft: Draft; onClose: () => vo
   return (
     <Sheet open onClose={onClose} label={title} title={title} right={step === 1 && !editing ? <button className="iconbtn" onClick={() => setStep('import')} aria-label="Import from a receipt or a bank file"><Icon name="import" /></button> : undefined}>
       {step !== 'import' && (
-        <div className="steps" role="list">
+        <div className="steps">
           {stepNames.map((s, i) => (
-            <button key={s} role="listitem" onClick={() => setStep((i + 1) as 1 | 2 | 3)} aria-current={step === i + 1 ? 'step' : undefined}
+            <button key={s} onClick={() => setStep((i + 1) as 1 | 2 | 3)} aria-current={step === i + 1 ? 'step' : undefined}
               className={typeof step === 'number' && step > i + 1 ? 'done' : ''} disabled={typeof step !== 'number' || i + 1 > step || (mode === 'topup' && i === 1)}>{s}</button>
           ))}
         </div>

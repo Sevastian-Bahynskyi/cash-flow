@@ -11,7 +11,7 @@ import type { TableName, Tables, TransactionInsert, TransactionRow } from './typ
  * device for offline reading, and refreshed per table after a write. RLS scopes every query.
  */
 type Status = 'loading' | 'ready' | 'error'
-type Queued = { id: string; row: TransactionInsert }
+type Queued = { id: string; row: TransactionInsert & { id: string } }
 type Store = {
   userId: string | null
   tables: Tables | null
@@ -20,6 +20,8 @@ type Store = {
   offline: boolean
   loadedAt: number | null
   queued: number
+  /** Ids saved on this device that have not reached the server yet. */
+  pendingIds: ReadonlySet<string>
   reload: (only?: TableName[]) => Promise<void>
   patch: <K extends TableName>(name: K, update: (rows: Tables[K]) => Tables[K]) => void
   addTransactions: (rows: TransactionInsert[]) => Promise<TransactionRow[]>
@@ -48,17 +50,17 @@ async function all<T>(build: (from: number, to: number) => PromiseLike<{ data: T
 const sb = () => supabase()
 const LOAD: { [K in TableName]: (uid: string) => Promise<Tables[K]> } = {
   transactions: () => all((a, b) => sb().from('transactions').select('*').order('occurred_on').order('created_at').order('id').range(a, b)),
-  categories: () => all((a, b) => sb().from('categories').select('id,user_id,parent_id,name,level,is_system,icon,color').order('level').order('name').range(a, b)),
-  category_overrides: () => all((a, b) => sb().from('category_overrides').select('id,user_id,category_id,name,icon,updated_at').range(a, b)),
-  budgets: () => all((a, b) => sb().from('budgets').select('id,user_id,category_id,salary_cycle_id,amount_minor,notes,created_at').range(a, b)),
-  savings_accounts: () => all((a, b) => sb().from('savings_accounts').select('id,user_id,name,goal_minor,color,icon,created_at').order('created_at').range(a, b)),
-  savings_events: () => all((a, b) => sb().from('savings_events').select('id,user_id,savings_account_id,action,amount_minor,occurred_on,note,created_at').order('occurred_on').order('created_at').range(a, b)),
-  loans: () => all((a, b) => sb().from('loans').select('id,user_id,name,principal_minor,remaining_minor,status,created_at').order('created_at', { ascending: false }).range(a, b)),
-  loan_events: () => all((a, b) => sb().from('loan_events').select('*').order('occurred_on', { ascending: false }).range(a, b)),
-  receivables: () => all((a, b) => sb().from('receivables').select('id,user_id,name,principal_minor,remaining_minor,status,created_at').order('created_at', { ascending: false }).range(a, b)),
-  receivable_events: () => all((a, b) => sb().from('receivable_events').select('*').order('occurred_on', { ascending: false }).range(a, b)),
-  merchant_category_rules: () => all((a, b) => sb().from('merchant_category_rules').select('*').order('priority', { ascending: false }).order('updated_at', { ascending: false }).range(a, b)),
-  transfer_people: () => all((a, b) => sb().from('transfer_people').select('id,user_id,name,normalized_name,created_at,updated_at').order('name').range(a, b)),
+  categories: () => all((a, b) => sb().from('categories').select('id,user_id,parent_id,name,level,is_system,icon,color').order('level').order('name').order('id').range(a, b)),
+  category_overrides: () => all((a, b) => sb().from('category_overrides').select('id,user_id,category_id,name,icon,updated_at').order('id').range(a, b)),
+  budgets: () => all((a, b) => sb().from('budgets').select('id,user_id,category_id,salary_cycle_id,amount_minor,notes,created_at').order('id').range(a, b)),
+  savings_accounts: () => all((a, b) => sb().from('savings_accounts').select('id,user_id,name,goal_minor,color,icon,created_at').order('created_at').order('id').range(a, b)),
+  savings_events: () => all((a, b) => sb().from('savings_events').select('id,user_id,savings_account_id,action,amount_minor,occurred_on,note,created_at').order('occurred_on').order('created_at').order('id').range(a, b)),
+  loans: () => all((a, b) => sb().from('loans').select('id,user_id,name,principal_minor,remaining_minor,status,created_at').order('created_at', { ascending: false }).order('id').range(a, b)),
+  loan_events: () => all((a, b) => sb().from('loan_events').select('*').order('occurred_on', { ascending: false }).order('created_at', { ascending: false }).order('id').range(a, b)),
+  receivables: () => all((a, b) => sb().from('receivables').select('id,user_id,name,principal_minor,remaining_minor,status,created_at').order('created_at', { ascending: false }).order('id').range(a, b)),
+  receivable_events: () => all((a, b) => sb().from('receivable_events').select('*').order('occurred_on', { ascending: false }).order('created_at', { ascending: false }).order('id').range(a, b)),
+  merchant_category_rules: () => all((a, b) => sb().from('merchant_category_rules').select('*').order('priority', { ascending: false }).order('updated_at', { ascending: false }).order('id').range(a, b)),
+  transfer_people: () => all((a, b) => sb().from('transfer_people').select('id,user_id,name,normalized_name,created_at,updated_at').order('name').order('id').range(a, b)),
   profile: async (uid) => {
     const { data, error } = await sb().from('profiles').select('display_name,avatar_url').eq('user_id', uid).maybeSingle()
     if (error) throw new Error(error.message)
@@ -66,6 +68,12 @@ const LOAD: { [K in TableName]: (uid: string) => Promise<Tables[K]> } = {
   },
 }
 const NAMES = Object.keys(LOAD) as TableName[]
+/** Rows saved on this device but not yet on the server, shown in every list until they sync. */
+function withQueued(rows: TransactionRow[], q: Queued[]): TransactionRow[] {
+  const have = new Set(rows.map((r) => r.id))
+  const now = new Date().toISOString()
+  return sortTx([...rows, ...q.filter((x) => !have.has(x.id)).map((x) => ({ ...x.row, created_at: now, updated_at: now } as TransactionRow))])
+}
 const sortTx = (rows: TransactionRow[]): TransactionRow[] => [...rows].sort((a, b) => a.occurred_on.localeCompare(b.occurred_on) || a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))
 
 export function DataProvider({ children }: { children: React.ReactNode }): React.JSX.Element {
@@ -78,6 +86,9 @@ export function DataProvider({ children }: { children: React.ReactNode }): React
   const [queue, setQueue] = useState<Queued[]>([])
   const tablesRef = useRef<Tables | null>(null)
   tablesRef.current = tables
+  const queueRef = useRef<Queued[]>([])
+  queueRef.current = queue
+  const flushing = useRef(false)
 
   const save = useCallback(async (uid: string, t: Tables, at: number) => { await idbSet(`data:${uid}`, { t, at }) }, [])
 
@@ -91,6 +102,7 @@ export function DataProvider({ children }: { children: React.ReactNode }): React
       setTables((prev) => {
         const next = { ...(prev ?? ({} as Tables)) } as Tables
         names.forEach((n, i) => { (next as Record<TableName, unknown>)[n] = loaded[i] })
+        if (names.includes('transactions')) next.transactions = withQueued(next.transactions, queueRef.current)
         void save(uid, next, at)
         return next
       })
@@ -118,8 +130,8 @@ export function DataProvider({ children }: { children: React.ReactNode }): React
       const cached = await idbGet<{ t: Tables; at: number }>(`data:${uid}`)
       const q = await idbGet<Queued[]>(`queue:${uid}`)
       if (!alive) return
-      if (cached) { setTables(cached.t); setLoadedAt(cached.at); setStatus('ready') }
-      if (q?.length) setQueue(q)
+      if (q?.length) { setQueue(q); queueRef.current = q }
+      if (cached) { setTables({ ...cached.t, transactions: withQueued(cached.t.transactions, q ?? []) }); setLoadedAt(cached.at); setStatus('ready') }
     })()
     const { data: sub } = supabase().auth.onAuthStateChange((event) => { if (event === 'SIGNED_OUT') window.location.assign('/sign-in') })
     return () => { alive = false; sub.subscription.unsubscribe() }
@@ -127,14 +139,23 @@ export function DataProvider({ children }: { children: React.ReactNode }): React
 
   useEffect(() => { if (userId && !DEMO) void reload() }, [userId, reload])
 
-  // Back online: send what was saved on the device, then refresh.
+  // Back online: send what was saved on the device, then refresh. Each row carries its own id, so a
+  // flush that reached the server but lost its answer, or a second open window, never makes a duplicate.
+  const [queueError, setQueueError] = useState<string | null>(null)
   const flush = useCallback(async (): Promise<void> => {
-    if (!userId || !queue.length) return
-    const { error: e } = await supabase().from('transactions').insert(queue.map((q) => q.row))
-    if (e) return
-    setQueue([]); await idbSet(`queue:${userId}`, [])
-    await reload(['transactions'])
-  }, [userId, queue, reload])
+    const batch = queueRef.current
+    if (!userId || !batch.length || flushing.current) return
+    flushing.current = true
+    try {
+      const { error: e } = await supabase().from('transactions').upsert(batch.map((q) => q.row), { onConflict: 'id', ignoreDuplicates: true })
+      if (e) { setQueueError(`${batch.length} saved on this device couldn’t sync: ${e.message}`); return }
+      const sent = new Set(batch.map((q) => q.id))
+      const rest = queueRef.current.filter((q) => !sent.has(q.id))
+      setQueue(rest); queueRef.current = rest; setQueueError(null)
+      await idbSet(`queue:${userId}`, rest)
+      await reload(['transactions'])
+    } finally { flushing.current = false }
+  }, [userId, reload])
   useEffect(() => {
     const on = (): void => { setOffline(false); void flush().then(() => reload()) }
     const off = (): void => setOffline(true)
@@ -153,10 +174,10 @@ export function DataProvider({ children }: { children: React.ReactNode }): React
     const now = new Date().toISOString()
     if (!navigator.onLine) {
       // Saved on this device; it syncs when the connection is back. A typed amount is never lost.
-      const local = rows.map((row, i) => ({ id: `local-${Date.now()}-${i}`, row }))
-      const nextQ = [...queue, ...local]
-      setQueue(nextQ); await idbSet(`queue:${userId}`, nextQ)
-      const shown = local.map(({ id, row }) => ({ ...row, id, created_at: now, updated_at: now } as TransactionRow))
+      const local = rows.map((row) => { const id = crypto.randomUUID(); return { id, row: { ...row, id } } })
+      const nextQ = [...queueRef.current, ...local]
+      setQueue(nextQ); queueRef.current = nextQ; await idbSet(`queue:${userId}`, nextQ)
+      const shown = withQueued([], local)
       patch('transactions', (t) => sortTx([...t, ...shown]))
       return shown
     }
@@ -165,18 +186,21 @@ export function DataProvider({ children }: { children: React.ReactNode }): React
     const saved = (data ?? []) as TransactionRow[]
     patch('transactions', (t) => sortTx([...t, ...saved]))
     return saved
-  }, [userId, queue, patch])
+  }, [userId, patch])
 
   const signOut = useCallback(async () => {
+    if (queueRef.current.length) await flush()
+    if (queueRef.current.length) throw new Error(`${queueRef.current.length} saved on this device haven’t synced yet. Connect, then sign out.`)
     await idbClear()
     try { localStorage.removeItem('cashflow:uid') } catch { /* nothing kept */ }
     if ('caches' in window) for (const k of await caches.keys()) await caches.delete(k)
     await supabase().auth.signOut()
     window.location.assign('/sign-in')
-  }, [])
+  }, [flush])
 
-  const value = useMemo<Store>(() => ({ userId, tables, status, error, offline, loadedAt, queued: queue.length, reload, patch, addTransactions, signOut }),
-    [userId, tables, status, error, offline, loadedAt, queue.length, reload, patch, addTransactions, signOut])
+  const pendingIds = useMemo(() => new Set(queue.map((q) => q.id)), [queue])
+  const value = useMemo<Store>(() => ({ userId, tables, status, error: error ?? queueError, offline, loadedAt, queued: queue.length, pendingIds, reload, patch, addTransactions, signOut }),
+    [userId, tables, status, error, queueError, offline, loadedAt, queue.length, pendingIds, reload, patch, addTransactions, signOut])
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }
 

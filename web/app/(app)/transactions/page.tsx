@@ -11,6 +11,7 @@ import { useStore, write } from '@/lib/data/store'
 import type { Model } from '@/lib/data/model'
 import { supabase } from '@/lib/supabase/client'
 import { kr, shortDate, todayYmd } from '@/lib/fmt'
+import { isSalaryCategoryOption } from '@/lib/domain/category-rules'
 import { useWide } from '@/lib/useWide'
 import type { TransactionRow } from '@/lib/data/types'
 
@@ -83,7 +84,7 @@ function Transactions({ m }: { m: Model }): React.JSX.Element {
     } catch (e) { toast(e instanceof Error ? e.message : 'Not saved.') } finally { setBusy(false) }
   }
   const onOpen = (t: TransactionRow): void => {
-    if (sel) { const n = new Set(sel); if (n.has(t.id)) n.delete(t.id); else n.add(t.id); setSel(n); return }
+    if (sel) { if (store.pendingIds.has(t.id)) return; const n = new Set(sel); if (n.has(t.id)) n.delete(t.id); else n.add(t.id); setSel(n); return }
     if (wide) setPicked(t.id); else open(t)
   }
   const catName = catParam ? m.byId.get(catParam)?.name : null
@@ -96,7 +97,7 @@ function Transactions({ m }: { m: Model }): React.JSX.Element {
       <div className="cols"><div>
         {sel ? (
           <div className="filters"><b style={{ padding: '0 4px' }}>{sel.size ? `${sel.size} selected` : 'Select transactions'}</b><span className="spacer" />
-            <button className="btn link" onClick={() => setSel(new Set(visible.flatMap((g) => g.rows.map((t) => t.id))))}>All</button>
+            <button className="btn link" onClick={() => setSel(new Set(visible.flatMap((g) => g.rows.map((t) => t.id)).filter((id) => !store.pendingIds.has(id))))}>All</button>
             <button className="btn ghost" style={{ minHeight: 38 }} onClick={() => setSel(null)}>Cancel</button></div>
         ) : (
           <div className="filters">
@@ -137,7 +138,7 @@ function Transactions({ m }: { m: Model }): React.JSX.Element {
       {bulk === 'cat' && sel && (
         <Sheet open onClose={() => setBulk(null)} title={`Category for ${sel.size}`}>
           <div className="panel">{m.options.filter((o) => kinds.has('income') ? o.parentName.toLowerCase() === 'income' && o.parentId !== o.id : o.parentName.toLowerCase() !== 'income').map((o) => (
-            <button key={o.id} className="row" disabled={busy} onClick={() => void bulkRun(`Moved ${sel.size} to ${o.name}`, (ids) => supabase().from('transactions').update({ category_id: o.id }).in('id', ids))}><span className="who cat"><Icon name={o.icon} /></span><span className="nm">{o.name}<span className="meta" style={{ display: 'block' }}>{o.parentId !== o.id ? o.parentName : ''}</span></span><span /></button>
+            <button key={o.id} className="row" disabled={busy} onClick={() => void bulkRun(`Moved ${sel.size} to ${o.name}`, (ids) => supabase().from('transactions').update(kinds.has('income') ? { category_id: o.id, is_salary: isSalaryCategoryOption(o) } : { category_id: o.id }).in('id', ids))}><span className="who cat"><Icon name={o.icon} /></span><span className="nm">{o.name}<span className="meta" style={{ display: 'block' }}>{o.parentId !== o.id ? o.parentName : ''}</span></span><span /></button>
           ))}</div>
         </Sheet>
       )}

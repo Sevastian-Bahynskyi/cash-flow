@@ -134,7 +134,7 @@ function CategorySheet({ m, edit, budgetOf, onOpen, onClose }: { m: Model; edit:
         <input id="cname" value={name} onChange={(ev) => { setName(ev.target.value); setE({ ...e, name: undefined }) }} placeholder="Category name" autoComplete="off" />
         {e.name && <span className="err2">{e.name}</span>}</label>
       <IconPick value={icon} onPick={setIcon} />
-      {override && <p className="note" style={{ margin: '-6px 0 14px' }}>A system category. Your name and icon show only for you.</p>}
+      {override && <p className="note" style={{ margin: '-6px 0 14px' }}>A system category. Your name and icon show only for you.{c && ['salary', 'top up', 'transfer', 'others', 'other income', 'mobilepay'].includes(c.name.trim().toLowerCase()) ? ' Keep its name: Cashflow finds it by name, and a new name stops it working.' : ''}</p>}
       {(parent || (!c && newParentId)) && <p className="note" style={{ margin: '-6px 0 14px' }}>Part of {(parent ?? m.byId.get(newParentId ?? ''))?.name}.</p>}
       {hasBudget && <AmountField id="cbudget" label={`Budget for the ${m.current?.name} cycle`} value={budget} onChange={(v) => { setBudget(v); setE({ ...e, budget: undefined }) }} error={e.budget} hint="Empty means no budget" />}
       {level === 1 && !isIncome && !m.current?.real && <p className="note" style={{ margin: '-6px 0 14px' }}>Add a salary to set budgets.</p>}

@@ -11,6 +11,7 @@ import { useStore, write } from '@/lib/data/store'
 import { useModel, type Model } from '@/lib/data/model'
 import { supabase } from '@/lib/supabase/client'
 import { PARTNER } from '@/lib/partner'
+import { normalizeMerchantLookupKey } from '@/lib/domain/merchant'
 import { dayLabel, kr, shortDate, todayYmd } from '@/lib/fmt'
 import type { TransactionRow } from '@/lib/data/types'
 
@@ -28,13 +29,14 @@ export function WhoMark({ who }: { who: keyof typeof WHO }): React.JSX.Element {
 
 /** One transaction row: whose it is, name, category, amount with sign and colour (copy.md § In and out). */
 export function TxRow({ t, m, onOpen, current }: { t: TransactionRow; m: Model; onOpen: (t: TransactionRow) => void; current?: boolean }): React.JSX.Element {
+  const { pendingIds } = useStore()
   const w = whoOf(t)
   const meta = m.meta[t.category_id ?? '']
   const foreign = t.currency_code !== 'DKK' ? ` · ${kr(t.original_amount_minor, false, t.currency_code)}` : ''
   let sub: React.ReactNode, amt: React.ReactNode
   if (w === 'moved' || w === 'annain') { sub = <span>{w === 'moved' ? 'Moved to the shared pot' : `${PARTNER}, into the shared pot`}</span>; amt = <div className="amt moved">{kr(t.amount_minor)}<small>Moved</small></div> }
   else if (t.kind === 'income') { sub = <><Icon name={meta?.icon ?? 'in'} /><span>{meta?.name ?? 'Income'}{foreign}</span></>; amt = <div className="amt in">+{kr(t.amount_minor)}<small>In</small></div> }
-  else { sub = <><Icon name={meta?.icon ?? 'other'} /><span>{meta?.name ?? 'Category'}{t.shared ? `, shared with ${PARTNER}` : ''}{foreign}</span></>; amt = <div className="amt">{kr(t.amount_minor)}{t.id.startsWith('local-') && <small>Not synced</small>}</div> }
+  else { sub = <><Icon name={meta?.icon ?? 'other'} /><span>{meta?.name ?? 'Category'}{t.shared ? `, shared with ${PARTNER}` : ''}{foreign}</span></>; amt = <div className="amt">{kr(t.amount_minor)}{pendingIds.has(t.id) && <small>Not synced</small>}</div> }
   return (
     <button className="row" onClick={() => onOpen(t)} aria-current={current ? 'true' : undefined} style={current ? { background: 'var(--surface-2)' } : undefined}>
       <span className="who" title={WHO_LABEL[w]}>{w === 'none' ? null : WHO[w]}</span>
@@ -101,7 +103,7 @@ export function DetailBody({ t, m, onDone }: { t: TransactionRow; m: Model; onDo
     setBusy(true)
     try { await write(store, ['transactions'], run); toast(label); onDone?.() } catch (e) { toast(e instanceof Error ? e.message : 'Not saved.') } finally { setBusy(false) }
   }
-  const local = t.id.startsWith('local-')
+  const local = store.pendingIds.has(t.id)
   return (
     <>
       <div className="dhero"><div className="big serif num">{t.kind === 'income' ? <span style={{ color: 'var(--in)' }}>+{kr(t.amount_minor)}</span> : kr(t.amount_minor)}</div><p>{t.name}</p></div>
@@ -123,7 +125,7 @@ export function DetailBody({ t, m, onDone }: { t: TransactionRow; m: Model; onDo
               <span className="who"><Icon name={t.shared ? 'profile' : 'shared'} /></span><span>{t.shared ? 'Make it yours only' : `Share with ${PARTNER}`}</span><span />
             </button>
           )}
-          {!t.is_shared_topup && <button className="linkrow" onClick={() => { onDone?.(); router.push(`/rules?new=${encodeURIComponent(t.name)}&kind=${t.kind}&cat=${t.category_id ?? ''}`) }}><span className="who"><Icon name="rule" /></span><span>Always put {t.name} here</span><span /></button>}
+          {!t.is_shared_topup && <button className="linkrow" onClick={() => { onDone?.(); router.push(`/rules?new=${encodeURIComponent(normalizeMerchantLookupKey(t.name) || t.name)}&kind=${t.kind}&cat=${t.category_id ?? ''}`) }}><span className="who"><Icon name="rule" /></span><span>Always put {t.name} here</span><span /></button>}
           {ask ? (
             <div className="linkrow" style={{ gridTemplateColumns: '1fr auto auto' }}><span>Delete for good?</span><button className="btn ghost" style={{ minHeight: 38 }} onClick={() => setAsk(false)}>Cancel</button><button className="btn danger" style={{ minHeight: 38 }} disabled={busy} onClick={() => void act(`Deleted ${t.name}`, () => supabase().from('transactions').delete().eq('id', t.id))}>Delete</button></div>
           ) : <button className="linkrow" style={{ color: 'var(--over-text)' }} onClick={() => setAsk(true)}><span className="who" style={{ color: 'inherit' }}><Icon name="trash" /></span><span>Delete…</span><span /></button>}

@@ -72,7 +72,8 @@ function Reminder(): React.JSX.Element {
 
 const sharing = (r: ExportRow): string => r.is_shared_topup ? `Top-up (${r.shared_participant === 'gf' ? PARTNER : 'Me'})` : r.shared ? 'Shared' : 'Personal'
 const catName = (r: ExportRow): string => (Array.isArray(r.categories) ? r.categories[0]?.name : r.categories?.name) ?? (r.kind === 'income' ? 'Income' : 'Uncategorized')
-const csvCell = (v: string): string => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)
+// A leading = + - @ would run as a formula in a spreadsheet: prefix it with ' (CSV injection).
+const csvCell = (raw: string): string => { const v = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw; return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v }
 
 async function fetchRows(from: string, to: string): Promise<ExportRow[]> {
   const out: ExportRow[] = []
