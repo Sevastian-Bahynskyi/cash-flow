@@ -85,7 +85,7 @@ function Bank({ t }: { t: Tables }): React.JSX.Element {
   const row = (kind: Kind, x: Item, right: string, sub: string, prog: number | null, done = false): React.JSX.Element => (
     <button key={x.id} className={`linkrow mkb-bank ${kind}${done ? ' done' : ''}`} onClick={() => setOpen({ kind, id: x.id })}>
       <span className="who"><Icon name={x.icon} /></span>
-      <span style={{ minWidth: 0 }}><span className="nm">{x.name}</span><span className="sub">{done && <Check size={16} seed={x.name.length} />}{sub}</span>{prog !== null && <span className="goal" aria-hidden="true"><i style={{ width: `${prog}%` }} /></span>}</span>
+      <span style={{ minWidth: 0 }}><span className="nm">{x.name}</span><span className="sub">{done && <Check size={16} />}{sub}</span>{prog !== null && <span className="goal" aria-hidden="true"><i style={{ width: `${prog}%` }} /></span>}</span>
       <span className="end"><b className="num bankamt">{right}</b><Icon name="chev" /></span>
     </button>
   )
@@ -157,7 +157,7 @@ function Actions({ kind, x, t }: { kind: Kind; x: Item; t: Tables }): React.JSX.
   return (
     <>
       <div className="dhero"><div className="big serif num">{x.value ? kr(x.value, true) : 'Settled'}</div>
-        <p className={done ? 'mkb-done' : undefined}>{done && <Check size={18} seed={7} />}{kind === 'savings' ? (x.goal ? `${done ? 'Reached the' : 'of'} ${kr(x.goal, true)} goal` : 'No goal set yet') : done ? (kind === 'loan' ? `${kr(x.principal, true)} repaid` : 'Returned in full') : kind === 'loan' ? `left to repay of ${kr(x.principal, true)}` : `still owed of ${kr(x.principal, true)}`}</p>
+        <p className={done ? 'mkb-done' : undefined}>{done && <Check size={18} />}{kind === 'savings' ? (x.goal ? `${done ? 'Reached the' : 'of'} ${kr(x.goal, true)} goal` : 'No goal set yet') : done ? (kind === 'loan' ? `${kr(x.principal, true)} repaid` : 'Returned in full') : kind === 'loan' ? `left to repay of ${kr(x.principal, true)}` : `still owed of ${kr(x.principal, true)}`}</p>
         {kind === 'savings' && x.goal ? <span className="goal dgoal" aria-hidden="true"><i style={{ width: `${Math.min(100, pct(x.value, x.goal))}%` }} /></span> : null}
       </div>
       {x.synced ? <p className="note" style={{ textAlign: 'center' }}>The balance comes from your synced savings account.</p> : <>

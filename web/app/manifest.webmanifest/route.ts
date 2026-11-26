@@ -15,8 +15,8 @@ const manifest: MetadataRoute.Manifest = {
   start_url: '/',
   scope: '/',
   display: 'standalone',
-  background_color: '#E9E8E4',
-  theme_color: '#E9E8E4',
+  background_color: '#F2F3F7',
+  theme_color: '#F2F3F7',
   icons: [
     { src: appIconUrl(192), sizes: '192x192', type: 'image/png', purpose: 'any' },
     { src: appIconUrl(512), sizes: '512x512', type: 'image/png', purpose: 'any' },

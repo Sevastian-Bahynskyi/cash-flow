@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { Hanken_Grotesk, Newsreader } from 'next/font/google'
+import { Hanken_Grotesk } from 'next/font/google'
 import { PwaRegistration } from '@/components/PwaRegistration'
 import { APP_ICON_VERSION, appIconUrl } from '@/lib/app-icon'
 import './globals.css'
@@ -8,7 +8,6 @@ import './marks-a.css'
 import './marks-b.css'
 
 const hanken = Hanken_Grotesk({ subsets: ['latin'], weight: ['400', '500', '600'], variable: '--font-hanken', display: 'swap' })
-const newsreader = Newsreader({ subsets: ['latin'], weight: ['400', '500'], style: ['normal', 'italic'], variable: '--font-newsreader', display: 'swap' })
 
 export const metadata: Metadata = {
   title: 'Cashflow',
@@ -32,14 +31,14 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: 'cover',
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#E9E8E4' },
-    { media: '(prefers-color-scheme: dark)', color: '#0E0F16' },
+    { media: '(prefers-color-scheme: light)', color: '#F2F3F7' },
+    { media: '(prefers-color-scheme: dark)', color: '#0C0D12' },
   ],
 }
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>): React.JSX.Element {
   return (
-    <html lang="en" className={`${hanken.variable} ${newsreader.variable}`}>
+    <html lang="en" className={hanken.variable}>
       <head>
         <link rel="manifest" href="/manifest.webmanifest" crossOrigin="use-credentials" />
       </head>

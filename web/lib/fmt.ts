@@ -1,10 +1,12 @@
 // Money and dates at the edge (copy.md): integer minor units in, Intl out. Minus is U+2212.
+// Money always reads the Danish way ("1.843,50 kr.", "3,32 €"), whatever the phone's language: one format, like the bank's.
+const MONEY_LOCALE = 'da-DK'
 const cache = new Map<string, Intl.NumberFormat>()
 function nf(currency: string, whole: boolean): Intl.NumberFormat {
   const key = currency + whole
   let f = cache.get(key)
   if (!f) {
-    f = new Intl.NumberFormat(undefined, { style: 'currency', currency, ...(whole ? { maximumFractionDigits: 0, minimumFractionDigits: 0 } : {}) })
+    f = new Intl.NumberFormat(MONEY_LOCALE, { style: 'currency', currency, ...(whole ? { maximumFractionDigits: 0, minimumFractionDigits: 0 } : {}) })
     cache.set(key, f)
   }
   return f
@@ -58,9 +60,9 @@ export const range = (a: string, bInclusive: string): string => `${shortDate(a)}
 export function typedAmount(typed: string, currency = base): string {
   const [w = '', f] = typed.split(',')
   const digits = f?.length ?? 0
-  const f2 = new Intl.NumberFormat(undefined, { style: 'currency', currency, minimumFractionDigits: digits, maximumFractionDigits: digits })
+  const f2 = new Intl.NumberFormat(MONEY_LOCALE, { style: 'currency', currency, minimumFractionDigits: digits, maximumFractionDigits: digits })
   const parts = f2.formatToParts(Number(`${w || '0'}.${f || '0'}`))
-  const dec = new Intl.NumberFormat(undefined).formatToParts(1.5).find((p) => p.type === 'decimal')?.value ?? ','
+  const dec = new Intl.NumberFormat(MONEY_LOCALE).formatToParts(1.5).find((p) => p.type === 'decimal')?.value ?? ','
   let out = '', placed = false
   for (const p of parts) {
     out += p.value

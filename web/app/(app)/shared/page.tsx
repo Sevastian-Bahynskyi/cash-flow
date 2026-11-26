@@ -5,7 +5,6 @@ import { useState } from 'react'
 import { Header } from '@/components/Header'
 import { Icon } from '@/components/Icon'
 import { Gate, SkRows, StatusLine, TxRow, useDetail } from '@/components/ui'
-import { Underline } from '@/components/Marks'
 import type { Model } from '@/lib/data/model'
 import { pot } from '@/lib/data/pot'
 import { kr, shortDate } from '@/lib/fmt'
@@ -45,7 +44,7 @@ function Shared({ m }: { m: Model }): React.JSX.Element {
             <div className="pace" style={{ border: 0, margin: 0, padding: 0 }}><span>You put in <b className="num">{kr(p.meTopupTotal, true)}</b></span><span>{PARTNER} put in <b className="num">{kr(p.gfTopupTotal, true)}</b></span></div>
           </section>
           <div className="panel" style={{ marginTop: 12, padding: 16 }}>
-            <p className="owes">Your part of <span className="num">{kr(p.sharedExpenseTotal, true)}</span> spent together is <em className="num"><Underline seed={11}>{kr(p.userEffectiveShare, true)}</Underline></em></p>
+            <p className="owes">Your part of <span className="num">{kr(p.sharedExpenseTotal, true)}</span> spent together is <em className="num">{kr(p.userEffectiveShare, true)}</em></p>
             <p className="note" style={{ padding: '6px 0 0' }}>{p.totalTopupTotal ? `It follows what you each put in: ${p.myPct} of every 100 kr. is yours.` : 'Nothing was put in yet, so it’s split half and half.'} Nobody types a ratio.</p>
           </div>
           <h2 className="sec">Spent together</h2>

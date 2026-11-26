@@ -28,6 +28,6 @@
   .printout th,.printout td{text-align:left;padding:4px 6px;border-bottom:1px solid var(--line-2)}
   .printout .r{text-align:right;font-variant-numeric:tabular-nums}
 }
-.auth .authbrand{font-family:var(--font-newsreader),'Newsreader',Georgia,serif;font-size:22px;color:var(--ink);margin:0 0 28px}
+.auth .authbrand{font-size:22px;font-weight:600;letter-spacing:-.02em;color:var(--ink);margin:0 0 28px}
 .auth h1.consenth{font-size:34px}
 .auth .uri{font-size:13px;color:var(--ink-3);margin-top:6px}

@@ -33,7 +33,7 @@ function SignIn(): React.JSX.Element {
   return (
     <main className="auth">
       <div>
-        <p style={{ fontFamily: 'var(--font-newsreader),Georgia,serif', fontSize: 22, color: 'var(--ink)', marginBottom: 40 }}>Cashflow</p>
+        <p style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-.02em', color: 'var(--ink)', marginBottom: 40 }}>Cashflow</p>
         <h1>Your money, payday to payday</h1>
         <p>See what is left until payday, keep your budgets, and share a pot with the person you live with.</p>
         <div className="mini" aria-hidden="true">

@@ -4,26 +4,27 @@
 .brow .mk-meter{grid-column:2/4;margin:6px 0 1px}
 @media (min-width:960px){
   /* Wider last column: "DKK 1,142 left, ahead" must not clip. */
-  .brow,.thead{grid-template-columns:28px minmax(0,1fr) 76px 76px 140px}
+  .brow,.thead{grid-template-columns:40px minmax(0,1fr) 84px 84px 132px}
   .brow .mk-meter{grid-column:2/6}
   .brow .pill{justify-self:end}
-  .brow .pill.ahead{font-size:12px;padding:3px 7px}
 }
 .mka-lines .row{min-height:64px}
 .mka-lines .row .mk-meter{margin:7px 0 3px;max-width:240px}
 
-/* Budget hero: ahead keeps the indigo card; the pill with its hatch says it. Past cycles: kept, checked. */
+/* Budget hero: ahead keeps the indigo card, said in words. Past cycles: kept, checked. */
 .mka-aheadline,.mka-kept{display:inline-flex;align-items:center;gap:4px 8px;flex-wrap:wrap}
-.mka-aheadline .pill{display:inline-flex;align-items:center;gap:6px;font-size:12px}
-.mka-aheadline .hatch{display:inline-block;width:16px;height:10px;border-radius:2px;background:var(--ahead)}
+.mka-aheadline .pill{font-size:13px;padding:3px 10px;border-radius:99px;background:rgba(255,255,255,.16);color:var(--on-you)}
 .mka-kept .mk-check{color:var(--on-you);flex:none}
-
-/* Cycle card: the ring around today stays white on the card. */
-.mka-today{color:var(--on-you)}
-.mka-today path{stroke-width:1.7}
 
 /* Add sheet: what is left in a category, in its state's ink. */
 .mka-left{color:var(--ink-3);font-weight:400}
 .mka-left.ahead{color:var(--ahead-text);font-weight:500}
 .mka-left.over{color:var(--over-text);font-weight:500}
-.hero .big:has(.mk-under){margin-bottom:12px}
+
+/* Budget hero: the same meter, big and white on the card. */
+.herometer{display:block;margin:16px 0 4px}
+.herometer .mk-meter{height:12px;background:var(--on-you-line)}
+.herometer .mk-meter .mk-fill{background:var(--on-you)}
+.herometer .mk-meter.over .mk-fill{background:rgba(255,255,255,.55)}
+.herometer .mk-meter .mk-today{background:var(--on-you-2)}
+.herometer .mk-meter .mk-end{background:var(--you)}

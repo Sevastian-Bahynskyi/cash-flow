@@ -3,7 +3,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Icon } from './Icon'
-import { Oval } from './marks-b/Oval'
 import { Sheet } from './Sheet'
 import { useToast } from './Toast'
 import { useStore, write } from '@/lib/data/store'
@@ -35,12 +34,14 @@ export function TxRow({ t, m, onOpen, current }: { t: TransactionRow; m: Model; 
   const foreign = t.currency_code !== 'DKK' ? ` · ${kr(t.original_amount_minor, false, t.currency_code)}` : ''
   let sub: React.ReactNode, amt: React.ReactNode
   const pend = t.status === 'pending' ? <small>Pending</small> : null
-  if (w === 'moved' || w === 'annain' || w === 'own') { sub = <span>{WHO_LABEL[w]}</span>; amt = <div className="amt moved">{kr(t.amount_minor)}<small>Moved</small></div> }
-  else if (t.kind === 'income') { sub = <><Icon name={meta?.icon ?? 'in'} /><span>{meta?.name ?? 'Income'}{foreign}</span></>; amt = <div className="amt in">+{kr(t.amount_minor)}{pend ?? <small>In</small>}</div> }
-  else { sub = <><Icon name={meta?.icon ?? 'other'} /><span>{meta?.name ?? 'Category'}{t.shared ? `, shared with ${PARTNER}` : ''}{foreign}</span></>; amt = <div className="amt">{kr(t.amount_minor)}{pend}{pendingIds.has(t.id) && <small>Not synced</small>}</div> }
+  let badge: React.ReactNode = <Icon name={meta?.icon ?? (t.kind === 'income' ? 'in' : 'other')} />
+  if (w === 'moved' || w === 'annain' || w === 'own') { badge = WHO_ICON[w]; sub = <span>{WHO_LABEL[w]}</span>; amt = <div className="amt moved">{kr(t.amount_minor)}<small>Moved</small></div> }
+  else if (t.kind === 'income') { sub = <span>{meta?.name ?? 'Income'}{foreign}</span>; amt = <div className="amt in">+{kr(t.amount_minor)}{pend ?? <small>In</small>}</div> }
+  else { sub = <span>{meta?.name ?? 'Category'}{t.shared ? `, shared with ${PARTNER}` : ''}{foreign}</span>; amt = <div className="amt">{kr(t.amount_minor)}{pend}{pendingIds.has(t.id) && <small>Not synced</small>}</div> }
   return (
     <button className="row" onClick={() => onOpen(t)} aria-current={current ? 'true' : undefined} style={current ? { background: 'var(--surface-2)' } : undefined}>
-      <span className="who" title={WHO_LABEL[w]}>{WHO_ICON[w]}</span>
+      {/* the category on a soft disc; shared rows carry the two dots on its corner */}
+      <span className={`who ${w === 'income' ? 'in' : ''}`} title={WHO_LABEL[w]}>{badge}{w === 'shared' && <span className="badge">{WHO.shared}</span>}</span>
       <span style={{ minWidth: 0 }}><div className="nm">{t.name}{t.needs_review && <i className="unsure" title="Best guess, not confirmed yet" aria-label="Not confirmed yet" />}</div><div className="meta">{sub}</div></span>
       {amt}
     </button>
@@ -49,7 +50,7 @@ export function TxRow({ t, m, onOpen, current }: { t: TransactionRow; m: Model; 
 
 export const SkRows = ({ n }: { n: number }): React.JSX.Element => (
   <>{Array.from({ length: n }, (_, i) => (
-    <div className="row" key={i}><span className="sk" style={{ width: 22, height: 22, borderRadius: '50%' }} /><span><span className="sk" style={{ width: `${50 + (i * 37) % 40}%`, height: 12, marginBottom: 6 }} /><span className="sk" style={{ width: '30%', height: 10 }} /></span><span className="sk" style={{ width: 64, height: 12 }} /></div>
+    <div className="row" key={i}><span className="sk" style={{ width: 40, height: 40, borderRadius: '50%' }} /><span><span className="sk" style={{ width: `${50 + (i * 37) % 40}%`, height: 12, marginBottom: 6 }} /><span className="sk" style={{ width: '30%', height: 10 }} /></span><span className="sk" style={{ width: 64, height: 12 }} /></div>
   ))}</>
 )
 
@@ -297,7 +298,7 @@ export function DayList({ rows, m, onOpen, selected }: { rows: TransactionRow[];
       return (
         <div key={d}>
           <div className="dayh mkb-dayh">
-            {d === today ? <span className="mkb-today">{label}<Oval /></span> : <span>{label}</span>}
+            <span className={d === today ? 'mkb-today' : undefined}>{label}</span>
             {tot ? <span className="num">{kr(tot)}</span> : null}
             {tot > 0 && <span className="mkb-daybar" aria-hidden="true"><i style={{ width: `${Math.min(100, (100 * (tot - shared)) / top).toFixed(1)}%` }} />{shared > 0 && <i className="sh" style={{ width: `${Math.min(100 - Math.min(100, (100 * (tot - shared)) / top), (100 * shared) / top).toFixed(1)}%` }} />}</span>}
           </div>

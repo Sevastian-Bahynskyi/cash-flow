@@ -55,17 +55,16 @@ function Home({ m }: { m: Model }): React.JSX.Element {
     <div className="cols">
       <div>
         <CycleCard m={m} />
-        <div className="panel" style={{ marginTop: 8 }}>
+        <div className="panel" style={{ marginTop: 14 }}>
           {b.allMine > 0 && <NavRow href="/where" icon="where" name="Where it went" sub={`${kr(b.allMine, true)} spent${prev.allMine ? `, ${kr(Math.abs(b.allMine - prev.allMine), true)} ${b.allMine >= prev.allMine ? 'more' : 'less'} than ${m.prevOf(c)?.name}` : ''}`} />}
           {b.list.length > 0 && <NavRow href="/budgets" icon="budgets" name="Budgets" sub={`${b.list.length} categories, ${kr(Math.max(0, b.left), true)} left`} />}
         </div>
-        {!b.list.length && c?.real && <div className="panel" style={{ marginTop: 8 }}><NavRow href="/budgets" icon="budgets" name="Set your budgets" sub="Then the card shows what is left to spend" /></div>}
+        {!b.list.length && c?.real && <div className="panel" style={{ marginTop: 14 }}><NavRow href="/budgets" icon="budgets" name="Set your budgets" sub="Then the card shows what is left to spend" /></div>}
         {(over.length > 0 || ahead.length > 0) && <>
           <h2 className="sec">Needs a look</h2>
-          {over.length > 0 && <div className="alert"><Link className="row" href={`/budgets?cat=${over[0]!.id}`}><span className="who cat"><Icon name={over[0]!.cat!.icon} /></span><span><div className="nm">{over[0]!.cat!.name}</div><div className="meta num">{kr(over[0]!.spent, true)} of {kr(over[0]!.amount, true)}</div></span><span className="amt ovq">{kr(-over[0]!.left, true)} over</span></Link></div>}
-          {(over.length > 1 || ahead.length > 0) && <div className="panel mka-lines" style={{ marginTop: 8 }}>{[...over.slice(1), ...ahead].map((x) => (
+          <div className="panel mka-lines">{[...over, ...ahead].map((x) => (
             <Link className="row" key={x.id} href={`/budgets?cat=${x.id}`}><span className="who cat"><Icon name={x.cat!.icon} /></span><span style={{ minWidth: 0 }}><div className="nm">{x.cat!.name}</div><div className="meta num">{kr(x.spent, true)} of {kr(x.amount, true)}</div><Meter spent={x.spent} amount={x.amount} daysGoneShare={share} /></span><StatePill left={x.left} st={stateOf(x.spent, x.amount, share)} /></Link>
-          ))}</div>}
+          ))}</div>
         </>}
         <h2 className="sec">Balance</h2>
         <div className="panel" style={{ padding: 16 }}>
