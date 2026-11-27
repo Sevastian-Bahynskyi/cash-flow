@@ -6,9 +6,6 @@
   "scripts": {
     "start": "expo start",
     "start:clear": "expo start --clear",
-    "web:build": "expo export -p web",
-    "web:serve": "serve -s dist -l tcp://127.0.0.1:4173",
-    "my-cash-flow": "pnpm web:build && pnpm web:serve",
     "ios": "expo run:ios",
     "android": "expo run:android",
     "lint": "eslint .",
