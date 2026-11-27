@@ -7,6 +7,7 @@ import { findIncomeParentIds } from '@/core/domain/category-rules'
 import { buildNavigableCycles, findCycleFor, type SalaryCycle } from '@/core/domain/cycles'
 import { computeMyCostByTransactionId } from '@/core/domain/shared'
 import { addDays, daysBetween, todayYmd } from '@/core/fmt'
+import { supabaseUrl } from '@/lib/supabase'
 import { useStore } from './store'
 import type { BudgetRow, CategoryRow, Tables, TransactionRow } from './types'
 
@@ -30,6 +31,9 @@ function derive(t: Tables) {
   const incomeParents = findIncomeParentIds(cats)
   const isTransfer = (id: string | null): boolean => (parentOf(id)?.name.toLowerCase() ?? '') === TRANSFER
   const tx = t.transactions
+  // Keyed like scripts/logos.ts logoKey.
+  const logos = new Map(t.merchant_logos.map((l) => [l.key, `${supabaseUrl}/storage/v1/object/public/merchant-logos/${encodeURIComponent(l.path)}`]))
+  const logoOf = (name: string): string | null => logos.get(name.trim().toLowerCase()) ?? null
   // My cost of each expense: joint spending at my share of the cycle's top-ups (trailing 90 days, then half, when a cycle has none).
   const share = computeMyCostByTransactionId(tx, buildNavigableCycles(tx), today)
   const paidBack = new Map<string, number>()
@@ -106,7 +110,7 @@ function derive(t: Tables) {
   const days = current ? Math.max(1, daysBetween(current.startOn, current.endInclusive) + 1) : 0
   const daysLeft = current ? Math.max(0, daysBetween(today, current.endInclusive) + 1) : 0
 
-  return { t, today, options, cats, byId, meta, parentOf, incomeParents, isTransfer, tx, share, mine, portions, spendingIn, splitsOf, paidBack, cycles, current, inCycle, prevOf, budgetsOf, bankOf, days, daysLeft,
+  return { t, today, options, cats, byId, meta, parentOf, logoOf, incomeParents, isTransfer, tx, share, mine, portions, spendingIn, splitsOf, paidBack, cycles, current, inCycle, prevOf, budgetsOf, bankOf, days, daysLeft,
     payday: current ? addDays(current.endInclusive, 1) : null, hasSalary: tx.some((r) => r.is_salary) }
 }
 

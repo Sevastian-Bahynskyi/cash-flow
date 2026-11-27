@@ -73,6 +73,7 @@ const LOAD: { [K in TableName]: (uid: string) => Promise<Tables[K]> } = {
     return data ?? [];
   },
   transaction_splits: () => all((a, b) => sb.from('transaction_splits').select('id,user_id,transaction_id,category_id,amount_minor,note,created_at').order('created_at').order('id').range(a, b)),
+  merchant_logos: () => all((a, b) => sb.from('merchant_logos').select('key,path').not('path', 'is', null).order('key').range(a, b)),
   paybacks: () => all((a, b) => sb.from('paybacks').select('id,user_id,payment_transaction_id,expense_transaction_id,amount_minor,created_at').order('created_at').order('id').range(a, b)),
 };
 const NAMES = Object.keys(LOAD) as TableName[];
@@ -127,9 +128,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       try {
         const raw = await AsyncStorage.getItem(cacheKey(userId));
-        const cached = raw ? (JSON.parse(raw) as { t: Omit<Tables, 'shared_budgets'> & Partial<Tables>; at: number }) : null;
+        const cached = raw ? (JSON.parse(raw) as { t: Omit<Tables, 'shared_budgets' | 'merchant_logos'> & Partial<Tables>; at: number }) : null;
         // a device copy from before shared budgets existed has no such table yet
-        if (alive && cached && !tablesRef.current) { setTables({ shared_budgets: [], ...cached.t }); setLoadedAt(cached.at); setStatus('ready'); }
+        if (alive && cached && !tablesRef.current) { setTables({ shared_budgets: [], merchant_logos: [], ...cached.t }); setLoadedAt(cached.at); setStatus('ready'); }
       } catch { /* no device copy */ }
       if (alive) await reload();
       if (alive) await sync();
