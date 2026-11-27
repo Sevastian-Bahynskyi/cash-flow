@@ -38,7 +38,7 @@ const withGroq = async (respond: (body: string) => Response | Promise<Response>,
   const prompts: string[] = [];
   globalThis.fetch = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const url = input instanceof Request ? input.url : String(input);
-    if (!url.startsWith("https://api.groq.com")) return real(input, init);
+    if (!url.startsWith("https://openrouter.ai")) return real(input, init);
     const body = typeof init?.body === "string" ? init.body : "";
     prompts.push(body);
     return await respond(body);

@@ -16,7 +16,7 @@ if (!sp || !bankStatePath) throw new Error("usage: sync-local.ts <sp-dir> <bankm
 const status = new Deno.Command("supabase", { args: ["status", "-o", "json"], stdout: "piped", stderr: "null" }).outputSync();
 const local: { API_URL: string; SERVICE_ROLE_KEY: string } = JSON.parse(new TextDecoder().decode(status.stdout));
 if (!/^https?:\/\/(127\.0\.0\.1|localhost)[:/]/.test(local.API_URL)) throw new Error("refusing to run: not a local stack");
-Deno.env.delete("GROQ_API_KEY"); // AI stays off locally: leftovers keep the deterministic best guess.
+Deno.env.delete("OPENROUTER_API_KEY"); // AI stays off locally: leftovers keep the deterministic best guess.
 
 const db = createClient(local.API_URL, local.SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 

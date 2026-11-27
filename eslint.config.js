@@ -14,7 +14,10 @@ module.exports = defineConfig([
       'coverage/**',
       'dist/**',
       'supabase/functions/**',
-      'scripts/logos*.ts', // Deno, like the functions
+      // Deno scripts, like the functions
+      'scripts/logos.ts',
+      'scripts/bank/**',
+      'scripts/classify/*.ts',
     ],
   },
   ...expo,
