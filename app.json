@@ -33,7 +33,8 @@
       "expo-localization",
       "expo-font",
       "expo-notifications",
-      "./plugins/withPodsMinDeploymentTarget"
+      "./plugins/withPodsMinDeploymentTarget",
+      "./plugins/withSceneLifecycle"
     ],
     "experiments": {
       "typedRoutes": true
