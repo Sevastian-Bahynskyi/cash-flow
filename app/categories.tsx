@@ -1,3 +1,1 @@
-import CategoryManagementScreen from '@/features/categories/CategoryManagementScreen';
-
-export default CategoryManagementScreen;
+export { default } from '@/screens/Categories';

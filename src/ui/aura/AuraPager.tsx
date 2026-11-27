@@ -64,8 +64,8 @@ function AuraPageView({ page, width, height, unit, index, position }: {
   page: AuraPage; width: number; height: number; unit: string; index: number; position: ReturnType<typeof useDerivedValue<number>>;
 }) {
   const ink = MOODS[page.mood].ink;
-  const glow = ink === '#FFFFFF' ? 'rgba(255,255,255,0.45)' : 'transparent';
   const amount = `${page.sign ?? ''}${bigAmount(page.amountMinor)}`;
+  const size = Math.min(width * 0.32, 140);
   // the number softens and drifts as it leaves, like the prototype
   const leave = useAnimatedStyle(() => {
     const d = Math.abs(position.value - index);
@@ -84,7 +84,8 @@ function AuraPageView({ page, width, height, unit, index, position }: {
         </View>
         <View style={styles.numberRow}>
           <Text
-            style={[styles.big, { color: ink, textShadowColor: glow, fontSize: Math.min(width * 0.34, 150) }]}
+            // iOS draws a text shadow as a box and clips slanted glyphs to the text frame: no shadow, and room for the slant
+            style={[styles.big, { color: ink, fontSize: size, paddingHorizontal: size * 0.08 }]}
             numberOfLines={1}
             adjustsFontSizeToFit
             minimumFontScale={0.5}
@@ -138,8 +139,8 @@ const styles = StyleSheet.create({
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
   label: { fontFamily: auraFonts.label, fontSize: 17, opacity: 0.88 },
   numberRow: { flexDirection: 'row', alignItems: 'flex-end', maxWidth: '100%' },
-  big: { fontFamily: auraFonts.number, letterSpacing: -2, includeFontPadding: false, textShadowRadius: 28, textShadowOffset: { width: 0, height: 0 }, flexShrink: 1 },
-  unit: { fontFamily: auraFonts.numberUnit, fontSize: 20, marginLeft: 4, marginBottom: 14 },
+  big: { fontFamily: auraFonts.number, letterSpacing: -2, includeFontPadding: false, flexShrink: 1 },
+  unit: { fontFamily: auraFonts.numberUnit, fontSize: 20, marginLeft: -4, marginBottom: 14 },
   line: { fontFamily: auraFonts.line, fontSize: 21, marginTop: 14, textAlign: 'center' },
   subline: { fontFamily: auraFonts.label, fontSize: 14, opacity: 0.82, marginTop: 4, textAlign: 'center' },
   bars: { position: 'absolute', left: 48, right: 48, bottom: 44, gap: 12 },
