@@ -46,6 +46,7 @@ import Info from 'lucide-react-native/icons/info';
 import CircleHelp from 'lucide-react-native/icons/circle-help';
 import KeyRound from 'lucide-react-native/icons/key-round';
 import Landmark from 'lucide-react-native/icons/landmark';
+import LayoutGrid from 'lucide-react-native/icons/layout-grid';
 import Laptop from 'lucide-react-native/icons/laptop';
 import Lightbulb from 'lucide-react-native/icons/lightbulb';
 import Link from 'lucide-react-native/icons/link';
@@ -66,7 +67,6 @@ import Receipt from 'lucide-react-native/icons/receipt';
 import RefreshCw from 'lucide-react-native/icons/refresh-cw';
 import RotateCw from 'lucide-react-native/icons/rotate-cw';
 import Search from 'lucide-react-native/icons/search';
-import Shapes from 'lucide-react-native/icons/shapes';
 import ShieldCheck from 'lucide-react-native/icons/shield-check';
 import Shirt from 'lucide-react-native/icons/shirt';
 import ShoppingBag from 'lucide-react-native/icons/shopping-bag';
@@ -114,7 +114,7 @@ const ICONS: Readonly<Record<string, LucideIcon>> = {
   savings: PiggyBank,
   loan: Hourglass,
   owed: HandCoins,
-  other: Shapes,
+  other: LayoutGrid,
   basket: ShoppingBasket,
   store: Store,
   utensils: Utensils,
@@ -204,5 +204,5 @@ export function iconFor(name: string | null | undefined): LucideIcon {
   const raw = name ?? '';
   const legacy = Object.hasOwn(LEGACY, raw) ? LEGACY[raw] ?? raw : raw;
   const key = Object.hasOwn(ALIAS, legacy) ? ALIAS[legacy] ?? legacy : legacy;
-  return (Object.hasOwn(ICONS, key) ? ICONS[key] : undefined) ?? Shapes;
+  return (Object.hasOwn(ICONS, key) ? ICONS[key] : undefined) ?? LayoutGrid;
 }

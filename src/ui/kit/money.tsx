@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, Text, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
@@ -19,6 +19,22 @@ export const whoOf = (t: TransactionRow): Who => t.is_shared_topup ? (t.shared_p
 export const WHO_LABEL: Record<Who, string> = { none: 'Yours', shared: `Shared with ${PARTNER}`, moved: 'Moved to the shared pot', annain: `${PARTNER}, into the shared pot`, income: 'Money in', own: 'Moved between your accounts' };
 
 /** One transaction row: whose it is, name, category, amount with sign and colour. Shared rows wear the turning ring. */
+/** The merchant's logo with its category as a small badge; the plain category disc when the logo fails to load. */
+function LogoDisc({ uri, icon, color, children }: { uri: string; icon: string; color: string; children?: ReactNode }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <Disc icon={icon} color={color}>{children}</Disc>;
+  return (
+    <View style={{ width: 40, height: 40 }}>
+      {/* logos are drawn for white pages */}
+      <Image source={{ uri }} onError={() => setFailed(true)} accessibilityIgnoresInvertColors style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#fff' }} />
+      <View style={{ position: 'absolute', right: -6, bottom: -6, width: 24, height: 24, borderRadius: 12, backgroundColor: C.surface2, borderWidth: 2, borderColor: C.surface, alignItems: 'center', justifyContent: 'center' }}>
+        <Icon name={icon} size={13} color={color} />
+      </View>
+      {children}
+    </View>
+  );
+}
+
 export function TxRow({ t, m, onOpen, current, categoryId, scope }: { t: TransactionRow; m: Model; onOpen: (t: TransactionRow) => void; current?: boolean; categoryId?: string; scope?: Scope }) {
   const w = whoOf(t);
   const meta = m.meta[t.category_id ?? ''];
@@ -43,12 +59,14 @@ export function TxRow({ t, m, onOpen, current, categoryId, scope }: { t: Transac
       icon = category?.icon ?? 'other';
     }
   }
+  const ring = w === 'shared' && !m.isTransfer(t.category_id) && !t.counterparty_person_id ? <View style={{ position: 'absolute', left: -5, top: -5 }}><SharedRing size={50} /></View> : null;
+  const logo = w === 'moved' || w === 'annain' || w === 'own' || t.counterparty_person_id ? null : m.logoOf(t.name);
   return (
     <Row
       onPress={() => onOpen(t)}
       selected={current}
       accessibilityLabel={`${t.name}, ${sub}, ${amount}${w === 'shared' ? `, shared with ${PARTNER}` : ''}`}
-      lead={<Disc icon={icon} bg={discBg} color={discInk}>{w === 'shared' && !m.isTransfer(t.category_id) && !t.counterparty_person_id ? <View style={{ position: 'absolute', left: -5, top: -5 }}><SharedRing size={50} /></View> : null}</Disc>}
+      lead={logo ? <LogoDisc uri={logo} icon={icon} color={discInk}>{ring}</LogoDisc> : <Disc icon={icon} bg={discBg} color={discInk}>{ring}</Disc>}
       title={<View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><T k="strong" numberOfLines={1} style={{ flexShrink: 1 }}>{t.name}</T>{t.needs_review ? <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: C.ahead }} accessibilityLabel="Not confirmed yet" /> : null}</View>}
       meta={sub}
       end={<View style={{ alignItems: 'flex-end' }}><Text style={{ fontFamily: F.strong, fontSize: 16, color, fontVariant: ['tabular-nums'] }}>{amount}</Text>{small ? <T k="meta" style={{ fontSize: 11 }}>{small}</T> : null}</View>}

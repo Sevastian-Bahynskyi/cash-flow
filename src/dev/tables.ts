@@ -43,6 +43,7 @@ export function fixtureTables(scenario: QaScenario): Tables {
     receivables: [],
     receivable_events: [],
     merchant_category_rules: [],
+    merchant_logos: [],
     transfer_people: [],
     profile: { display_name: 'Cashflow QA', avatar_url: null },
     bank_connections: [],
