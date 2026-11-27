@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { FontAwesome6 } from '@expo/vector-icons';
@@ -40,6 +41,14 @@ import { buildNavigableCycles, type SalaryCycle } from '@/lib/cycles';
 import { computePersonalExpenseMinorByTransactionId } from '@/lib/shared';
 import type { TransactionRow } from '@/features/transactions/types';
 import { supabase } from '@/lib/supabase';
+import { AuraPager } from '@/ui/aura/AuraPager';
+import { CycleClosedMoment } from '@/ui/aura/CycleClosedMoment';
+import { buildAuraHome } from './auraPages';
+
+// The aura leaves this much of the screen for the list below it to peek in.
+const AURA_PEEK = 64;
+const TAB_BAR_HEIGHT = 88;
+const CLOSED_CYCLE_SEEN_KEY = 'aura.closedCycleSeen';
 
 type RangeFilter = 'month' | 'year' | 'all';
 const TOP_CATEGORIES_COLLAPSED_COUNT = 5;
@@ -173,6 +182,28 @@ export default function HomeScreen() {
   const heroPulse = useSharedValue(0);
   const heroPagerRef = useRef<ScrollView | null>(null);
   const [heroPagerWidth, setHeroPagerWidth] = useState(0);
+  const { height: windowHeight } = useWindowDimensions();
+  const auraHome = useMemo(
+    () => buildAuraHome(data),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [data.activeCycle, data.previousCycle, data.budgets, data.categories, data.transactions, data.shared, data.cycleBalanceMinor, data.categoryLabels],
+  );
+  const [momentVisible, setMomentVisible] = useState(false);
+  const activeCycleId = data.activeCycle?.id ?? null;
+  const hasPreviousCycle = auraHome.previousKeptMinor !== null;
+
+  // Show "Cycle closed" once for each new cycle.
+  useEffect(() => {
+    if (!activeCycleId || !hasPreviousCycle) return;
+    AsyncStorage.getItem(CLOSED_CYCLE_SEEN_KEY)
+      .then((seen) => { if (seen !== activeCycleId) setMomentVisible(true); })
+      .catch(() => undefined);
+  }, [activeCycleId, hasPreviousCycle]);
+
+  const closeMoment = (): void => {
+    setMomentVisible(false);
+    if (activeCycleId) AsyncStorage.setItem(CLOSED_CYCLE_SEEN_KEY, activeCycleId).catch(() => undefined);
+  };
 
   useEffect(() => {
     if (composer.refreshKey > 0) runDetached(data.reload(), 'home.reload');
@@ -472,8 +503,21 @@ export default function HomeScreen() {
     opacity: interpolate(heroPulse.value, [0, 1], [0.1, 0.32]),
   }));
 
+  const header = (
+    <ScreenHeader
+      title="Home"
+      subtitle="Personal flow"
+      actions={[
+        { icon: 'bell', onPress: () => router.push('/alerts'), badgeCount: alertCount, accessibilityLabel: 'Alerts' },
+        { icon: 'brain', onPress: () => router.push('/ai-rules'), accessibilityLabel: 'AI rules' }
+      ]}
+      avatar={{ uri: profile.avatarUrl, onPress: () => router.push('/profile' as never) }}
+    />
+  );
+
   return (
     <MotionScope value={motionRun}>
+      <CycleClosedMoment visible={momentVisible} keptMinor={auraHome.previousKeptMinor ?? 0} onClose={closeMoment} />
       <Animated.ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
@@ -481,15 +525,9 @@ export default function HomeScreen() {
         onScroll={onScroll}
         scrollEventThrottle={16}
       >
-        <ScreenHeader
-          title="Home"
-          subtitle="Personal flow"
-          actions={[
-            { icon: 'bell', onPress: () => router.push('/alerts'), badgeCount: alertCount, accessibilityLabel: 'Alerts' },
-            { icon: 'brain', onPress: () => router.push('/ai-rules'), accessibilityLabel: 'AI rules' }
-          ]}
-          avatar={{ uri: profile.avatarUrl, onPress: () => router.push('/profile' as never) }}
-        />
+        {!data.isInitialLoading && auraHome.pages.length > 0 ? (
+          <AuraPager pages={auraHome.pages} height={windowHeight - TAB_BAR_HEIGHT - AURA_PEEK} header={header} />
+        ) : header}
 
         {data.isInitialLoading ? <HomeSkeleton /> : null}
 

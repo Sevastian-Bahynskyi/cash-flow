@@ -1,4 +1,7 @@
 import { useEffect } from 'react';
+import { useFonts } from 'expo-font';
+import { BarlowCondensed_700Bold_Italic, BarlowCondensed_800ExtraBold_Italic } from '@expo-google-fonts/barlow-condensed';
+import { Barlow_500Medium, Barlow_600SemiBold, Barlow_600SemiBold_Italic, Barlow_700Bold_Italic } from '@expo-google-fonts/barlow';
 import { Stack, usePathname, useRouter, useSegments } from 'expo-router';
 import { ActivityIndicator, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
@@ -116,6 +119,17 @@ function AuthGate() {
 }
 
 export default function RootLayout() {
+  const [fontsLoaded, fontError] = useFonts({
+    BarlowCondensed_700Bold_Italic,
+    BarlowCondensed_800ExtraBold_Italic,
+    Barlow_500Medium,
+    Barlow_600SemiBold,
+    Barlow_600SemiBold_Italic,
+    Barlow_700Bold_Italic,
+  });
+  // the aura's type is the look; wait for it, but never block the app on a font failure
+  if (!fontsLoaded && !fontError) return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
+
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }}>
       <SafeAreaProvider>

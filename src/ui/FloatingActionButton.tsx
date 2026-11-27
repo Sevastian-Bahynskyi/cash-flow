@@ -21,6 +21,7 @@ type FloatingActionButtonProps = {
     bottom: number;
     right: number;
     backgroundColor?: string;
+    iconColor?: string;
     hidden?: boolean;
     animateOnMount?: boolean;
     hideTranslate?: number;
@@ -35,6 +36,7 @@ export function FloatingActionButton({
     bottom,
     right,
     backgroundColor = colors.accent,
+    iconColor = colors.text,
     hidden = false,
     animateOnMount = false,
     hideTranslate = DEFAULT_HIDE_TRANSLATE,
@@ -65,8 +67,8 @@ export function FloatingActionButton({
                 onPress={onPress}
                 style={({ pressed }) => [styles.fab, { backgroundColor }, pressed && styles.fabPressed]}
             >
-                <FontAwesome6 name={icon} size={24} color={colors.text} />
-                <Text style={styles.fabLabel}>{label}</Text>
+                <FontAwesome6 name={icon} size={24} color={iconColor} />
+                <Text style={[styles.fabLabel, { color: iconColor }]}>{label}</Text>
             </Pressable>
         </Animated.View>
     );

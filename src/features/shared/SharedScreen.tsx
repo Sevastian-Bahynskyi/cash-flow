@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,6 +14,8 @@ import { MotionView } from '@/ui/MotionView';
 import { FilterChips } from '@/ui/FilterChips';
 import { FloatingActionButton } from '@/ui/FloatingActionButton';
 import { ScreenHeader } from '@/ui/ScreenHeader';
+import { AuraPager } from '@/ui/aura/AuraPager';
+import { bigAmount } from '@/ui/aura/type';
 import { SkeletonBlock, SkeletonCard } from '@/ui/Skeleton';
 import { TopCategoriesSection } from '@/ui/TopCategoriesSection';
 import { HeroCard } from '@/ui/HeroCard';
@@ -351,6 +353,15 @@ export default function SharedScreen() {
     heroPagerRef.current?.scrollTo({ x: selectedIndex * heroPagerWidth, animated: false });
   }, [cyclesWithTransactions, heroPagerWidth, selectedCycle?.id, showCycleCarousel]);
 
+  const { height: windowHeight } = useWindowDimensions();
+  const header = (
+    <ScreenHeader
+      title="Shared"
+      subtitle="Fairness and shared spend"
+      avatar={{ uri: profile.avatarUrl, onPress: () => router.push('/profile' as never) }}
+    />
+  );
+
   return (
     <MotionScope value={motionRun}>
       <View style={styles.container}>
@@ -359,11 +370,20 @@ export default function SharedScreen() {
           contentContainerStyle={styles.content}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.text} />}
         >
-          <ScreenHeader
-            title="Shared"
-            subtitle="Fairness and shared spend"
-            avatar={{ uri: profile.avatarUrl, onPress: () => router.push('/profile' as never) }}
-          />
+          {data.isInitialLoading ? header : (
+            <AuraPager
+              height={Math.round(windowHeight * 0.66)}
+              header={header}
+              pages={[{
+                key: 'shared',
+                mood: 'shared',
+                label: 'Shared',
+                amountMinor: sharedBalance,
+                line: sharedBalance >= 0 ? 'Left in the shared account.' : 'The shared account is short.',
+                subline: `You added ${bigAmount(meTopupTotal)} kr. · your partner ${bigAmount(gfTopupTotal)} kr.`,
+              }]}
+            />
+          )}
 
           {data.isInitialLoading ? <SharedSkeleton /> : null}
 

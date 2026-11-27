@@ -5,6 +5,7 @@ import { formatDateLabel, formatMinor } from '@/lib/format';
 import type { TransactionRow } from './types';
 import { MotionView } from '@/ui/MotionView';
 import { CategoryIcon } from '@/ui/CategoryIcon';
+import { SharedRing } from '@/ui/aura/SharedRing';
 import { SelectionIndicator } from '@/ui/SelectionIndicator';
 import { SharedParticipantChip } from '@/features/shared/SharedParticipantChip';
 
@@ -96,8 +97,15 @@ function TransactionRowCard({
         }}
         onLongPress={openActions}
       >
-        <View style={[styles.iconWrap, { backgroundColor: `${item.categoryColor}22` }]}>
-          <CategoryIcon name={item.categoryIcon} size={20} color={item.categoryColor} />
+        <View style={styles.iconSlot}>
+          <View style={[styles.iconWrap, { backgroundColor: `${item.categoryColor}22` }]}>
+            <CategoryIcon name={item.categoryIcon} size={20} color={item.categoryColor} />
+          </View>
+          {row.shared && !row.is_shared_topup ? (
+            <View style={styles.sharedRing} accessible accessibilityLabel="Shared">
+              <SharedRing size={52} />
+            </View>
+          ) : null}
         </View>
         <View style={styles.rowBody}>
           <View style={styles.rowTop}>
@@ -252,10 +260,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
   },
   rowPressed: { opacity: 0.85 },
+  iconSlot: { width: 42, height: 42 },
+  sharedRing: { position: 'absolute', left: -5, top: -5, width: 52, height: 52 },
   iconWrap: {
     width: 42,
     height: 42,
-    borderRadius: radius.md,
+    borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
   },

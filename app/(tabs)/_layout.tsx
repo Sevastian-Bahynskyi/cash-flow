@@ -1,25 +1,13 @@
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Tabs, usePathname } from 'expo-router';
-import { FontAwesome6 } from '@expo/vector-icons';
+import { Bank, ChartPie, House, Users } from '@/ui/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useComposer } from '@/features/transactions/composer/context/ComposerContext';
 import { FloatingActionButton } from '@/ui/FloatingActionButton';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 
-const iconForRoute = (name: string, focused: boolean): keyof typeof FontAwesome6.glyphMap => {
-  switch (name) {
-    case 'index':
-      return focused ? 'house' : 'house';
-    case 'dashboard':
-      return focused ? 'chart-pie' : 'chart-pie';
-    case 'shared':
-      return focused ? 'users' : 'users';
-    case 'bank':
-      return focused ? 'building-columns' : 'building-columns';
-    default:
-      return 'circle';
-  }
-};
+const ICONS = { index: House, dashboard: ChartPie, shared: Users, bank: Bank } as const;
+const iconForRoute = (name: string) => ICONS[name as keyof typeof ICONS] ?? House;
 
 function GlobalAddButton() {
   const composer = useComposer();
@@ -40,7 +28,8 @@ function GlobalAddButton() {
       onPress={() => composer.openCreate()}
       bottom={bottom}
       right={spacing.xl}
-      backgroundColor={colors.accent}
+      backgroundColor="#F2F2F3"
+      iconColor="#0D0D0F"
       hidden={hidden}
     />
   );
@@ -68,11 +57,10 @@ export default function TabsLayout() {
           tabBarLabelStyle: [styles.tabLabel, isWide && styles.sideBarLabel],
           sceneStyle: isWide ? styles.wideScene : undefined,
           tabBarIcon: ({ focused, color }) => (
-            <FontAwesome6
-              name={iconForRoute(route.name, focused)}
-              size={22}
-              color={color}
-            />
+            (() => {
+              const Icon = iconForRoute(route.name);
+              return <Icon size={26} color={color} weight={focused ? 'fill' : 'duotone'} />;
+            })()
           ),
         })}
       >
@@ -91,9 +79,8 @@ const styles = StyleSheet.create({
   tabBar: {
     position: 'absolute',
     height: 88,
-    backgroundColor: 'rgba(11,11,15,0.96)',
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    backgroundColor: '#0D0D0F',
+    borderTopWidth: 0,
     paddingTop: spacing.sm,
     paddingBottom: spacing.md,
   },

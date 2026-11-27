@@ -20,6 +20,8 @@
     "postinstall": "patch-package"
   },
   "dependencies": {
+    "@expo-google-fonts/barlow": "0.4.1",
+    "@expo-google-fonts/barlow-condensed": "0.4.1",
     "@expo/metro-runtime": "~6.1.2",
     "@expo/vector-icons": "^15.1.1",
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -44,6 +46,7 @@
     "expo-status-bar": "~3.0.9",
     "expo-web-browser": "~15.0.11",
     "patch-package": "^8.0.1",
+    "phosphor-react-native": "3.0.6",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.5",
