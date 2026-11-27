@@ -1,1 +1,1 @@
-export { default } from '@/screens/Cycle';
+export { BudgetsHome as default } from '@/screens/Budgets';

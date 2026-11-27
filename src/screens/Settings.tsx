@@ -119,7 +119,7 @@ function SettingsBody({ m }: { m: Model }) {
       <Export m={m} />
       <List>{[
         <Row key="o" disabled={out} lead={<Disc icon="signout" color={C.over} />} title={<T k="strong" style={{ color: C.over }}>{out ? 'Signing out…' : 'Sign out'}</T>}
-          onPress={() => { setOut(true); (async () => { try { if (userId) await AsyncStorage.removeItem(`cashflow:data:${userId}`); await signOut(); } catch { setOut(false); toast('Not signed out. Check the connection and try again.'); } })().catch(() => undefined); }} />,
+          onPress={() => { setOut(true); (async () => { try { if (userId) await AsyncStorage.removeItem(`cashflow:data:${userId}`); await signOut(); } catch { setOut(false); toast('Not signed out. Check the connection and try again.', undefined, 'error'); } })().catch(() => undefined); }} />,
       ]}</List>
     </Screen>
   );

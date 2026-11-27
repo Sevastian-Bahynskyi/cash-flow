@@ -10,6 +10,10 @@ import { useStore } from './store'
 import type { BudgetRow, CategoryRow, Tables, TransactionRow } from './types'
 
 export type Cycle = SalaryCycle & { name: string; endInclusive: string; real: boolean }
+/** Whose budgets: yours (your purchases and your share of joint ones) or the joint account's (joint purchases in full). */
+export type Scope = 'personal' | 'shared'
+/** The latest synced balance of the personal or the joint account(s); null when the bank has given none. */
+export type BankBalance = { minor: number; at: string; accounts: number }
 export type Model = ReturnType<typeof derive>
 
 const TRANSFER = 'transfers'
@@ -35,17 +39,19 @@ function derive(t: Tables) {
   /** What this row costs you: your share of a shared expense, less what people paid back; nothing for money moved, top-ups or transfers. */
   const mine = (r: TransactionRow): number => r.kind !== 'expense' || r.is_shared_topup || NEUTRAL.has(r.movement ?? '') || isTransfer(r.category_id) ? 0
     : Math.max(0, (share.get(r.id) ?? r.amount_minor) - (paidBack.get(r.id) ?? 0))
-  /** Your cost of a row by category: split parts go to their own category, the rest stays on the row's (budgets and analytics sum these). */
-  const portions = (r: TransactionRow): { category_id: string | null; minor: number }[] => {
-    const v = mine(r)
+  /** What a joint purchase costs the joint account: its full amount, once. Top-ups, money moved and transfers cost nothing. */
+  const joint = (r: TransactionRow): number => !r.shared || r.kind !== 'expense' || r.status === 'void' || r.is_shared_topup || NEUTRAL.has(r.movement ?? '') || isTransfer(r.category_id) ? 0 : r.amount_minor
+  /** A row's cost by category for one scope: split parts go to their own category, the rest stays on the row's (budgets and analytics sum these). */
+  const portions = (r: TransactionRow, scope: Scope = 'personal'): { category_id: string | null; minor: number }[] => {
+    const v = scope === 'shared' ? joint(r) : mine(r)
     const sp = splitsOf.get(r.id)
     if (!v || !sp?.length || !r.amount_minor) return [{ category_id: r.category_id, minor: v }]
     const parts = sp.map((x) => ({ category_id: x.category_id, minor: Math.round((v * x.amount_minor) / r.amount_minor) }))
     return [...parts, { category_id: r.category_id, minor: v - parts.reduce((a, x) => a + x.minor, 0) }]
   }
-  const spendingIn = (r: TransactionRow, categoryId: string): number => {
+  const spendingIn = (r: TransactionRow, categoryId: string, scope: Scope = 'personal'): number => {
     const category = byId.get(categoryId)
-    return portions(r).reduce((sum, part) => {
+    return portions(r, scope).reduce((sum, part) => {
       const parent = parentOf(part.category_id)
       const matches = categoryId === 'uncategorized' ? !parent : category?.level === 1 ? parent?.id === categoryId : part.category_id === categoryId
       return matches ? sum + part.minor : sum
@@ -62,12 +68,13 @@ function derive(t: Tables) {
   const inCycle = (c: Cycle | null) => (r: { occurred_on: string }): boolean => Boolean(c && r.occurred_on >= c.startOn && (c.endOnExclusive === null || r.occurred_on < c.endOnExclusive))
   const prevOf = (c: Cycle | null): Cycle | null => { const i = c ? cycles.findIndex((x) => x.id === c.id) : -1; return i > 0 ? cycles[i - 1] ?? null : null }
 
-  /** Budgets of a cycle by parent category, with what you spent there (child rows roll up to the parent). */
-  function budgetsOf(c: Cycle | null) {
+  /** Budgets of a cycle by parent category, with what was spent there (child rows roll up to the parent). Each salary cycle has its own limits; unused room never carries over. */
+  function budgetsOf(c: Cycle | null, scope: Scope = 'personal') {
     const rows = c ? tx.filter(inCycle(c)) : []
     const spent = new Map<string, number>()
-    for (const r of rows) for (const x of portions(r)) { const p = parentOf(x.category_id); if (p && x.minor) spent.set(p.id, (spent.get(p.id) ?? 0) + x.minor) }
-    const list = (c ? t.budgets.filter((b) => b.salary_cycle_id === c.id) : []).map((b: BudgetRow) => {
+    for (const r of rows) for (const x of portions(r, scope)) { const p = parentOf(x.category_id); if (p && x.minor) spent.set(p.id, (spent.get(p.id) ?? 0) + x.minor) }
+    const limits = scope === 'shared' ? t.shared_budgets : t.budgets
+    const list = (c ? limits.filter((b) => b.salary_cycle_id === c.id) : []).map((b: BudgetRow) => {
       const cat = byId.get(b.category_id)
       const s = spent.get(b.category_id) ?? 0
       return { budget: b, cat, id: b.category_id, spent: s, amount: b.amount_minor, left: b.amount_minor - s, ratio: b.amount_minor ? s / b.amount_minor : 0 }
@@ -87,10 +94,18 @@ function derive(t: Tables) {
     ...cats.filter((r) => r.level === 2 && r.parent_id).map((r) => { const p = byId.get(r.parent_id as string); const pn = p?.name ?? ''; const n = getDisplayCategoryName(pn, r.name); return { id: r.id, name: n, parentName: pn, searchKey: `${pn} ${n} ${r.name}`.toLowerCase(), parentId: r.parent_id as string, icon: r.icon, color: r.color, parentColor: p?.color ?? r.color, parentIcon: p?.icon ?? r.icon } }),
   ]
 
+  /** What is in the bank now: the personal or joint account(s), summed; the time is the oldest of their syncs. It spans every cycle. */
+  const bankOf = (scope: Scope): BankBalance | null => {
+    const accounts = t.bank_accounts.filter((a) => a.role === (scope === 'shared' ? 'joint' : 'personal') && a.balance_minor !== null)
+    if (!accounts.length) return null
+    const at = accounts.map((a) => a.balance_at ?? a.last_synced_at ?? '').sort()[0] ?? ''
+    return { minor: accounts.reduce((sum, a) => sum + (a.balance_minor ?? 0), 0), at, accounts: accounts.length }
+  }
+
   const days = current ? Math.max(1, daysBetween(current.startOn, current.endInclusive) + 1) : 0
   const daysLeft = current ? Math.max(0, daysBetween(today, current.endInclusive) + 1) : 0
 
-  return { t, today, options, cats, byId, meta, parentOf, incomeParents, isTransfer, tx, share, mine, portions, spendingIn, splitsOf, paidBack, cycles, current, inCycle, prevOf, budgetsOf, days, daysLeft,
+  return { t, today, options, cats, byId, meta, parentOf, incomeParents, isTransfer, tx, share, mine, portions, spendingIn, splitsOf, paidBack, cycles, current, inCycle, prevOf, budgetsOf, bankOf, days, daysLeft,
     payday: current ? addDays(current.endInclusive, 1) : null, hasSalary: tx.some((r) => r.is_salary) }
 }
 

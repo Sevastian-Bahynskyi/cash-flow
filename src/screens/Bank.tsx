@@ -47,7 +47,7 @@ function Accounts({ t }: { t: Tables }) {
       const url = res.data?.url;
       if (res.error || !url) throw new Error('Couldn’t start the renewal. Try again in a moment.');
       await Linking.openURL(url);
-    } catch (e) { toast(e instanceof Error ? e.message : 'Couldn’t start the renewal.'); } finally { setBusy(null); }
+    } catch (e) { toast(e instanceof Error ? e.message : 'Couldn’t start the renewal.', undefined, 'error'); } finally { setBusy(null); }
   };
   if (!t.bank_connections.length) return <Panel><Empty title="No bank connected" sub="Cashflow reads your accounts through Enable Banking, read-only." /></Panel>;
   return (

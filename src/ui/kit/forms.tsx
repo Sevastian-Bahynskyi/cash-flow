@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Pressable, Switch, View } from 'react-native';
+import { Switch, View } from 'react-native';
 import { useStore } from '@/core/data/store';
 import type { TableName } from '@/core/data/types';
 import { C } from './theme';
-import { Btn, Icon, T, tap, useToast } from './ui';
+import { Btn, Icon, outcome, Press, T, tap, useToast } from './ui';
 
 type Step = [TableName[], () => PromiseLike<{ error: { message: string; code?: string } | null }>];
 
@@ -31,7 +31,7 @@ export function useSaver(): { busy: boolean; err: string | null; setErr: (e: str
       if (touched.size) await store.reload([...touched]);
       toast(msg);
       return true;
-    } catch (e) { setErr(e instanceof Error ? e.message : 'Not saved.'); return false; } finally { setBusy(false); }
+    } catch (e) { outcome(false); setErr(e instanceof Error ? e.message : 'Not saved.'); return false; } finally { setBusy(false); }
   };
   return { busy, err, setErr, save };
 }
@@ -69,10 +69,10 @@ export function IconPick({ value, onPick, extra = [] }: { value: string; onPick:
       <T k="meta">Icon</T>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
         {[...extra, ...PICKABLE].map((k) => (
-          <Pressable key={k} onPress={() => { tap(); onPick(k); }} accessibilityRole="button" accessibilityLabel={k} accessibilityState={{ selected: value === k }}
+          <Press key={k} scale={0.9} onPress={() => { tap(); onPick(k); }} accessibilityRole="button" accessibilityLabel={k} accessibilityState={{ selected: value === k }}
             style={{ width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: value === k ? C.ink : C.surface }}>
             <Icon name={k} color={value === k ? C.bg : C.ink} />
-          </Pressable>
+          </Press>
         ))}
       </View>
     </View>

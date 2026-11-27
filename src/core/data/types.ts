@@ -13,6 +13,8 @@ export type Tables = {
   categories: CategoryRow[]
   category_overrides: CategoryOverrideRow[]
   budgets: BudgetRow[]
+  /** Category limits for the joint account; same shape as the personal ones in `budgets`. */
+  shared_budgets: BudgetRow[]
   savings_accounts: SavingsAccountRow[]
   savings_events: SavingsEventRow[]
   loans: LoanRow[]

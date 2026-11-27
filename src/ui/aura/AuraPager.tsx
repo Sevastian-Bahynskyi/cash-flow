@@ -1,10 +1,22 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { type FlatList, type NativeScrollEvent, type NativeSyntheticEvent, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import Animated, { useAnimatedScrollHandler, useAnimatedStyle, useDerivedValue, useSharedValue, useReducedMotion, interpolate, Extrapolation } from 'react-native-reanimated';
+import Animated, { Easing, Keyframe, LayoutAnimationConfig, LinearTransition, useAnimatedScrollHandler, useAnimatedStyle, useDerivedValue, useSharedValue, useReducedMotion, interpolate, Extrapolation } from 'react-native-reanimated';
 import { Aura } from './Aura';
 import { MOODS, type Mood } from './moods';
+import { HeatNumber } from './ThermalNumber';
 import { auraFonts, bigAmount } from './type';
+
+// an older dot grows in as you go back and shrinks away the same way as you come forward
+const DOT_IN = new Keyframe({
+  0: { opacity: 0, transform: [{ scale: 0.4 }] },
+  100: { opacity: 1, transform: [{ scale: 1 }], easing: Easing.bezier(0.23, 1, 0.32, 1) },
+}).duration(320);
+const DOT_OUT = new Keyframe({
+  0: { opacity: 1, transform: [{ scale: 1 }] },
+  100: { opacity: 0, transform: [{ scale: 0.4 }], easing: Easing.bezier(0.23, 1, 0.32, 1) },
+}).duration(260);
+const DOT_MOVE = LinearTransition.duration(320).easing(Easing.bezier(0.23, 1, 0.32, 1));
 
 export type AuraPage = {
   key: string;
@@ -36,7 +48,6 @@ export function AuraPager({ pages, height, header, unit = 'kr.', navigation }: P
   const [width, setWidth] = useState(screenWidth);
   const initial = navigation?.currentIndex ?? 0;
   const [index, setIndex] = useState(initial);
-  const [firstDot, setFirstDot] = useState(Math.max(initial - 1, 0));
   const list = useRef<FlatList<AuraPage>>(null);
   const active = useRef(initial);
   const reduce = useReducedMotion();
@@ -51,7 +62,6 @@ export function AuraPager({ pages, height, header, unit = 'kr.', navigation }: P
     if (!page || next === active.current) return;
     active.current = next;
     setIndex(next);
-    setFirstDot((first) => Math.min(first, Math.max(0, next - 1)));
     navigation?.onChange(page);
     Haptics.selectionAsync().catch(() => undefined);
   };
@@ -59,22 +69,25 @@ export function AuraPager({ pages, height, header, unit = 'kr.', navigation }: P
     select(Math.round(event.nativeEvent.contentOffset.x / width));
   };
 
+  // one dot older than the furthest of where it opened and where you are
+  const firstDot = Math.max(Math.min(initial, index) - 1, 0);
   const dotStart = Math.max(firstDot, Math.min(index - 3, pages.length - 7));
   const dotEnd = Math.min(pages.length, dotStart + 7);
   return (
     <View style={{ height }} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
       <Aura moods={pages.map((page) => page.mood)} position={position} style={StyleSheet.absoluteFill} />
       {pages.length === 1 && pages[0] ? (
-        <AuraPageView page={pages[0]} width={width} height={height} unit={unit} index={0} position={position} compact={!header} />
+        <AuraPageView page={pages[0]} width={width} height={height} unit={unit} index={0} position={position} compact={!header} active />
       ) : (
         <Animated.FlatList
           ref={list}
           data={pages}
           renderItem={({ item, index: i }) => (
             <View accessibilityElementsHidden={i !== index} importantForAccessibility={i === index ? 'auto' : 'no-hide-descendants'}>
-              <AuraPageView page={item} width={width} height={height} unit={unit} index={i} position={position} />
+              <AuraPageView page={item} width={width} height={height} unit={unit} index={i} position={position} active={i === index} />
             </View>
           )}
+          extraData={index}
           keyExtractor={(page) => page.key}
           getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
           initialScrollIndex={initial}
@@ -89,11 +102,13 @@ export function AuraPager({ pages, height, header, unit = 'kr.', navigation }: P
         />
       )}
       {pages.length > 1 ? (
-        <View style={styles.dots}>
+        <View style={styles.dots} pointerEvents="box-none">
+          <LayoutAnimationConfig skipEntering>
           {pages.slice(dotStart, dotEnd).map((page, i) => {
             const target = dotStart + i;
             return (
-              <Pressable key={page.key} style={styles.dotButton} accessibilityRole="button"
+              <Animated.View key={page.key} entering={reduce ? undefined : DOT_IN} exiting={reduce ? undefined : DOT_OUT} layout={reduce ? undefined : DOT_MOVE}>
+              <Pressable style={styles.dotButton} accessibilityRole="button"
                 accessibilityLabel={page.navigationLabel ?? page.label} accessibilityState={{ selected: target === index }}
                 onPress={() => {
                   if (target === active.current) return;
@@ -103,8 +118,10 @@ export function AuraPager({ pages, height, header, unit = 'kr.', navigation }: P
                 }}>
                 <Dot i={target} position={position} ink={MOODS[pages[index]?.mood ?? 'calm'].ink} />
               </Pressable>
+              </Animated.View>
             );
           })}
+          </LayoutAnimationConfig>
         </View>
       ) : null}
       {header ? <View style={styles.header} pointerEvents="box-none">{header}</View> : null}
@@ -112,8 +129,8 @@ export function AuraPager({ pages, height, header, unit = 'kr.', navigation }: P
   );
 }
 
-function AuraPageView({ page, width, height, unit, index, position, compact = false }: {
-  compact?: boolean;
+function AuraPageView({ page, width, height, unit, index, position, compact = false, active }: {
+  compact?: boolean; active: boolean;
   page: AuraPage; width: number; height: number; unit: string; index: number; position: ReturnType<typeof useDerivedValue<number>>;
 }) {
   const ink = MOODS[page.mood].ink;
@@ -136,15 +153,8 @@ function AuraPageView({ page, width, height, unit, index, position, compact = fa
           <Text style={[styles.label, { color: ink }]}>{page.label}</Text>
         </View>
         <View style={styles.numberRow}>
-          <Text
-            // iOS draws a text shadow as a box and clips slanted glyphs to the text frame: no shadow, and room for the slant
-            style={[styles.big, { color: ink, fontSize: size, paddingHorizontal: size * 0.08 }]}
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.5}
-          >
-            {amount}
-          </Text>
+          {/* the italic slant has room inside the canvas; it shrinks to leave space for the unit */}
+          <HeatNumber text={amount} size={size} maxWidth={width - 56 - 36} ink={ink} active={active} />
           <Text style={[styles.unit, { color: ink }]}>{unit}</Text>
         </View>
         <Text style={[styles.line, { color: ink }]}>{page.line}</Text>
@@ -185,7 +195,6 @@ const styles = StyleSheet.create({
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
   label: { fontFamily: auraFonts.label, fontSize: 17, opacity: 0.88 },
   numberRow: { flexDirection: 'row', alignItems: 'flex-end', maxWidth: '100%' },
-  big: { fontFamily: auraFonts.number, letterSpacing: -2, includeFontPadding: false, flexShrink: 1 },
   unit: { fontFamily: auraFonts.numberUnit, fontSize: 20, marginLeft: -4, marginBottom: 14 },
   line: { fontFamily: auraFonts.line, fontSize: 21, marginTop: 14, textAlign: 'center' },
   subline: { fontFamily: auraFonts.label, fontSize: 14, opacity: 0.82, marginTop: 4, textAlign: 'center' },
@@ -195,7 +204,8 @@ const styles = StyleSheet.create({
   barLabel: { fontFamily: auraFonts.bodyStrong, fontSize: 13, opacity: 0.92 },
   track: { height: 8, borderRadius: 8, overflow: 'hidden' },
   fill: { height: '100%', borderRadius: 8 },
-  dots: { position: 'absolute', bottom: 4, alignSelf: 'center', flexDirection: 'row', justifyContent: 'center' },
+  // full width, so the row re-centres by moving its dots rather than jumping as a whole
+  dots: { position: 'absolute', bottom: 4, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center' },
   dotButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   dot: { height: 7, borderRadius: 7 },
 });

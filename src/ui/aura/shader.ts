@@ -50,19 +50,12 @@ half4 main(float2 xy) {
 }
 `)!;
 
-// Thermal number: a blurred and a sharp copy of the text (red and green channels) mapped to a heat ramp that burns in.
-export const thermalEffect = Skia.RuntimeEffect.Make(`
-uniform shader image;
-uniform float t;
-uniform float k;
-uniform float2 res;
-
-float h(float2 p) { return fract(sin(dot(p, float2(127.1, 311.7))) * 43758.5453); }
+const NOISE = `float h(float2 p) { return fract(sin(dot(p, float2(127.1, 311.7))) * 43758.5453); }
 float n(float2 p) {
   float2 i = floor(p); float2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(h(i), h(i + float2(1, 0)), f.x), mix(h(i + float2(0, 1)), h(i + float2(1, 1)), f.x), f.y);
-}
-float3 ramp(float v) {
+}`;
+const RAMP = `float3 ramp(float v) {
   float3 c = float3(1.0);
   c = mix(c, float3(1.0, 0.87, 0.25), smoothstep(0.05, 0.2, v));
   c = mix(c, float3(1.0, 0.36, 0.16), smoothstep(0.18, 0.33, v));
@@ -71,7 +64,17 @@ float3 ramp(float v) {
   c = mix(c, float3(0.05, 0.09, 0.38), smoothstep(0.62, 0.8, v));
   c = mix(c, float3(0.02, 0.03, 0.16), smoothstep(0.85, 1.0, v));
   return c;
-}
+}`;
+
+// Thermal number: a blurred and a sharp copy of the text (red and green channels) mapped to a heat ramp that burns in.
+export const thermalEffect = Skia.RuntimeEffect.Make(`
+uniform shader image;
+uniform float t;
+uniform float k;
+uniform float2 res;
+
+${NOISE}
+${RAMP}
 half4 main(float2 xy) {
   float2 uv = xy / res;
   half4 s = image.eval(xy);
@@ -79,5 +82,27 @@ half4 main(float2 xy) {
   float v = mix(float(s.g), float(s.r), 0.55) * (0.82 + 0.36 * nn);
   float rev = clamp(k * 1.7 - (1.0 - uv.x) * 0.5 - nn * 0.4, 0.0, 1.0);
   return half4(half3(ramp(v * rev)), 1.0);
+}
+`)!;
+
+// Heat fill for the big number: hot bands sweep in from the right and flow across the letters, then cool into the ink.
+export const heatEffect = Skia.RuntimeEffect.Make(`
+uniform float p;
+uniform float2 res;
+uniform float3 ink;
+
+${NOISE}
+${RAMP}
+half4 main(float2 xy) {
+  float2 uv = xy / res;
+  float t = p * 2.4;
+  float nn = n(uv * float2(5.0, 2.5) + float2(t * 0.9, -t * 0.6));
+  float rev = clamp(clamp(p / 0.55, 0.0, 1.0) * 1.8 - (1.0 - uv.x) * 0.6 - nn * 0.35, 0.0, 1.0);
+  float v = 0.47 + 0.3 * sin(6.2 * (uv.x * 0.9 - uv.y * 0.5 + nn * 0.7) - t * 3.0);
+  float cool = smoothstep(0.55, 1.0, p);
+  float3 col = mix(ramp(v), ramp(0.2), (1.0 - smoothstep(0.0, 0.6, rev)) * (1.0 - cool));
+  col = mix(col, ink, cool);
+  float a = smoothstep(0.0, 0.35, rev);
+  return half4(half3(col) * a, a);
 }
 `)!;

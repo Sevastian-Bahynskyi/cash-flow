@@ -61,7 +61,8 @@ function AppStack(): React.JSX.Element {
         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg }, animation: 'fade' }}>
           <Stack.Screen name="(tabs)" />
           {['budgets', 'budget-detail', 'budgets-plan', 'spending-transactions', 'where', 'shared', 'bank', 'categories', 'rules'].map((name) => (
-            <Stack.Screen key={name} name={name} options={{ animation: 'slide_from_right' }} />
+            // the system push, with Back by a swipe from anywhere on the screen
+            <Stack.Screen key={name} name={name} options={{ animation: 'default', fullScreenGestureEnabled: true }} />
           ))}
           <Stack.Screen name="sign-in" />
           <Stack.Screen name="sign-up" />

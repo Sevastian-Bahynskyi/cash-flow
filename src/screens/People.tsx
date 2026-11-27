@@ -1,6 +1,6 @@
 import type React from 'react';
 import { useMemo, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useStore, write } from '@/core/data/store';
@@ -11,7 +11,7 @@ import { kr, shortDate } from '@/core/fmt';
 import { PARTNER } from '@/core/partner';
 import { SharedRing } from '@/ui/aura/SharedRing';
 import { C, F } from '@/ui/kit/theme';
-import { Btn, Empty, Header, Icon, List, Panel, Row, Screen, Sec, Sheet, T, tap, useToast } from '@/ui/kit/ui';
+import { Btn, Empty, Header, Icon, List, Panel, Press, Row, Screen, Sec, Sheet, T, tap, useToast } from '@/ui/kit/ui';
 import { Gate, SheetHero, TxRow, useDetail } from '@/ui/kit/money';
 
 const KIND: [PersonKind, string, string][] = [
@@ -50,18 +50,18 @@ function People({ m }: { m: Model }) {
     try {
       await write(store, ['paybacks'], () => supabase.from('paybacks').insert(s.items.map((i) => ({ user_id: store.userId, payment_transaction_id: s.payment_transaction_id, expense_transaction_id: i.expense_transaction_id, amount_minor: i.amount_minor }))));
       toast('Paid back. That part no longer counts as your spending.');
-    } catch (e) { toast(e instanceof Error ? e.message : 'Not saved.'); } finally { setBusy(false); }
+    } catch (e) { toast(e instanceof Error ? e.message : 'Not saved.', undefined, 'error'); } finally { setBusy(false); }
   };
   const setKind = async (id: string, kind: PersonKind): Promise<void> => {
     setBusy(true);
     try { await write(store, ['transfer_people'], () => supabase.from('transfer_people').update({ kind }).eq('id', id)); setEdit(null); }
-    catch (e) { toast(e instanceof Error ? e.message : 'Not saved.'); } finally { setBusy(false); }
+    catch (e) { toast(e instanceof Error ? e.message : 'Not saved.', undefined, 'error'); } finally { setBusy(false); }
   };
   const editing = edit ? balances.find((b) => b.person_id === edit) : undefined;
 
   return (
     <Screen onRefresh={store.sync} header={<Header title="People" sub={`Who owes whom, and the pot with ${PARTNER}`} />}>
-      <Pressable onPress={() => { tap(); router.push('/shared' as never); }} accessibilityRole="button" accessibilityLabel={`The pot with ${PARTNER}`}>
+      <Press scale={0.98} onPress={() => { tap(); router.push('/shared' as never); }} accessibilityRole="button" accessibilityLabel={`The pot with ${PARTNER}`}>
         <Panel style={{ padding: 16, gap: 10 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
             <View style={{ width: 40, height: 40 }}><View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: C.surface2, alignItems: 'center', justifyContent: 'center' }}><Icon name="shared" /></View><View style={{ position: 'absolute', left: -5, top: -5 }}><SharedRing size={50} /></View></View>
@@ -72,7 +72,7 @@ function People({ m }: { m: Model }) {
             <View key={k} style={{ flexDirection: 'row', justifyContent: 'space-between' }}><T k="meta" style={{ fontSize: 14 }}>{k}</T><T k="num" style={{ fontSize: 14 }}>{v}</T></View>
           ))}
         </Panel>
-      </Pressable>
+      </Press>
 
       {suggestions.length > 0 ? (
         <>

@@ -1,17 +1,18 @@
 import { useMemo, useState } from 'react';
 import { Text, View, useWindowDimensions } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Svg, { Circle, Line, Path, Text as SvgText } from 'react-native-svg';
 import { useStore } from '@/core/data/store';
-import type { Cycle, Model } from '@/core/data/model';
+import type { Cycle, Model, Scope } from '@/core/data/model';
 import type { CategoryRow, TransactionRow } from '@/core/data/types';
 import { budgetState, goneShare } from '@/core/domain/budget-state';
-import { daysBetween, kr, plus, shortDate } from '@/core/fmt';
+import { dayLabel, daysBetween, kr, plus, shortDate, ymd } from '@/core/fmt';
 import { AuraPager } from '@/ui/aura/AuraPager';
-import type { Mood } from '@/ui/aura/moods';
+import { moodForPace, type Mood } from '@/ui/aura/moods';
 import { budgetColor, C, F } from '@/ui/kit/theme';
-import { Btn, Disc, Empty, Header, Icon, IconBtn, List, Meter, NavRow, Panel, Row, Screen, Sec, StatePill, T } from '@/ui/kit/ui';
-import { BudgetEditor, Gate, RichNote, TxRow, useDetail } from '@/ui/kit/money';
+import { Btn, Disc, Empty, Header, Icon, IconBtn, List, Meter, NavRow, Panel, Press, Row, Screen, Sec, Seg, StatePill, T, tap } from '@/ui/kit/ui';
+import { BudgetEditor, Gate, hhmm, RichNote, TxRow, useDetail } from '@/ui/kit/money';
 
 function CyclePick({ m, idx, onPick }: { m: Model; idx: number; onPick: (id: string) => void }) {
   const c = m.cycles[idx];
@@ -27,14 +28,66 @@ function CyclePick({ m, idx, onPick }: { m: Model; idx: number; onPick: (id: str
   );
 }
 
+const DAY = 86_400_000;
+const ACCOUNT: Record<Scope, string> = { personal: 'personal account', shared: 'joint account' };
+
+/** What is in the bank right now: the latest synced balance of the matching account. It spans every cycle, so it is never this cycle's number. */
+function BankLine({ m, scope, isCurrent }: { m: Model; scope: Scope; isCurrent: boolean }) {
+  const router = useRouter();
+  const bank = m.bankOf(scope);
+  const which = bank && bank.accounts > 1 ? `${bank.accounts} ${ACCOUNT[scope]}s` : ACCOUNT[scope];
+  const at = bank?.at ? new Date(bank.at) : null;
+  const stale = at ? Date.now() - at.getTime() > DAY : false;
+  const day = at ? dayLabel(ymd(at)) : '';
+  const synced = at ? `${stale ? 'Last synced' : 'Synced'} ${/^(today|yesterday)$/i.test(day) ? day.toLowerCase() : day} at ${hhmm(at.toISOString())}` : null;
+  const label = bank ? `In the bank: ${kr(bank.minor, true)}, ${which} balance today. ${synced ?? ''}` : `In the bank: no balance for the ${which} yet.`;
+  return (
+    <Press scale={0.98} onPress={() => { tap(); router.push('/bank' as never); }} accessibilityRole="button" accessibilityLabel={label}>
+      <Panel style={{ padding: 16, gap: 3 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
+          <T k="strong">In the bank</T>
+          {bank
+            ? <Text style={{ fontFamily: F.num, fontSize: 30, color: C.ink, flexShrink: 1 }} numberOfLines={1} adjustsFontSizeToFit>{kr(bank.minor, true)}</Text>
+            : <T k="strong" style={{ color: C.ink3 }}>No balance</T>}
+        </View>
+        {bank ? (
+          <>
+            <T k="meta">{`${which[0]?.toUpperCase()}${which.slice(1)} balance today${isCurrent ? '' : ', not at the end of this cycle'}`}</T>
+            <T k="meta">Includes money from earlier cycles</T>
+            <T k="meta" style={stale ? { color: C.ahead } : undefined}>{synced}</T>
+          </>
+        ) : <T k="meta">{`The bank hasn’t sent a balance for your ${which} yet. Open Bank to sync or connect it.`}</T>}
+      </Panel>
+    </Press>
+  );
+}
+
+/** "Left in budgets" over the aura: the cycle's limits minus what counted, for the chosen scope. */
+function LeftAura({ m, c, b, scope }: { m: Model; c: Cycle; b: ReturnType<Model['budgetsOf']>; scope: Scope }) {
+  const { height } = useWindowDimensions();
+  if (!b.list.length) {
+    return <Panel><Empty title={scope === 'shared' ? 'No shared budgets this cycle' : 'No budgets this cycle'} sub="Open a category below to set its limit." /></Panel>;
+  }
+  const mood: Mood = scope === 'shared' ? (b.left < 0 ? 'over' : 'shared') : moodForPace(b.left, b.total ? b.used / b.total : 0, goneShare(m, c));
+  return (
+    <View style={{ borderRadius: 28, overflow: 'hidden' }}>
+      <AuraPager height={Math.round(height * 0.27)} pages={[{
+        key: `${scope}-${c.id}`, mood, label: scope === 'shared' ? 'Left in shared budgets' : 'Left in budgets', amountMinor: b.left,
+        line: `${kr(b.used, true)} spent of ${kr(b.total, true)}`,
+        subline: scope === 'shared' ? 'Joint purchases, counted in full' : 'Your purchases and your share of joint ones',
+      }]} />
+    </View>
+  );
+}
+
 /** Spent by day in one category this cycle, against the cycle before and the budget line. */
-function Pace({ m, c, cat, budget }: { m: Model; c: Cycle; cat: CategoryRow; budget: number }) {
+function Pace({ m, c, cat, budget, scope }: { m: Model; c: Cycle; cat: CategoryRow; budget: number; scope: Scope }) {
   const { width } = useWindowDimensions();
   const prev = m.prevOf(c);
   const n = daysBetween(c.startOn, c.endInclusive) + 1;
   const cum = (rows: TransactionRow[], start: string, len: number): number[] => {
     const a = new Array<number>(Math.max(0, len)).fill(0);
-    for (const r of rows) { const i = daysBetween(start, r.occurred_on); if (i >= 0 && i < len) a[i] = (a[i] ?? 0) + m.spendingIn(r, cat.id); }
+    for (const r of rows) { const i = daysBetween(start, r.occurred_on); if (i >= 0 && i < len) a[i] = (a[i] ?? 0) + m.spendingIn(r, cat.id, scope); }
     for (let i = 1; i < len; i++) a[i] = (a[i] ?? 0) + (a[i - 1] ?? 0);
     return a;
   };
@@ -69,7 +122,7 @@ function Pace({ m, c, cat, budget }: { m: Model; c: Cycle; cat: CategoryRow; bud
   );
 }
 
-function BudgetList({ m, c, b }: { m: Model; c: Cycle; b: ReturnType<Model['budgetsOf']> }) {
+function BudgetList({ m, c, b, scope }: { m: Model; c: Cycle; b: ReturnType<Model['budgetsOf']>; scope: Scope }) {
   const router = useRouter();
   const { fontScale } = useWindowDimensions();
   const largeText = fontScale >= 1.75;
@@ -88,12 +141,12 @@ function BudgetList({ m, c, b }: { m: Model; c: Cycle; b: ReturnType<Model['budg
   const firstWithChildren = parents.find((cat) => children.has(cat.id))?.id;
   const childSpend = new Map<string, number>();
   for (const row of b.rows) {
-    for (const part of m.portions(row)) {
+    for (const part of m.portions(row, scope)) {
       if (part.category_id) childSpend.set(part.category_id, (childSpend.get(part.category_id) ?? 0) + part.minor);
     }
   }
   const share = goneShare(m, c);
-  const detail = (id: string): void => router.push({ pathname: '/budget-detail', params: { cat: id, cycle: c.id } });
+  const detail = (id: string): void => router.push({ pathname: '/budget-detail', params: { cat: id, cycle: c.id, ...(scope === 'shared' ? { scope } : {}) } });
 
   if (!parents.length) return <Panel><Empty title="No spending categories yet" /></Panel>;
   return (
@@ -108,7 +161,7 @@ function BudgetList({ m, c, b }: { m: Model; c: Cycle; b: ReturnType<Model['budg
         const state = item ? budgetState(spent, item.amount, share) : 'none';
         const remaining = item ? `${kr(Math.abs(item.left), true)} ${item.left < 0 ? 'over' : 'left'}${state === 'ahead' ? ', ahead of pace' : ''}` : 'No budget';
         return (
-          <List key={cat.id}>{[
+          <List key={cat.id} animate>{[
             <Row key={cat.id} expanded={kids.length ? isOpen : undefined} stackEnd={largeText} accessibilityLabel={`${cat.name}, ${subtitle}, ${remaining}`}
               onPress={() => kids.length ? setExpanded((state) => ({ ...state, [cat.id]: !isOpen })) : detail(cat.id)}
               lead={<Disc icon={cat.icon} color={color} />}
@@ -116,7 +169,7 @@ function BudgetList({ m, c, b }: { m: Model; c: Cycle; b: ReturnType<Model['budg
               meta={subtitle}
               end={<View style={{ alignItems: largeText ? 'flex-start' : 'flex-end', gap: 4 }}>
                 {item ? <StatePill left={item.left} st={state} /> : <T k="meta">No budget</T>}
-                <Icon name={isOpen ? 'down' : 'chev'} size={15} color={C.ink3} />
+                {kids.length ? <Animated.View style={[TURN, { transform: [{ rotate: isOpen ? '90deg' : '0deg' }] }]}><Icon name="chev" size={15} color={C.ink3} /></Animated.View> : <Icon name="chev" size={15} color={C.ink3} />}
               </View>} />,
             ...(isOpen ? kids.map((kid) => (
               <Row key={kid.id} stackEnd={largeText} lead={<View style={{ marginLeft: largeText ? 10 : 22 }}><Disc icon={kid.icon} color={color} /></View>}
@@ -131,8 +184,9 @@ function BudgetList({ m, c, b }: { m: Model; c: Cycle; b: ReturnType<Model['budg
   );
 }
 
-function Budgets({ m }: { m: Model }) {
-  const params = useLocalSearchParams<{ cycle?: string; cat?: string }>();
+function Budgets({ m, home }: { m: Model; home?: boolean }) {
+  const params = useLocalSearchParams<{ cycle?: string; cat?: string; scope?: string }>();
+  const scope: Scope = params.scope === 'shared' ? 'shared' : 'personal';
   const router = useRouter();
   const store = useStore();
   const open = useDetail();
@@ -140,20 +194,35 @@ function Budgets({ m }: { m: Model }) {
   const requested = m.cycles.findIndex((cycle) => cycle.id === params.cycle);
   const cycleIdx = requested >= 0 ? requested : m.cycles.findIndex((cycle) => cycle.id === m.current?.id);
   const c = m.cycles[cycleIdx] ?? null;
-  const b = useMemo(() => m.budgetsOf(c), [m, c]);
+  const b = useMemo(() => m.budgetsOf(c, scope), [m, c, scope]);
   const [editing, setEditing] = useState(false);
   const sel = m.byId.get(params.cat ?? '');
-  const header = <Header back wrapTitle title={sel?.name ?? 'Budgets'} sub={sel ? m.parentOf(sel.id)?.id !== sel.id ? m.parentOf(sel.id)?.name : 'Budget details' : undefined} />;
-  if (!c || !m.hasSalary) return <Screen header={header}><Panel><Empty title="No salary yet" sub="Budgets run from payday to payday. The first cycle starts when your salary arrives from the bank." /></Panel></Screen>;
+  const parentName = sel && m.parentOf(sel.id)?.id !== sel.id ? m.parentOf(sel.id)?.name : undefined;
+  const sub = sel ? (scope === 'shared' ? (parentName ? `${parentName}, shared` : 'Shared budget') : parentName ?? 'Budget details') : undefined;
+  const header = <Header back={!home} wrapTitle title={sel?.name ?? 'Budgets'} sub={sub} />;
+  const scopes = <Seg value={scope} onChange={(next) => router.setParams({ scope: next })} options={[['personal', 'Personal'], ['shared', 'Shared']]} />;
+  if (!c || !m.hasSalary) {
+    return (
+      <Screen onRefresh={store.sync} header={header}>
+        {scopes}
+        <BankLine m={m} scope={scope} isCurrent />
+        <Panel><Empty title="No salary yet" sub="Budgets run from payday to payday. The first cycle starts when your salary arrives from the bank." /></Panel>
+      </Screen>
+    );
+  }
 
   const picker = <CyclePick m={m} idx={cycleIdx} onPick={(id) => router.setParams({ cycle: id })} />;
   if (!sel) {
     return (
       <Screen onRefresh={store.sync} header={header}>
+        {scopes}
         {picker}
-        {b.list.length ? <T k="note">{kr(b.used, true)} spent of {kr(b.total, true)} budgeted</T> : <T k="note">No budgets set for this cycle.</T>}
-        {c.real ? <List>{[<NavRow key="plan" href={`/budgets-plan?cycle=${c.id}`} icon="sack" name="Cycle plan" />]}</List> : null}
-        <BudgetList m={m} c={c} b={b} />
+        <View style={{ gap: 8 }}>
+          <LeftAura m={m} c={c} b={b} scope={scope} />
+          <BankLine m={m} scope={scope} isCurrent={c.id === m.current?.id} />
+        </View>
+        {c.real && scope === 'personal' ? <List>{[<NavRow key="plan" href={`/budgets-plan?cycle=${c.id}`} icon="sack" name="Cycle plan" />]}</List> : null}
+        <BudgetList m={m} c={c} b={b} scope={scope} />
       </Screen>
     );
   }
@@ -161,15 +230,15 @@ function Budgets({ m }: { m: Model }) {
   const parent = m.parentOf(sel.id);
   const item = b.list.find((x) => x.id === sel.id);
   const prev = m.prevOf(c);
-  const spent = (cycle: Cycle | null): number => m.tx.filter(m.inCycle(cycle)).reduce((sum, row) => sum + m.spendingIn(row, sel.id), 0);
+  const spent = (cycle: Cycle | null): number => m.tx.filter(m.inCycle(cycle)).reduce((sum, row) => sum + m.spendingIn(row, sel.id, scope), 0);
   const spentSel = spent(c);
   const lastSpent = spent(prev);
   const amount = item?.amount ?? 0;
-  const inCat = b.rows.filter((row) => m.spendingIn(row, sel.id) > 0).reverse();
+  const inCat = b.rows.filter((row) => m.spendingIn(row, sel.id, scope) > 0).reverse();
   const st = budgetState(spentSel, amount, goneShare(m, c));
-  const mood: Mood = st === 'over' ? 'over' : st === 'ahead' ? 'ahead' : 'calm';
+  const mood: Mood = st === 'over' ? 'over' : scope === 'shared' ? 'shared' : st === 'ahead' ? 'ahead' : 'calm';
   const line = amount ? (spentSel > amount ? `${kr(spentSel - amount, true)} over budget` : `${kr(amount - spentSel, true)} left in budget`) : 'Spent this cycle';
-  const allCharges = (): void => router.push({ pathname: '/spending-transactions', params: { cat: sel.id, from: c.startOn, until: c.endOnExclusive ?? '', cycle: c.id } });
+  const allCharges = (): void => router.push({ pathname: '/spending-transactions', params: { cat: sel.id, from: c.startOn, until: c.endOnExclusive ?? '', cycle: c.id, ...(scope === 'shared' ? { scope } : {}) } });
 
   return (
     <Screen onRefresh={store.sync} header={header}>
@@ -180,10 +249,10 @@ function Budgets({ m }: { m: Model }) {
       </View>
       {item?.budget.notes ? <RichNote text={item.budget.notes} /> : null}
       {sel.level === 1 && c.real ? <Btn kind="ghost" icon="edit" label={item ? 'Change budget' : 'Set budget'} onPress={() => setEditing(true)} /> : null}
-      {inCat.length ? <><Sec>Pace through the cycle</Sec><Pace m={m} c={c} cat={sel} budget={amount} /></> : null}
+      {inCat.length ? <><Sec>Pace through the cycle</Sec><Pace m={m} c={c} cat={sel} budget={amount} scope={scope} /></> : null}
       <Sec right={inCat.length ? <Btn kind="link" label="All" onPress={allCharges} /> : undefined}>Transactions</Sec>
-      {inCat.length ? <List>{inCat.slice(0, 12).map((t) => <TxRow key={t.id} t={t} m={m} onOpen={open} categoryId={sel.id} />)}</List> : <Panel><Empty title="Nothing spent here this cycle" /></Panel>}
-      {editing ? <BudgetEditor cat={sel} cycle={c} budget={item?.budget} spent={spentSel} last={lastSpent} onClose={() => setEditing(false)} /> : null}
+      {inCat.length ? <List>{inCat.slice(0, 12).map((t) => <TxRow key={t.id} t={t} m={m} onOpen={open} categoryId={sel.id} scope={scope} />)}</List> : <Panel><Empty title="Nothing spent here this cycle" /></Panel>}
+      {editing ? <BudgetEditor cat={sel} cycle={c} budget={item?.budget} spent={spentSel} last={lastSpent} scope={scope} onClose={() => setEditing(false)} /> : null}
     </Screen>
   );
 }
@@ -222,4 +291,8 @@ function Plan({ m }: { m: Model }) {
 }
 
 export function BudgetsScreen(): React.JSX.Element { return <Gate>{(m) => <Budgets m={m} />}</Gate>; }
+/** The first screen: budgets with the bank balance beside them, no Back. */
+export function BudgetsHome(): React.JSX.Element { return <Gate>{(m) => <Budgets m={m} home />}</Gate>; }
 export function PlanScreen() { return <Gate>{(m) => <Plan m={m} />}</Gate>; }
+
+const TURN = { transitionProperty: 'transform', transitionDuration: '220ms', transitionTimingFunction: 'ease-out' } as const;

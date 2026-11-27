@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useEffect, useMemo, useState } from 'react';
-import { Image, Pressable, Text, View, useWindowDimensions } from 'react-native';
+import { Image, Text, View, useWindowDimensions } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { qaScenario } from '@/dev/scenario';
@@ -14,13 +15,14 @@ import { PARTNER } from '@/core/partner';
 import { AuraPager } from '@/ui/aura/AuraPager';
 import { CycleClosedMoment } from '@/ui/aura/CycleClosedMoment';
 import { budgetColor, C, F } from '@/ui/kit/theme';
-import { Btn, Disc, Empty, Header, List, Meter, NavRow, Panel, Row, Screen, Sec, Seg, StatePill, T, tap } from '@/ui/kit/ui';
+import { Btn, Disc, Empty, Header, List, Meter, NavRow, Panel, Press, Row, Screen, Sec, Seg, StatePill, T, tap } from '@/ui/kit/ui';
 import { Gate, SyncLine, TxRow, useDetail } from '@/ui/kit/money';
 import { auraPages } from './auraPages';
 
 const TAB_BAR = 88;
 const PEEK = 72;
 const CLOSED_SEEN = 'cashflow:closedCycleSeen';
+const SWAP_IN = FadeInDown.duration(220);
 
 function Avatar() {
   const { tables } = useStore();
@@ -28,11 +30,11 @@ function Avatar() {
   const p = tables?.profile;
   const initial = (p?.display_name ?? 'You').trim()[0]?.toUpperCase() ?? 'Y';
   return (
-    <Pressable onPress={() => { tap(); router.push('/settings' as never); }} accessibilityRole="button" accessibilityLabel="Settings" style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+    <Press scale={0.9} onPress={() => { tap(); router.push('/settings' as never); }} accessibilityRole="button" accessibilityLabel="Settings" style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
       {p?.avatar_url ? <Image source={{ uri: p.avatar_url }} style={{ width: 36, height: 36, borderRadius: 18 }} /> : (
         <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.35)', alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontFamily: F.strong, color: '#FFFFFF' }}>{initial}</Text></View>
       )}
-    </Pressable>
+    </Press>
   );
 }
 
@@ -104,21 +106,21 @@ function Home({ m }: { m: Model }) {
         <Panel style={{ padding: 16, gap: 12 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
             <Seg value={per} onChange={setPer} options={[['cycle', 'Cycle'], ['year', 'Year'], ['all', 'All time']]} />
-            <Text style={{ fontFamily: F.num, fontSize: 26, color: bal > 0 ? C.in : C.ink }}>{bal > 0 ? plus(bal, true) : kr(bal, true)}</Text>
+            <Animated.Text key={per} entering={SWAP_IN} style={{ fontFamily: F.num, fontSize: 26, color: bal > 0 ? C.in : C.ink }}>{bal > 0 ? plus(bal, true) : kr(bal, true)}</Animated.Text>
           </View>
           <T k="note">Money in minus your spending and what you moved to the pot.</T>
         </Panel>
 
         <Sec>With {PARTNER}</Sec>
         {p.totalTopupTotal || p.sharedExpenseTotal ? (
-          <Pressable disabled={!isCurrent} onPress={() => { tap(); router.push('/shared' as never); }} style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}>
+          <Press scale={0.98} disabled={!isCurrent} onPress={() => { tap(); router.push('/shared' as never); }} accessibilityRole="button">
             <Panel style={{ padding: 16, gap: 10 }}>
               <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}><Text style={{ fontFamily: F.num, fontSize: 40, color: C.ink }}>{kr(p.sharedBalance, true)}</Text><T k="meta">left in the pot</T></View>
               {[[`${PARTNER} moved in`, p.gfTopupTotal], ['You moved in', p.meTopupTotal], ['Spent together', p.sharedExpenseTotal], ['Your part, from what you put in', p.userEffectiveShare]].map(([k, v]) => (
                 <View key={k as string} style={{ flexDirection: 'row', justifyContent: 'space-between' }}><T k="meta" style={{ fontSize: 14 }}>{k}</T><T k="num" style={{ fontSize: 14 }}>{kr(v as number, true)}</T></View>
               ))}
             </Panel>
-          </Pressable>
+          </Press>
         ) : <Panel><Empty title="Nothing in the pot this cycle" sub={`Top-ups and shared spending with ${PARTNER} show here.`} /></Panel>}
 
         <Sec right={isCurrent ? <Btn kind="link" label="All" onPress={() => router.push('/activity' as never)} /> : undefined}>Latest</Sec>

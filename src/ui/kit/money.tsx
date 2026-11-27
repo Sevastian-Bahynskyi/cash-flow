@@ -1,16 +1,17 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useStore, write } from '@/core/data/store';
-import { useModel, type Cycle, type Model } from '@/core/data/model';
+import { useModel, type Cycle, type Model, type Scope } from '@/core/data/model';
 import type { BudgetRow, CategoryRow, TransactionRow } from '@/core/data/types';
 import { PARTNER } from '@/core/partner';
 import { normalizeMerchantLookupKey } from '@/core/domain/merchant';
 import { dayLabel, kr, minorToInput, parseAmount, shortDate, todayYmd } from '@/core/fmt';
 import { SharedRing } from '@/ui/aura/SharedRing';
 import { budgetColor, C, F } from './theme';
-import { Btn, Disc, Divider, Empty, Field, Icon, List, Panel, Row, Sec, Sheet, T, useToast } from './ui';
+import { Btn, Disc, Divider, Empty, Field, Icon, List, outcome, Panel, Row, Sec, Sheet, T, useToast } from './ui';
 
 /* whose money a row is (two people, two colours) */
 type Who = 'none' | 'shared' | 'moved' | 'annain' | 'income' | 'own';
@@ -18,7 +19,7 @@ export const whoOf = (t: TransactionRow): Who => t.is_shared_topup ? (t.shared_p
 export const WHO_LABEL: Record<Who, string> = { none: 'Yours', shared: `Shared with ${PARTNER}`, moved: 'Moved to the shared pot', annain: `${PARTNER}, into the shared pot`, income: 'Money in', own: 'Moved between your accounts' };
 
 /** One transaction row: whose it is, name, category, amount with sign and colour. Shared rows wear the turning ring. */
-export function TxRow({ t, m, onOpen, current, categoryId }: { t: TransactionRow; m: Model; onOpen: (t: TransactionRow) => void; current?: boolean; categoryId?: string }) {
+export function TxRow({ t, m, onOpen, current, categoryId, scope }: { t: TransactionRow; m: Model; onOpen: (t: TransactionRow) => void; current?: boolean; categoryId?: string; scope?: Scope }) {
   const w = whoOf(t);
   const meta = m.meta[t.category_id ?? ''];
   const foreign = t.currency_code !== 'DKK' ? ` · ${kr(t.original_amount_minor, false, t.currency_code)}` : '';
@@ -38,7 +39,7 @@ export function TxRow({ t, m, onOpen, current, categoryId }: { t: TransactionRow
     if (parent) discInk = budgetColor(parent);
     if (categoryId) {
       sub = category?.name ?? 'Uncategorized';
-      amount = kr(m.spendingIn(t, categoryId));
+      amount = kr(m.spendingIn(t, categoryId, scope));
       icon = category?.icon ?? 'other';
     }
   }
@@ -56,10 +57,10 @@ export function TxRow({ t, m, onOpen, current, categoryId }: { t: TransactionRow
 }
 
 /** Day groups with each day's spending, newest first. */
-export function DayList({ rows, m, onOpen, categoryId }: { rows: TransactionRow[]; m: Model; onOpen: (t: TransactionRow) => void; categoryId?: string }) {
+export function DayList({ rows, m, onOpen, categoryId, scope }: { rows: TransactionRow[]; m: Model; onOpen: (t: TransactionRow) => void; categoryId?: string; scope?: Scope }) {
   const days = [...new Set(rows.map((t) => t.occurred_on))].map((d) => {
     const items = rows.filter((t) => t.occurred_on === d);
-    return { d, items, tot: items.reduce((a, t) => a + (categoryId ? m.spendingIn(t, categoryId) : m.mine(t)), 0) };
+    return { d, items, tot: items.reduce((a, t) => a + (categoryId ? m.spendingIn(t, categoryId, scope) : m.mine(t)), 0) };
   });
   // Each day's spend as a thin bar against a typical heavy day (the 90th percentile), so one rent day doesn't flatten the rest.
   const sorted = days.map((x) => x.tot).filter(Boolean).sort((a, z) => a - z);
@@ -73,13 +74,13 @@ export function DayList({ rows, m, onOpen, categoryId }: { rows: TransactionRow[
           {tot > 0 ? <View style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: C.track }}><View style={{ width: `${Math.min(100, (100 * tot) / top)}%`, height: 4, borderRadius: 2, backgroundColor: C.ink3 }} /></View> : <View style={{ flex: 1 }} />}
           {tot ? <T k="num" style={{ fontSize: 14, color: C.ink2 }}>{kr(tot)}</T> : null}
         </View>
-        <List>{items.map((t) => <TxRow key={t.id} t={t} m={m} onOpen={onOpen} categoryId={categoryId} />)}</List>
+        <List>{items.map((t) => <TxRow key={t.id} t={t} m={m} onOpen={onOpen} categoryId={categoryId} scope={scope} />)}</List>
       </View>
     ))}</>
   );
 }
 
-const hhmm = (iso: string): string => new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
+export const hhmm = (iso: string): string => new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
 const DAY = 86_400_000;
 
 /** Bank sync health: quiet "Synced 08:12"; amber when old, failing, or the bank consent ends within 14 days. */
@@ -117,11 +118,15 @@ export function SyncLine() {
   );
 }
 
+const GATE_IN = FadeIn.duration(260);
+
 /** Renders the screen once data is here; until then a spinner, or one clear error. */
 export function Gate({ children }: { children: (m: Model) => ReactNode }) {
   const { status, error, reload } = useStore();
   const m = useModel();
-  if (m) return <>{children(m)}</>;
+  // content that kept you waiting fades in; content already cached is simply there
+  const [waited] = useState(!m);
+  if (m) return waited ? <Animated.View entering={GATE_IN} style={{ flex: 1 }}>{children(m)}</Animated.View> : <>{children(m)}</>;
   if (status === 'error') return <View style={{ flex: 1, backgroundColor: C.bg, justifyContent: 'center', padding: 24, gap: 12 }}><T k="sec">Couldn’t load your money</T><T k="note">{error}</T><Btn label="Retry" onPress={() => void reload()} /></View>;
   return <View style={{ flex: 1, backgroundColor: C.bg, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={C.ink} /></View>;
 }
@@ -197,7 +202,7 @@ function CategoryPick({ t, m, onClose }: { t: TransactionRow; m: Model; onClose:
     try {
       await write(store, ['transactions'], () => supabase.from('transactions').update({ category_id: o.id, needs_review: false, reason_source: 'you', reason: `You chose ${o.name}`, confidence: 1 }).eq('id', t.id));
       setPicked(o);
-    } catch (e) { toast(e instanceof Error ? e.message : 'Not saved.'); } finally { setBusy(false); }
+    } catch (e) { toast(e instanceof Error ? e.message : 'Not saved.', undefined, 'error'); } finally { setBusy(false); }
   };
   const always = async (): Promise<void> => {
     if (!picked || !store.userId) return;
@@ -206,7 +211,7 @@ function CategoryPick({ t, m, onClose }: { t: TransactionRow; m: Model; onClose:
       await write(store, ['merchant_category_rules'], () => supabase.from('merchant_category_rules').upsert({ user_id: store.userId, match_target: 'normalized_merchant', match_type: 'exact', pattern: key, kind: t.kind, canonical_merchant: t.name, category_id: picked.id, is_shared_topup: false, is_blocked: false, priority: 300, source: 'manual' }, { onConflict: 'user_id,kind,match_target,match_type,pattern' }));
       if (same.length) await write(store, ['transactions'], () => supabase.from('transactions').update({ category_id: picked.id, needs_review: false, reason_source: 'rule', reason: `Your rule: ${t.name}`, confidence: 1 }).in('id', same.map((x) => x.id)));
       toast(`${t.name} always goes to ${picked.name}`); onClose();
-    } catch (e) { toast(e instanceof Error ? e.message : 'Not saved.'); } finally { setBusy(false); }
+    } catch (e) { toast(e instanceof Error ? e.message : 'Not saved.', undefined, 'error'); } finally { setBusy(false); }
   };
   if (picked) return (
     <Sheet open onClose={onClose} title="Saved">
@@ -238,11 +243,11 @@ function SplitSheet({ t, m, onClose }: { t: TransactionRow; m: Model; onClose: (
     if (bad || !cat || !store.userId) return;
     setBusy(true);
     try { await write(store, ['transaction_splits'], () => supabase.from('transaction_splits').insert({ user_id: store.userId, transaction_id: t.id, category_id: cat, amount_minor: v })); setAmount(''); setCat(null); toast('Split saved'); }
-    catch (e) { toast(e instanceof Error ? e.message : 'Not saved.'); } finally { setBusy(false); }
+    catch (e) { toast(e instanceof Error ? e.message : 'Not saved.', undefined, 'error'); } finally { setBusy(false); }
   };
   const remove = async (id: string): Promise<void> => {
     setBusy(true);
-    try { await write(store, ['transaction_splits'], () => supabase.from('transaction_splits').delete().eq('id', id)); } catch (e) { toast(e instanceof Error ? e.message : 'Not saved.'); } finally { setBusy(false); }
+    try { await write(store, ['transaction_splits'], () => supabase.from('transaction_splits').delete().eq('id', id)); } catch (e) { toast(e instanceof Error ? e.message : 'Not saved.', undefined, 'error'); } finally { setBusy(false); }
   };
   return (
     <Sheet open onClose={onClose} title={`Split ${t.name}`}>
@@ -270,7 +275,7 @@ export function DetailBody({ t, m, onDone }: { t: TransactionRow; m: Model; onDo
   const myPart = t.amount_minor ? m.share.get(t.id) : undefined;
   const act = async (label: string, run: () => PromiseLike<{ error: { message: string } | null }>): Promise<void> => {
     setBusy(true);
-    try { await write(store, ['transactions'], run); toast(label); } catch (e) { toast(e instanceof Error ? e.message : 'Not saved.'); } finally { setBusy(false); }
+    try { await write(store, ['transactions'], run); toast(label); } catch (e) { toast(e instanceof Error ? e.message : 'Not saved.', undefined, 'error'); } finally { setBusy(false); }
   };
   const neutral = t.is_shared_topup || t.movement === 'moved' || t.movement === 'ignore';
   const splits = m.splitsOf.get(t.id) ?? [];
@@ -323,8 +328,9 @@ export function DetailBody({ t, m, onDone }: { t: TransactionRow; m: Model; onDo
   );
 }
 
-/** Sets one category's budget for one salary cycle, with notes (**bold** works). Empty or 0 removes it. */
-export function BudgetEditor({ cat, cycle, budget, spent, last, onClose }: { cat: CategoryRow; cycle: Cycle; budget?: BudgetRow; spent: number; last: number; onClose: () => void }) {
+/** Sets one category's personal or shared budget for one salary cycle, with notes (**bold** works). Empty or 0 removes it. */
+export function BudgetEditor({ cat, cycle, budget, spent, last, onClose, scope = 'personal' }: { cat: CategoryRow; cycle: Cycle; budget?: BudgetRow; spent: number; last: number; onClose: () => void; scope?: Scope }) {
+  const table = scope === 'shared' ? 'shared_budgets' : 'budgets';
   const store = useStore();
   const toast = useToast();
   const [amt, setAmt] = useState(budget ? minorToInput(budget.amount_minor) : '');
@@ -337,18 +343,23 @@ export function BudgetEditor({ cat, cycle, budget, spent, last, onClose }: { cat
     if (!store.userId) return;
     setBusy(true); setErr(null);
     try {
-      if (minor === 0) { if (budget) await write(store, ['budgets'], () => supabase.from('budgets').delete().eq('id', budget.id)); }
-      else await write(store, ['budgets'], () => supabase.from('budgets').upsert({ user_id: store.userId, category_id: cat.id, salary_cycle_id: cycle.id, amount_minor: minor, notes: notes.trim() || null }, { onConflict: 'user_id,category_id,salary_cycle_id' }));
-      toast(minor ? `${cat.name}: ${kr(minor, true)} this cycle` : `${cat.name} keeps no budget now`);
+      if (minor === 0) { if (budget) await write(store, [table], () => supabase.from(table).delete().eq('id', budget.id)); }
+      else await write(store, [table], () => supabase.from(table).upsert({ user_id: store.userId, category_id: cat.id, salary_cycle_id: cycle.id, amount_minor: minor, notes: notes.trim() || null }, { onConflict: 'user_id,category_id,salary_cycle_id' }));
+      const what = scope === 'shared' ? `${cat.name}, shared` : cat.name;
+      toast(minor ? `${what}: ${kr(minor, true)} this cycle` : `${what} keeps no budget now`);
       onClose();
-    } catch (e) { setErr(e instanceof Error ? e.message : 'Not saved.'); } finally { setBusy(false); }
+    } catch (e) {
+      outcome(false);
+      // until the shared-budgets migration is live, say so instead of a database message
+      setErr(e instanceof Error ? (/shared_budgets/.test(e.message) ? 'Shared budgets aren’t switched on in the database yet.' : e.message) : 'Not saved.');
+    } finally { setBusy(false); }
   }
   return (
-    <Sheet open onClose={onClose} title={`${cat.name} budget`}>
+    <Sheet open onClose={onClose} title={scope === 'shared' ? `${cat.name} shared budget` : `${cat.name} budget`}>
       <T k="note">{kr(spent, true)} spent in the {cycle.name} cycle{last ? `, ${kr(last, true)} the cycle before` : ''}.</T>
       <Field label="Budget this cycle" keyboardType="decimal-pad" autoFocus value={amt} placeholder="0" onChangeText={(v) => { setAmt(v); setErr(null); }} onSubmitEditing={() => void save()} error={err} style={{ fontFamily: F.num, fontSize: 34 }} />
       <Field label="Notes" value={notes} onChangeText={setNotes} placeholder="Optional" multiline hint="**bold** works" />
-      <T k="note">The next salary copies this cycle’s budgets into the new cycle.</T>
+      <T k="note">{scope === 'shared' ? 'Counts each joint purchase in full. ' : 'Counts your purchases and your share of joint ones. '}The next salary starts a new cycle with this limit again. Money left unspent isn’t added to it.</T>
       <Btn label="Save" busy={busy} onPress={() => void save()} />
       {budget ? <Btn kind="danger" label="Remove budget" disabled={busy} onPress={() => void save(true)} /> : null}
     </Sheet>
