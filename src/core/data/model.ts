@@ -1,11 +1,12 @@
 
 import { useMemo } from 'react'
+import { nextPayday } from '@/core/domain/payday'
 import { applyCategoryOverrides, buildCategoryMeta, getDisplayCategoryName, type CategoryMeta } from '@/core/domain/category-helpers'
 import type { CategoryOption } from '@/core/domain/categories-types'
 import { findIncomeParentIds } from '@/core/domain/category-rules'
 import { buildNavigableCycles, findCycleFor, type SalaryCycle } from '@/core/domain/cycles'
 import { computeMyCostByTransactionId } from '@/core/domain/shared'
-import { addDays, daysBetween, parseYmd, todayYmd, ymd } from '@/core/fmt'
+import { addDays, daysBetween, todayYmd } from '@/core/fmt'
 import { useStore } from './store'
 import type { BudgetRow, CategoryRow, Tables, TransactionRow } from './types'
 
@@ -109,14 +110,10 @@ function derive(t: Tables) {
     payday: current ? addDays(current.endInclusive, 1) : null, hasSalary: tx.some((r) => r.is_salary) }
 }
 
-/** Next salary is expected on the same day next month as the cycle's salary (clamped to the month's end). */
+/** Next salary is expected on the owner's Danish payday: a banking day before the month's last banking day. */
 function expectedPayday(c: SalaryCycle, all: SalaryCycle[]): string | null {
   if (c.endOnExclusive || !all.some((x) => x.id === c.id && isReal(x))) return null
-  const d = parseYmd(c.startOn)
-  const day = d.getDate()
-  const next = new Date(d.getFullYear(), d.getMonth() + 1, 1)
-  next.setDate(Math.min(day, new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate()))
-  return ymd(next)
+  return nextPayday(c.startOn)
 }
 
 /** The derived model for the screens; null until the first data arrives. */
