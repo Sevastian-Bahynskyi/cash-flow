@@ -1,5 +1,5 @@
 import { assertEquals } from "jsr:@std/assert@1";
-import { iconLinks, logoKey } from "./logos.ts";
+import { iconLinks, logoKey, parseDomains } from "./logos.ts";
 
 Deno.test("iconLinks picks the smallest sharp icon and resolves relative links", () => {
   const html = `<link rel="icon" href="/f16.png" sizes="16x16">
@@ -18,4 +18,9 @@ Deno.test("iconLinks picks the smallest sharp icon and resolves relative links",
 
 Deno.test("logoKey matches names regardless of case and padding", () => {
   assertEquals(logoKey("  Føtex "), "føtex");
+});
+
+Deno.test("parseDomains keeps known keys and cleans or drops bad domains", () => {
+  const got = parseDomains('noise {"results":[{"key":"netto","domain":"https://www.Netto.dk/"},{"key":"anna","domain":null},{"key":"x","domain":"not a domain"},{"key":"ghost","domain":"a.dk"}]}', new Set(["netto", "anna", "x"]));
+  assertEquals([...got], [["netto", "netto.dk"], ["anna", null], ["x", null]]);
 });
