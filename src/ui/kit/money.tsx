@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useStore, write } from '@/core/data/store';
@@ -117,11 +118,15 @@ export function SyncLine() {
   );
 }
 
+const GATE_IN = FadeIn.duration(260);
+
 /** Renders the screen once data is here; until then a spinner, or one clear error. */
 export function Gate({ children }: { children: (m: Model) => ReactNode }) {
   const { status, error, reload } = useStore();
   const m = useModel();
-  if (m) return <>{children(m)}</>;
+  // content that kept you waiting fades in; content already cached is simply there
+  const [waited] = useState(!m);
+  if (m) return waited ? <Animated.View entering={GATE_IN} style={{ flex: 1 }}>{children(m)}</Animated.View> : <>{children(m)}</>;
   if (status === 'error') return <View style={{ flex: 1, backgroundColor: C.bg, justifyContent: 'center', padding: 24, gap: 12 }}><T k="sec">Couldn’t load your money</T><T k="note">{error}</T><Btn label="Retry" onPress={() => void reload()} /></View>;
   return <View style={{ flex: 1, backgroundColor: C.bg, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={C.ink} /></View>;
 }
@@ -197,7 +202,7 @@ function CategoryPick({ t, m, onClose }: { t: TransactionRow; m: Model; onClose:
     try {
       await write(store, ['transactions'], () => supabase.from('transactions').update({ category_id: o.id, needs_review: false, reason_source: 'you', reason: `You chose ${o.name}`, confidence: 1 }).eq('id', t.id));
       setPicked(o);
-    } catch (e) { toast(e instanceof Error ? e.message : 'Not saved.'); } finally { setBusy(false); }
+    } catch (e) { toast(e instanceof Error ? e.message : 'Not saved.', undefined, 'error'); } finally { setBusy(false); }
   };
   const always = async (): Promise<void> => {
     if (!picked || !store.userId) return;
@@ -206,7 +211,7 @@ function CategoryPick({ t, m, onClose }: { t: TransactionRow; m: Model; onClose:
       await write(store, ['merchant_category_rules'], () => supabase.from('merchant_category_rules').upsert({ user_id: store.userId, match_target: 'normalized_merchant', match_type: 'exact', pattern: key, kind: t.kind, canonical_merchant: t.name, category_id: picked.id, is_shared_topup: false, is_blocked: false, priority: 300, source: 'manual' }, { onConflict: 'user_id,kind,match_target,match_type,pattern' }));
       if (same.length) await write(store, ['transactions'], () => supabase.from('transactions').update({ category_id: picked.id, needs_review: false, reason_source: 'rule', reason: `Your rule: ${t.name}`, confidence: 1 }).in('id', same.map((x) => x.id)));
       toast(`${t.name} always goes to ${picked.name}`); onClose();
-    } catch (e) { toast(e instanceof Error ? e.message : 'Not saved.'); } finally { setBusy(false); }
+    } catch (e) { toast(e instanceof Error ? e.message : 'Not saved.', undefined, 'error'); } finally { setBusy(false); }
   };
   if (picked) return (
     <Sheet open onClose={onClose} title="Saved">
@@ -238,11 +243,11 @@ function SplitSheet({ t, m, onClose }: { t: TransactionRow; m: Model; onClose: (
     if (bad || !cat || !store.userId) return;
     setBusy(true);
     try { await write(store, ['transaction_splits'], () => supabase.from('transaction_splits').insert({ user_id: store.userId, transaction_id: t.id, category_id: cat, amount_minor: v })); setAmount(''); setCat(null); toast('Split saved'); }
-    catch (e) { toast(e instanceof Error ? e.message : 'Not saved.'); } finally { setBusy(false); }
+    catch (e) { toast(e instanceof Error ? e.message : 'Not saved.', undefined, 'error'); } finally { setBusy(false); }
   };
   const remove = async (id: string): Promise<void> => {
     setBusy(true);
-    try { await write(store, ['transaction_splits'], () => supabase.from('transaction_splits').delete().eq('id', id)); } catch (e) { toast(e instanceof Error ? e.message : 'Not saved.'); } finally { setBusy(false); }
+    try { await write(store, ['transaction_splits'], () => supabase.from('transaction_splits').delete().eq('id', id)); } catch (e) { toast(e instanceof Error ? e.message : 'Not saved.', undefined, 'error'); } finally { setBusy(false); }
   };
   return (
     <Sheet open onClose={onClose} title={`Split ${t.name}`}>
@@ -270,7 +275,7 @@ export function DetailBody({ t, m, onDone }: { t: TransactionRow; m: Model; onDo
   const myPart = t.amount_minor ? m.share.get(t.id) : undefined;
   const act = async (label: string, run: () => PromiseLike<{ error: { message: string } | null }>): Promise<void> => {
     setBusy(true);
-    try { await write(store, ['transactions'], run); toast(label); } catch (e) { toast(e instanceof Error ? e.message : 'Not saved.'); } finally { setBusy(false); }
+    try { await write(store, ['transactions'], run); toast(label); } catch (e) { toast(e instanceof Error ? e.message : 'Not saved.', undefined, 'error'); } finally { setBusy(false); }
   };
   const neutral = t.is_shared_topup || t.movement === 'moved' || t.movement === 'ignore';
   const splits = m.splitsOf.get(t.id) ?? [];

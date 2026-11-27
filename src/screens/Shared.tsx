@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, View, useWindowDimensions } from 'react-native';
+import { View, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useStore } from '@/core/data/store';
 import type { Model } from '@/core/data/model';
@@ -8,7 +8,7 @@ import { kr, shortDate } from '@/core/fmt';
 import { PARTNER } from '@/core/partner';
 import { AuraPager } from '@/ui/aura/AuraPager';
 import { C } from '@/ui/kit/theme';
-import { Btn, Empty, Header, Icon, List, Panel, Row, Screen, Sec, Seg, T, tap } from '@/ui/kit/ui';
+import { Btn, Empty, Header, Icon, List, Panel, Press, Row, Screen, Sec, Seg, T, tap } from '@/ui/kit/ui';
 import { Gate, TxRow, useDetail } from '@/ui/kit/money';
 
 type Per = 'cycle' | 'year' | 'all';
@@ -55,12 +55,12 @@ function Shared({ m }: { m: Model }) {
               const c = m.byId.get(id);
               const mine = (100 * s * p.userShareRatio) / max, hers = (100 * s * (1 - p.userShareRatio)) / max;
               return c ? (
-                <Pressable key={id} onPress={() => { tap(); router.push(`/activity?shared=1&cat=${id}` as never); }} style={{ gap: 6 }}>
+                <Press key={id} scale={0.98} onPress={() => { tap(); router.push(`/activity?shared=1&cat=${id}` as never); }} style={{ gap: 6 }} accessibilityRole="button">
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Icon name={c.icon} size={18} /><T k="strong" style={{ flex: 1 }}>{c.name}</T><T k="num">{kr(s, true)}</T></View>
                   <View style={{ flexDirection: 'row', height: 8, borderRadius: 4, overflow: 'hidden', backgroundColor: C.track }}>
                     <View style={{ width: `${mine}%`, backgroundColor: C.ink }} /><View style={{ width: `${hers}%`, backgroundColor: C.partner }} />
                   </View>
-                </Pressable>
+                </Press>
               ) : null;
             }) : <Empty title="Nothing spent together yet." sub="" />}
               {cats.length ? <View style={{ flexDirection: 'row', gap: 16 }}><T k="meta">● Your part</T><T k="meta" style={{ color: C.partner }}>● {PARTNER}’s part</T></View> : null}

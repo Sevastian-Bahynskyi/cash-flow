@@ -1,5 +1,7 @@
-import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type TextInputProps, type TextStyle, type ViewStyle } from 'react-native';
+import { createContext, isValidElement, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { ActivityIndicator, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View, type PressableProps, type StyleProp, type TextInputProps, type TextStyle, type ViewStyle } from 'react-native';
+import Animated, { Easing, FadeIn, FadeInDown, FadeOut, FadeOutDown, LayoutAnimationConfig, LinearTransition, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
+import { GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -8,7 +10,41 @@ import { iconFor } from './iconMap';
 import { kr } from '@/core/fmt';
 import { budgetState, type BudgetState } from '@/core/domain/budget-state';
 
+/** A tick for a discrete choice: a row, a tab, an option. */
 export const tap = (): void => { Haptics.selectionAsync().catch(() => undefined); };
+/** A light knock for a button that does something. */
+export const knock = (): void => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined); };
+/** The outcome of a save, felt as well as read. */
+export const outcome = (ok: boolean): void => {
+  Haptics.notificationAsync(ok ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Error).catch(() => undefined);
+};
+
+const SLIDE = { duration: 320, dampingRatio: 0.82 } as const;
+// CSS transitions take a keyword here: Expo's web style types reject a cubicBezier() object
+const PRESS = { transitionProperty: 'transform', transitionDuration: '140ms', transitionTimingFunction: 'ease-out' } as const;
+const GROW = { duration: 650, easing: Easing.bezier(0.23, 1, 0.32, 1) } as const;
+const MOVE = LinearTransition.duration(240).easing(Easing.bezier(0.77, 0, 0.175, 1));
+const ROW_IN = FadeIn.duration(220).delay(60);
+const ROW_OUT = FadeOut.duration(140);
+const TOAST_IN = FadeInDown.duration(280).easing(Easing.bezier(0.23, 1, 0.32, 1));
+const TOAST_OUT = FadeOutDown.duration(180);
+
+// iOS 26 liquid glass; older systems get a quiet translucent fill
+const GLASS = isLiquidGlassAvailable() && isGlassEffectAPIAvailable();
+export function Glass({ style, interactive, children }: { style?: StyleProp<ViewStyle>; interactive?: boolean; children?: ReactNode }) {
+  if (!GLASS) return <View style={[{ backgroundColor: 'rgba(255,255,255,0.1)' }, style]}>{children}</View>;
+  return <GlassView glassEffectStyle="regular" colorScheme="dark" isInteractive={interactive} style={style}>{children}</GlassView>;
+}
+
+/** A pressable that gives a little under the finger: it sinks on press-in and springs back on release. */
+export function Press({ style, scale = 0.97, children, onPressIn, onPressOut, ...rest }: Omit<PressableProps, 'style' | 'children'> & { style?: StyleProp<ViewStyle>; scale?: number; children: ReactNode }) {
+  const [down, setDown] = useState(false);
+  return (
+    <Pressable {...rest} pressRetentionOffset={16} onPressIn={(e) => { setDown(true); onPressIn?.(e); }} onPressOut={(e) => { setDown(false); onPressOut?.(e); }}>
+      <Animated.View style={[style, PRESS, { transform: [{ scale: down ? scale : 1 }] }]}>{children}</Animated.View>
+    </Pressable>
+  );
+}
 
 const ACTIONS = new Set(['add', 'close', 'back', 'chev', 'down', 'check', 'done', 'search', 'filter', 'edit', 'trash', 'more', 'swap', 'split', 'undo', 'retry', 'signout', 'export', 'import', 'in', 'out', 'moved', 'sync']);
 
@@ -38,7 +74,7 @@ export function Screen({ children, onRefresh, header, pad = true }: { children: 
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <ScrollView
         contentContainerStyle={{ paddingBottom: 140 }}
-        refreshControl={onRefresh ? <RefreshControl tintColor={C.ink} refreshing={busy} onRefresh={() => { setBusy(true); onRefresh().then(() => setBusy(false), () => setBusy(false)); }} /> : undefined}
+        refreshControl={onRefresh ? <RefreshControl tintColor={C.ink} refreshing={busy} onRefresh={() => { knock(); setBusy(true); onRefresh().then(() => setBusy(false), () => setBusy(false)); }} /> : undefined}
       >
         {header}
         <View style={pad ? { paddingHorizontal: 16, gap: 12 } : undefined}>{children}</View>
@@ -55,9 +91,7 @@ export function Header({ title, sub, back, right, overAura, wrapTitle }: { title
     <View style={[st.header, { paddingTop: insets.top + 8 }]}>
       <View style={st.headerRow}>
         {back ? (
-          <Pressable hitSlop={12} onPress={() => { tap(); if (router.canGoBack()) router.back(); else router.replace('/'); }} style={st.iconBtn} accessibilityRole="button" accessibilityLabel="Back">
-            <Icon name="back" strong color={overAura ? '#FFFFFF' : C.ink} />
-          </Pressable>
+          <IconBtn name="back" label="Back" color={overAura ? '#FFFFFF' : C.ink} onPress={() => { if (router.canGoBack()) router.back(); else router.replace('/'); }} />
         ) : null}
         <View style={{ flex: 1 }}>
           <T k="title" style={overAura ? { color: '#FFFFFF' } : undefined} numberOfLines={wrapTitle ? undefined : 1} maxFontSizeMultiplier={wrapTitle ? 2.5 : undefined}>{title}</T>
@@ -69,11 +103,14 @@ export function Header({ title, sub, back, right, overAura, wrapTitle }: { title
   );
 }
 
+/** A round liquid-glass button for a header or a pager. */
 export function IconBtn({ name, onPress, label, color = C.ink, disabled }: { name: string; onPress: () => void; label: string; color?: string; disabled?: boolean }) {
   return (
-    <Pressable hitSlop={10} onPress={() => { tap(); onPress(); }} style={st.iconBtn} accessibilityRole="button" accessibilityLabel={label} disabled={disabled} accessibilityState={{ disabled }}>
-      <Icon name={name} color={disabled ? C.ink3 : color} />
-    </Pressable>
+    <Glass interactive={!disabled} style={[st.iconBtn, disabled && { opacity: 0.45 }]}>
+      <Pressable hitSlop={8} onPress={() => { tap(); onPress(); }} style={st.iconFill} accessibilityRole="button" accessibilityLabel={label} disabled={disabled} accessibilityState={{ disabled }}>
+        <Icon name={name} color={disabled ? C.ink3 : color} strong />
+      </Pressable>
+    </Glass>
   );
 }
 
@@ -108,19 +145,36 @@ export function Row({ lead, title, meta, end, onPress, disabled, selected, expan
     </>
   );
   if (!onPress) return <View style={[st.row, selected && st.rowSel]}>{body}</View>;
+  return <PressRow disabled={disabled} selected={selected} onPress={onPress} accessibilityLabel={accessibilityLabel} expanded={expanded}>{body}</PressRow>;
+}
+
+/** A list row lights up at once under the finger and fades back on release, like a system list. */
+function PressRow({ children, onPress, disabled, selected, expanded, accessibilityLabel }: { children: ReactNode; onPress: () => void; disabled?: boolean; selected?: boolean; expanded?: boolean; accessibilityLabel?: string }) {
+  const [down, setDown] = useState(false);
   return (
-    <Pressable disabled={disabled} onPress={() => { tap(); onPress(); }} style={({ pressed }) => [st.row, selected && st.rowSel, pressed && { backgroundColor: C.surface2 }, disabled && { opacity: 0.5 }]} accessibilityRole="button" accessibilityLabel={accessibilityLabel} accessibilityState={{ expanded }}>
-      {body}
+    <Pressable disabled={disabled} onPress={() => { tap(); onPress(); }} onPressIn={() => setDown(true)} onPressOut={() => setDown(false)} pressRetentionOffset={16}
+      accessibilityRole="button" accessibilityLabel={accessibilityLabel} accessibilityState={{ expanded, disabled }}>
+      <Animated.View style={[st.row, { backgroundColor: down || selected ? C.surface2 : 'rgba(33,33,38,0)', transitionProperty: 'backgroundColor', transitionDuration: down ? '0ms' : '260ms', transitionTimingFunction: 'ease-out' }, disabled && { opacity: 0.5 }]}>
+        {children}
+      </Animated.View>
     </Pressable>
   );
 }
 
 export const Divider = () => <View style={st.divider} />;
 
-/** Rows split by hairlines inside one panel. */
-export function List({ children }: { children: ReactNode[] }) {
+/** Rows split by hairlines inside one panel. `animate` lets rows that come and go fade and the rest slide into place. */
+export function List({ children, animate }: { children: ReactNode[]; animate?: boolean }) {
   const items = children.filter(Boolean);
-  return <Panel>{items.map((c, i) => <View key={i}>{i > 0 ? <Divider /> : null}{c}</View>)}</Panel>;
+  const keyOf = (c: ReactNode, i: number): string | number => (isValidElement(c) && c.key != null ? c.key : i);
+  if (!animate) return <Panel>{items.map((c, i) => <View key={keyOf(c, i)}>{i > 0 ? <Divider /> : null}{c}</View>)}</Panel>;
+  return (
+    <LayoutAnimationConfig skipEntering skipExiting>
+      <Animated.View layout={MOVE} style={st.panel}>
+        {items.map((c, i) => <Animated.View key={keyOf(c, i)} layout={MOVE} entering={ROW_IN} exiting={ROW_OUT}>{i > 0 ? <Divider /> : null}{c}</Animated.View>)}
+      </Animated.View>
+    </LayoutAnimationConfig>
+  );
 }
 
 /** A link row to another screen. */
@@ -129,12 +183,27 @@ export function NavRow({ href, icon, name, sub, end }: { href: string; icon: str
   return <Row lead={<Disc icon={icon} />} title={name} meta={sub} end={<View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>{end}<Icon name="chev" size={16} color={C.ink3} strong /></View>} onPress={() => router.push(href as never)} />;
 }
 
+/** A segmented control whose white thumb slides to the picked option. */
 export function Seg<K extends string>({ value, options, onChange }: { value: K; options: [K, string][]; onChange: (k: K) => void }) {
+  const [boxes, setBoxes] = useState<Partial<Record<K, { x: number; w: number }>>>({});
+  const x = useSharedValue(0);
+  const w = useSharedValue(0);
+  const box = boxes[value];
+  useEffect(() => {
+    if (!box) return;
+    // the first placement jumps; later picks slide
+    const first = w.get() === 0;
+    x.set(first ? box.x : withSpring(box.x, SLIDE));
+    w.set(first ? box.w : withSpring(box.w, SLIDE));
+  }, [box, x, w]);
+  const thumb = useAnimatedStyle(() => ({ width: w.get(), opacity: w.get() ? 1 : 0, transform: [{ translateX: x.get() }] }));
   return (
     <View style={st.seg} accessibilityRole="tablist">
+      <Animated.View style={[st.segThumb, thumb]} />
       {options.map(([k, label]) => (
-        <Pressable key={k} onPress={() => { tap(); onChange(k); }} style={[st.segBtn, value === k && st.segOn]} accessibilityRole="tab" accessibilityState={{ selected: value === k }}>
-          <Text style={[st.segText, value === k && { color: C.bg }]}>{label}</Text>
+        <Pressable key={k} onPress={() => { if (k !== value) { tap(); onChange(k); } }} style={st.segBtn} accessibilityRole="tab" accessibilityState={{ selected: value === k }}
+          onLayout={(e) => { const { x: bx, width } = e.nativeEvent.layout; setBoxes((b) => ({ ...b, [k]: { x: bx, w: width } })); }}>
+          <Animated.Text style={[st.segText, { color: value === k ? C.bg : C.ink2, transitionProperty: 'color', transitionDuration: '180ms', transitionTimingFunction: 'ease-out' }]}>{label}</Animated.Text>
         </Pressable>
       ))}
     </View>
@@ -144,9 +213,10 @@ export function Seg<K extends string>({ value, options, onChange }: { value: K; 
 export function Btn({ label, onPress, kind = 'primary', disabled, icon, busy }: { label: string; onPress: () => void; kind?: 'primary' | 'ghost' | 'link' | 'danger'; disabled?: boolean; icon?: string; busy?: boolean }) {
   const fg = kind === 'primary' ? C.bg : kind === 'danger' ? C.over : C.ink;
   return (
-    <Pressable disabled={disabled || busy} onPress={() => { tap(); onPress(); }} style={({ pressed }) => [st.btn, st[kind], pressed && { opacity: 0.8 }, (disabled || busy) && { opacity: 0.45 }]} accessibilityRole="button">
+    <Press disabled={disabled || busy} onPress={() => { if (kind === 'link') tap(); else knock(); onPress(); }} style={[st.btn, st[kind], (disabled || busy) && { opacity: 0.45 }]} scale={kind === 'link' ? 0.94 : 0.96}
+      accessibilityRole="button" accessibilityState={{ disabled: disabled || busy, busy }}>
       {busy ? <ActivityIndicator color={fg} /> : <>{icon ? <Icon name={icon} size={18} color={fg} /> : null}<Text style={[st.btnText, { color: fg }]}>{label}</Text></>}
-    </Pressable>
+    </Press>
   );
 }
 
@@ -171,7 +241,7 @@ export function Sheet({ open, onClose, title, right, children }: { open: boolean
     <Modal visible={open} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: C.bg }}>
         <View style={st.sheetBar}>
-          <Pressable hitSlop={12} onPress={onClose} style={st.iconBtn} accessibilityRole="button" accessibilityLabel="Close"><Icon name="close" strong /></Pressable>
+          <IconBtn name="close" label="Close" onPress={onClose} />
           <T k="strong" style={{ flex: 1, textAlign: 'center' }} numberOfLines={1}>{title}</T>
           <View style={{ minWidth: 44, alignItems: 'flex-end' }}>{right}</View>
         </View>
@@ -190,17 +260,26 @@ export function Meter({ spent, amount, share, height = 8, color }: { spent: numb
     <View style={[st.meter, { height, borderRadius: height }]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       {s === 'over' ? (
         <>
-          <View style={[st.meterFill, { width: pct(amount / spent), backgroundColor: color ?? C.ink3, borderRadius: height }]} />
-          <View style={[st.meterFill, { left: pct(amount / spent), width: pct(1 - amount / spent), backgroundColor: C.over, borderRadius: height }]} />
+          <Fill width={pct(amount / spent)} style={{ backgroundColor: color ?? C.ink3, borderRadius: height }} />
+          <Fill width={pct(1 - amount / spent)} style={{ left: pct(amount / spent), backgroundColor: C.over, borderRadius: height }} />
         </>
       ) : (
         <>
-          <View style={[st.meterFill, { width: pct(spent / amount), backgroundColor: color ?? (s === 'ahead' ? C.ahead : C.bar), borderRadius: height }]} />
+          <Fill width={pct(spent / amount)} style={{ backgroundColor: color ?? (s === 'ahead' ? C.ahead : C.bar), borderRadius: height }} />
           <View style={[st.today, { left: pct(share), height: height + 6, top: -3 }]} />
         </>
       )}
     </View>
   );
+}
+
+/** A meter fill that grows to its share when it appears or changes. */
+function Fill({ width, style }: { width: `${number}%`; style: StyleProp<ViewStyle> }) {
+  const p = useSharedValue(0);
+  const target = parseFloat(width);
+  useEffect(() => { p.set(withTiming(target, GROW)); }, [p, target]);
+  const grow = useAnimatedStyle(() => ({ width: `${p.get()}%` }));
+  return <Animated.View style={[st.meterFill, style, grow]} />;
 }
 
 /** The words for a budget's state: colour never speaks alone. */
@@ -211,15 +290,17 @@ export function StatePill({ left, st: s }: { left: number; st: BudgetState }) {
 }
 
 /* toasts: one quiet line at the bottom, with Undo when it helps */
-type Toast = { msg: string; undo?: () => void };
-const ToastCtx = createContext<(msg: string, undo?: () => void) => void>(() => undefined);
+type Toast = { id: number; msg: string; undo?: () => void };
+type ShowToast = (msg: string, undo?: () => void, tone?: 'ok' | 'error') => void;
+const ToastCtx = createContext<ShowToast>(() => undefined);
 export const useToast = () => useContext(ToastCtx);
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [t, setT] = useState<Toast | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const insets = useSafeAreaInsets();
-  const show = useCallback((msg: string, undo?: () => void) => {
-    setT({ msg, undo });
+  const show = useCallback<ShowToast>((msg, undo, tone = 'ok') => {
+    outcome(tone === 'ok');
+    setT((prev) => ({ id: (prev?.id ?? 0) + 1, msg, undo }));
     clearTimeout(timer.current);
     timer.current = setTimeout(() => setT(null), 4200);
   }, []);
@@ -227,10 +308,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastCtx.Provider value={show}>
       {children}
       {t ? (
-        <View style={[st.toast, { bottom: insets.bottom + 96 }]} accessibilityLiveRegion="polite">
+        <Animated.View key={t.id} entering={TOAST_IN} exiting={TOAST_OUT} style={[st.toast, { bottom: insets.bottom + 96 }]} accessibilityLiveRegion="polite">
           <Text style={st.toastText}>{t.msg}</Text>
-          {t.undo ? <Pressable onPress={() => { t.undo?.(); setT(null); }}><Text style={[st.toastText, { fontFamily: F.strong, textDecorationLine: 'underline' }]}>Undo</Text></Pressable> : null}
-        </View>
+          {t.undo ? <Pressable hitSlop={12} onPress={() => { tap(); t.undo?.(); setT(null); }}><Text style={[st.toastText, { fontFamily: F.strong, textDecorationLine: 'underline' }]}>Undo</Text></Pressable> : null}
+        </Animated.View>
       ) : null}
     </ToastCtx.Provider>
   );
@@ -239,7 +320,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 export const st = StyleSheet.create({
   header: { paddingHorizontal: 16, paddingBottom: 12 },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44 },
-  iconBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22 },
+  iconBtn: { width: 44, height: 44, borderRadius: 22, overflow: 'hidden' },
+  iconFill: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   sec: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 18, paddingHorizontal: 4 },
   panel: { backgroundColor: C.surface, borderRadius: R.panel, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 11, minHeight: 60 },
@@ -249,7 +331,7 @@ export const st = StyleSheet.create({
   disc: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   seg: { flexDirection: 'row', alignSelf: 'flex-start', backgroundColor: C.surface, borderRadius: R.pill, padding: 3 },
   segBtn: { minHeight: 40, paddingHorizontal: 16, borderRadius: R.pill, justifyContent: 'center' },
-  segOn: { backgroundColor: C.ink },
+  segThumb: { position: 'absolute', top: 3, bottom: 3, left: 0, borderRadius: R.pill, backgroundColor: C.ink },
   segText: { fontFamily: F.strong, fontSize: 14, color: C.ink2 },
   btn: { minHeight: 48, paddingHorizontal: 20, borderRadius: R.pill, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   primary: { backgroundColor: C.ink },

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { TextInput, View } from 'react-native';
+import Animated, { FadeIn, FadeInUp, FadeOut } from 'react-native-reanimated';
 import { useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useStore, write } from '@/core/data/store';
@@ -11,6 +12,10 @@ import { Btn, Empty, Header, Icon, IconBtn, List, Panel, Screen, Sec, Seg, T, us
 import { DayList, Gate, SyncLine, TxRow, useDetail } from '@/ui/kit/money';
 
 type Filter = 'all' | 'mine' | 'shared';
+
+const SEARCH_IN = FadeInUp.duration(200);
+const SEARCH_OUT = FadeOut.duration(120);
+const LIST_SWAP = FadeIn.duration(200);
 
 /** A search token matches a name, note or category, or a date written as 24.11, 24.11.2026, 2026-11 or 2026. */
 function matches(t: TransactionRow, m: Model, q: string): boolean {
@@ -33,13 +38,13 @@ function Inbox({ m }: { m: Model }) {
   const confirm = async (ids: string[]): Promise<void> => {
     setBusy(ids.length > 1 ? 'all' : ids[0]!);
     try { await write(store, ['transactions'], () => supabase.from('transactions').update({ needs_review: false }).in('id', ids)); toast(ids.length > 1 ? `Confirmed ${ids.length}` : 'Confirmed'); }
-    catch (e) { toast(e instanceof Error ? e.message : 'Not saved.'); } finally { setBusy(null); }
+    catch (e) { toast(e instanceof Error ? e.message : 'Not saved.', undefined, 'error'); } finally { setBusy(null); }
   };
   const ready = items.filter((t) => t.category_id).map((t) => t.id);
   return (
     <>
       <Sec right={ready.length > 1 ? <Btn kind="link" label="All look right" disabled={Boolean(busy)} onPress={() => void confirm(ready)} /> : undefined}>Inbox, {items.length} to check</Sec>
-      <List>{items.map((t) => (
+      <List animate>{items.map((t) => (
         <View key={t.id} style={{ flexDirection: 'row', alignItems: 'center' }}>
           <View style={{ flex: 1 }}><TxRow t={t} m={m} onOpen={open} /></View>
           <View style={{ paddingRight: 10 }}><Btn kind="ghost" label={busy === t.id ? '…' : 'Yes'} disabled={Boolean(busy) || !t.category_id} onPress={() => void confirm([t.id])} /></View>
@@ -99,16 +104,18 @@ function Transactions({ m }: { m: Model }) {
     }>
       {!catParam ? <SyncLine /> : null}
       {searchOpen ? (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.surface, borderRadius: 16, paddingHorizontal: 14 }}>
+        <Animated.View entering={SEARCH_IN} exiting={SEARCH_OUT} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.surface, borderRadius: 16, paddingHorizontal: 14 }}>
           <Icon name="search" size={18} color={C.ink3} />
-          <TextInput autoFocus value={q} onChangeText={setQ} placeholder="Name, note, category or date" placeholderTextColor={C.ink3} style={{ flex: 1, minHeight: 48, color: C.ink, fontFamily: F.body, fontSize: 16 }} autoCorrect={false} />
-        </View>
+          <TextInput autoFocus value={q} onChangeText={setQ} placeholder="Name, note, category or date" placeholderTextColor={C.ink3} style={{ flex: 1, minHeight: 48, color: C.ink, fontFamily: F.body, fontSize: 16 }} autoCorrect={false} keyboardAppearance="dark" clearButtonMode="while-editing" returnKeyType="search" />
+        </Animated.View>
       ) : null}
       {!catParam && !q.trim() ? <Inbox m={m} /> : null}
       <Seg value={filter} onChange={setFilter} options={[['all', 'All'], ['mine', 'Yours'], ['shared', 'Shared']]} />
       {(q.trim() || catParam || filter !== 'all') && scoped.length > 0 ? (
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 4 }}><T k="note">{scoped.length} {scoped.length === 1 ? 'transaction' : 'transactions'}</T><T k="note">Your spending {kr(total)}</T></View>
       ) : null}
+      {/* a new filter fades the list in rather than snapping it */}
+      <Animated.View key={filter} entering={LIST_SWAP} style={{ gap: 12 }}>
       {!m.tx.length ? <Panel><Empty title="No transactions yet" sub="What you spend, what comes in and what you move to the pot arrives from your bank, day by day." /></Panel>
         : !scoped.length ? <Panel><Empty title="Nothing matches" sub="Try another name or a date like 24.11." /></Panel>
         : catParam && from ? <DayList rows={scoped} m={m} onOpen={open} categoryId={catParam} />
@@ -118,6 +125,7 @@ function Transactions({ m }: { m: Model }) {
             {g.rows.length ? <DayList rows={g.rows} m={m} onOpen={open} categoryId={catParam} /> : <Panel><Empty title="Nothing yet this cycle" /></Panel>}
           </View>
         ))}
+      </Animated.View>
       {!q.trim() && !catParam && groups.length > shown ? <Btn kind="ghost" label="Load older" onPress={() => setShown((s) => s + 1)} /> : null}
       {!q.trim() && !catParam && groups.length > 0 && groups.length <= shown && shown > 1 ? <T k="note" style={{ textAlign: 'center' }}>Nothing older.</T> : null}
     </Screen>

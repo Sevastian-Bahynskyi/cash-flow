@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Text, View, useWindowDimensions } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Svg, { Circle, Line, Path, Text as SvgText } from 'react-native-svg';
 import { useStore } from '@/core/data/store';
@@ -108,7 +109,7 @@ function BudgetList({ m, c, b }: { m: Model; c: Cycle; b: ReturnType<Model['budg
         const state = item ? budgetState(spent, item.amount, share) : 'none';
         const remaining = item ? `${kr(Math.abs(item.left), true)} ${item.left < 0 ? 'over' : 'left'}${state === 'ahead' ? ', ahead of pace' : ''}` : 'No budget';
         return (
-          <List key={cat.id}>{[
+          <List key={cat.id} animate>{[
             <Row key={cat.id} expanded={kids.length ? isOpen : undefined} stackEnd={largeText} accessibilityLabel={`${cat.name}, ${subtitle}, ${remaining}`}
               onPress={() => kids.length ? setExpanded((state) => ({ ...state, [cat.id]: !isOpen })) : detail(cat.id)}
               lead={<Disc icon={cat.icon} color={color} />}
@@ -116,7 +117,7 @@ function BudgetList({ m, c, b }: { m: Model; c: Cycle; b: ReturnType<Model['budg
               meta={subtitle}
               end={<View style={{ alignItems: largeText ? 'flex-start' : 'flex-end', gap: 4 }}>
                 {item ? <StatePill left={item.left} st={state} /> : <T k="meta">No budget</T>}
-                <Icon name={isOpen ? 'down' : 'chev'} size={15} color={C.ink3} />
+                {kids.length ? <Animated.View style={[TURN, { transform: [{ rotate: isOpen ? '90deg' : '0deg' }] }]}><Icon name="chev" size={15} color={C.ink3} /></Animated.View> : <Icon name="chev" size={15} color={C.ink3} />}
               </View>} />,
             ...(isOpen ? kids.map((kid) => (
               <Row key={kid.id} stackEnd={largeText} lead={<View style={{ marginLeft: largeText ? 10 : 22 }}><Disc icon={kid.icon} color={color} /></View>}
@@ -223,3 +224,5 @@ function Plan({ m }: { m: Model }) {
 
 export function BudgetsScreen(): React.JSX.Element { return <Gate>{(m) => <Budgets m={m} />}</Gate>; }
 export function PlanScreen() { return <Gate>{(m) => <Plan m={m} />}</Gate>; }
+
+const TURN = { transitionProperty: 'transform', transitionDuration: '220ms', transitionTimingFunction: 'ease-out' } as const;
