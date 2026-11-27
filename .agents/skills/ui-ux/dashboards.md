@@ -46,7 +46,7 @@ Each list and chart is designed in all four states before it is done:
 
 ## What the owner's marks teach (references board, 26 Nov)
 
-The full list with a line per screen is `docs/redesign/references.json`; the marks are in `docs/design/owner-taste-evidence.md` § Cashflow.
+The marks are in `docs/design/owner-taste-evidence.md` § Cashflow.
 
 - **Loved:** money as a confident object (Apple Card, Revolut's big balance), a tactile control that makes money concrete (Apple Card's interest dial), people in the shared part (Revolut's joint account, payments as a chat), calm dense structure (Linear), a picture that answers "where did it go" (Monarch's Sankey), budgets as rows with the amount available in a coloured pill (YNAB) or aligned columns (Copilot), overspending shown with its next step (YNAB).
 - **Hated:** monospace terminal ledgers (Lunch Money), pale airy minimalism (Mercury, Things), generic fintech (Emma, Rocket), AI suggestion queues and insight cards (Copilot).

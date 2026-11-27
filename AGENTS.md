@@ -56,7 +56,7 @@ Load only what the task needs; these load on their own when the task matches:
 ## Supabase
 
 - Simple explicit schema and RLS. Query directly from feature code with explicit columns and row types.
-- Edge functions only where a secret is needed (Groq category suggestions in `supabase/functions/`).
+- Edge functions only where a secret is needed (`bank-sync`, `bank-consent` in `supabase/functions/`). AI goes through OpenRouter (`OPENROUTER_API_KEY`).
 - No RPCs, background jobs or triggers unless truly needed.
 - **Migrations are additive only.** Never drop or rewrite data. Timestamped files in `supabase/migrations/`, tested on a local stack first. No remote schema change or edge-function deploy without the owner's go.
 - MCP: local, gitignored `.mcp.json` from `.mcp.example.json`. The token comes from `SUPABASE_TOKEN_ACCOUNT2`, exported per repo by direnv (`.envrc`, gitignored); the same account serves `ordly`. Codex reads it via `bearer_token_env_var` in `.codex/config.toml`.

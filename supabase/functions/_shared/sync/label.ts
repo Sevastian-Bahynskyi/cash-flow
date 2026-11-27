@@ -1,4 +1,4 @@
-// Labels new bank rows: deterministic ladder first, AI (Groq) only for what it left open.
+// Labels new bank rows: deterministic ladder first, AI (OpenRouter) only for what it left open.
 import { aiLabel } from "../classify/ai.ts";
 import { loadContext } from "../classify/context.ts";
 import type { Labeler } from "./run.ts";

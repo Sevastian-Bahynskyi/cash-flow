@@ -1,7 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
-import { Platform } from 'react-native';
 import { supabase, supabaseAuthUrl, supabaseUrl } from '@/lib/supabase';
 import { runDetached } from '@/lib/async';
 import { reportDevError } from '@/lib/errors';
@@ -43,13 +42,6 @@ const buildGoogleOAuthUrl = (redirectTo: string, skipHttpRedirect: boolean): str
 };
 
 const buildRedirectTo = (nextPath?: string): string => {
-  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    const redirectUrl = new URL('/auth-callback', window.location.origin);
-    if (nextPath) {
-      redirectUrl.searchParams.set('next', nextPath);
-    }
-    return redirectUrl.toString();
-  }
   return Linking.createURL('auth-callback', {
     queryParams: nextPath ? { next: nextPath } : undefined,
   });
@@ -93,22 +85,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithGoogle = useCallback(async (nextPath?: string): Promise<void> => {
     if (qaScenario()) return;
     const redirectTo = buildRedirectTo(nextPath);
-
-    if (Platform.OS === 'web') {
-      if (supabaseAuthUrl && supabaseAuthUrl !== supabaseUrl) {
-        window.location.assign(buildGoogleOAuthUrl(redirectTo, false));
-        return;
-      }
-
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: { redirectTo },
-      });
-      if (error) {
-        reportDevError('auth.signInWithGoogle', error);
-      }
-      return;
-    }
 
     let authUrl: string | null = null;
 

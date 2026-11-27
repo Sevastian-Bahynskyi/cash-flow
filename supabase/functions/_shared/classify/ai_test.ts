@@ -1,4 +1,4 @@
-// AI fallback: what leaves the app (prompt privacy) and what happens when Groq fails. Groq is stubbed.
+// AI fallback: what leaves the app (prompt privacy) and what happens when the model call fails. OpenRouter is stubbed.
 import { assert, assertEquals } from "jsr:@std/assert@1";
 import { aiLabel } from "./ai.ts";
 import { type BankTx, type CategoryRef, classify, type Ctx, merchantKey } from "./engine.ts";
@@ -33,7 +33,7 @@ const rows: BankTx[] = [
   tx("t3", { bank: "lunar", bank_code: null, amount_minor: 12000, remittance: `Overførsel ${FAKE_IBAN.friend} ref card *${OWN_CARD_SUFFIXES[0]}` }),
 ];
 
-const withGroq = async (respond: (body: string) => Response | Promise<Response>, run: (prompts: string[]) => Promise<void>): Promise<void> => {
+const withModel = async (respond: (body: string) => Response | Promise<Response>, run: (prompts: string[]) => Promise<void>): Promise<void> => {
   const real = globalThis.fetch;
   const prompts: string[] = [];
   globalThis.fetch = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
@@ -49,10 +49,10 @@ const withGroq = async (respond: (body: string) => Response | Promise<Response>,
     globalThis.fetch = real;
   }
 };
-const groqOk = (content: string): Response => new Response(JSON.stringify({ choices: [{ message: { content } }] }));
+const modelOk = (content: string): Response => new Response(JSON.stringify({ choices: [{ message: { content } }] }));
 
 Deno.test("ai prompt: no own or partner names, no IBANs, no card suffixes", async () => {
-  await withGroq(() => groqOk('{"results":[]}'), async (prompts) => {
+  await withModel(() => modelOk('{"results":[]}'), async (prompts) => {
     await aiLabel(ctx, rows, "test-key");
     assert(prompts.length > 0, "leftovers were sent");
     const text = prompts.join("\n").toLowerCase();
@@ -68,13 +68,13 @@ Deno.test("ai failure: HTTP error, garbage, timeout-like throw -> deterministic 
   const deterministic = classify(ctx, rows);
   for (const respond of [
     () => new Response("down", { status: 503 }),
-    () => groqOk("not json at all"),
-    () => groqOk('{"results":[{"id":"t1","categoryId":"not-a-category","confidence":0.99}]}'),
+    () => modelOk("not json at all"),
+    () => modelOk('{"results":[{"id":"t1","categoryId":"not-a-category","confidence":0.99}]}'),
     (): Response => {
       throw new TypeError("network");
     },
   ]) {
-    await withGroq(respond, async () => {
+    await withModel(respond, async () => {
       const got = await aiLabel(ctx, rows, "test-key");
       assertEquals([...got], [...deterministic]);
     });
@@ -82,7 +82,7 @@ Deno.test("ai failure: HTTP error, garbage, timeout-like throw -> deterministic 
 });
 
 Deno.test("ai: no key -> no call, deterministic labels", async () => {
-  await withGroq(() => groqOk('{"results":[]}'), async (prompts) => {
+  await withModel(() => modelOk('{"results":[]}'), async (prompts) => {
     const got = await aiLabel(ctx, rows, undefined);
     assertEquals(prompts.length, 0);
     assertEquals([...got], [...classify(ctx, rows)]);

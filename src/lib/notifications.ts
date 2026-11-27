@@ -1,10 +1,8 @@
-import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 
 const DAILY_EXPENSE_REMINDER_ID = 'daily-expense-reminder';
 
 export function configureNotificationHandling(): void {
-  if (Platform.OS === 'web') return;
 
   Notifications.setNotificationHandler({
     handleNotification: () => Promise.resolve({
@@ -17,14 +15,12 @@ export function configureNotificationHandling(): void {
 }
 
 export async function isDailyExpenseReminderEnabled(): Promise<boolean> {
-  if (Platform.OS === 'web') return false;
 
   const scheduled = await Notifications.getAllScheduledNotificationsAsync();
   return scheduled.some(({ identifier }) => identifier === DAILY_EXPENSE_REMINDER_ID);
 }
 
 export async function enableDailyExpenseReminder(): Promise<boolean> {
-  if (Platform.OS === 'web') return false;
 
   const currentPermissions = await Notifications.getPermissionsAsync();
   const permissions = currentPermissions.granted
@@ -58,6 +54,5 @@ export async function enableDailyExpenseReminder(): Promise<boolean> {
 }
 
 export async function disableDailyExpenseReminder(): Promise<void> {
-  if (Platform.OS === 'web') return;
   await Notifications.cancelScheduledNotificationAsync(DAILY_EXPENSE_REMINDER_ID);
 }

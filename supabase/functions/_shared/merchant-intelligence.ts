@@ -1,12 +1,5 @@
 export type TransactionKind = "expense" | "income";
 
-export type Candidate = {
-  id: string;
-  parent: string;
-  name: string;
-  icon?: string;
-};
-
 export type MerchantSuggestionContext = {
   kind: TransactionKind;
   name: string;
@@ -14,11 +7,6 @@ export type MerchantSuggestionContext = {
   rawText?: string | null;
   message?: string | null;
   sender?: string | null;
-};
-
-type CategoryPath = {
-  parent: string;
-  name: string;
 };
 
 const translationMap: Record<string, string> = {
@@ -56,22 +44,6 @@ const trailingNoiseTokens = new Set([
   "sweden",
   "web",
 ]);
-
-const incomeSalaryPaths: readonly CategoryPath[] = [{ parent: "Income", name: "Salary" }];
-const incomeInterestPaths: readonly CategoryPath[] = [{ parent: "Income", name: "Interest" }];
-const incomeBenefitsPaths: readonly CategoryPath[] = [{ parent: "Income", name: "Benefits" }];
-const transferPaths: readonly CategoryPath[] = [{ parent: "Transfers", name: "Transfer" }];
-const parkingPaths: readonly CategoryPath[] = [{ parent: "Transport", name: "Parking" }];
-const phonePaths: readonly CategoryPath[] = [{ parent: "Household", name: "Phone" }];
-const insurancePaths: readonly CategoryPath[] = [{ parent: "Household", name: "Insurance" }];
-const fuelPaths: readonly CategoryPath[] = [{ parent: "Transport", name: "Fuel" }];
-const publicTransitPaths: readonly CategoryPath[] = [{ parent: "Transport", name: "Public transit" }];
-const restaurantsPaths: readonly CategoryPath[] = [{ parent: "Food", name: "Restaurants" }];
-const groceriesPaths: readonly CategoryPath[] = [{ parent: "Food", name: "Groceries" }];
-const subscriptionsPaths: readonly CategoryPath[] = [{ parent: "Entertainment", name: "Subscriptions" }];
-const fitnessPaths: readonly CategoryPath[] = [{ parent: "Health", name: "Fitness" }];
-const personalCarePaths: readonly CategoryPath[] = [{ parent: "Shopping", name: "Personal care" }];
-const travelPaths: readonly CategoryPath[] = [{ parent: "Entertainment", name: "Travel" }];
 
 const merchantAliases = [
   { canonical: "apple", patterns: [/\bapple\b/, /\bapple com bill\b/, /\bitunes\b/] },
@@ -116,53 +88,6 @@ const merchantAliases = [
   { canonical: "wolt", patterns: [/\bwolt\b/] },
   { canonical: "zalando", patterns: [/\bzalando\b/] },
 ];
-
-const curatedCategories = {
-  apple: { expense: subscriptionsPaths },
-  "banken food hall": { expense: restaurantsPaths },
-  bilka: { expense: groceriesPaths },
-  claude: { expense: subscriptionsPaths },
-  "coop 365": { expense: groceriesPaths },
-  dazn: { expense: subscriptionsPaths },
-  disney: { expense: subscriptionsPaths },
-  dsb: { expense: publicTransitPaths },
-  "easy park": { expense: parkingPaths },
-  f24: { expense: fuelPaths },
-  fakta: { expense: groceriesPaths },
-  "fitness world": { expense: fitnessPaths },
-  fitnessx: { expense: fitnessPaths },
-  fotex: { expense: groceriesPaths },
-  if: { expense: insurancePaths },
-  ingo: { expense: fuelPaths },
-  interest: { income: incomeInterestPaths },
-  "kiwi.com": { expense: travelPaths },
-  lebara: { expense: phonePaths },
-  lidl: { expense: groceriesPaths },
-  "lyca mobile": { expense: phonePaths },
-  matas: { expense: personalCarePaths },
-  mcdonalds: { expense: restaurantsPaths },
-  midttrafik: { expense: publicTransitPaths },
-  mono: { expense: transferPaths },
-  netto: { expense: groceriesPaths },
-  normal: { expense: personalCarePaths },
-  oister: { expense: phonePaths },
-  ok: { expense: fuelPaths },
-  puregym: { expense: fitnessPaths },
-  q8: { expense: fuelPaths },
-  rejsekort: { expense: publicTransitPaths },
-  "rema 1000": { expense: groceriesPaths },
-  revolut: { expense: transferPaths, income: transferPaths },
-  spotify: { expense: subscriptionsPaths },
-  steam: { expense: [{ parent: "Entertainment", name: "Games" }] },
-  su: { income: incomeBenefitsPaths },
-  transfergo: { expense: transferPaths, income: transferPaths },
-  tryg: { expense: insurancePaths },
-  wolt: { expense: restaurantsPaths },
-  zalando: { expense: [{ parent: "Shopping", name: "Clothes" }] },
-};
-
-const normalizeCategoryName = (value: string): string =>
-  value.trim().toLowerCase().replace(/\s+/g, "");
 
 export const normalizeAsciiText = (value: string): string =>
   value
@@ -263,64 +188,4 @@ export const normalizeMerchantContext = (context: MerchantSuggestionContext): st
   }
 
   return segments[0] ?? normalizedWhole;
-};
-
-const findCategoryId = (
-  candidates: readonly Candidate[],
-  paths: readonly CategoryPath[],
-): string | null => {
-  for (const path of paths) {
-    const match = candidates.find(
-      (candidate) =>
-        normalizeCategoryName(candidate.parent) === normalizeCategoryName(path.parent) &&
-        normalizeCategoryName(candidate.name) === normalizeCategoryName(path.name),
-    );
-    if (match) return match.id;
-  }
-  return null;
-};
-
-const isSalaryLike = (normalizedMerchant: string, sender: string): boolean =>
-  /\blonoverforsel\b|\blonoverfoersel\b|\bsalary\b/.test(normalizedMerchant) ||
-  /\bbeumer group\b|\buniwelco\b/.test(sender);
-
-const isBenefitsLike = (normalizedMerchant: string, sender: string): boolean =>
-  normalizedMerchant === "su" || /\buddannelses og forsknings\b/.test(sender);
-
-export const resolveCuratedCategoryId = ({
-  context,
-  candidates,
-}: {
-  context: MerchantSuggestionContext;
-  candidates: readonly Candidate[];
-}): { categoryId: string; confidence: number; normalizedMerchant: string } | null => {
-  const normalizedMerchant = normalizeMerchantContext(context);
-  const normalizedSender = normalizeAsciiText(context.sender ?? "");
-
-  if (context.kind === "income") {
-    if (isSalaryLike(normalizedMerchant, normalizedSender)) {
-      const categoryId = findCategoryId(candidates, incomeSalaryPaths);
-      if (categoryId) return { categoryId, confidence: 0.99, normalizedMerchant };
-    }
-
-    if (isBenefitsLike(normalizedMerchant, normalizedSender)) {
-      const categoryId = findCategoryId(candidates, incomeBenefitsPaths);
-      if (categoryId) return { categoryId, confidence: 0.99, normalizedMerchant };
-    }
-
-    if (normalizedMerchant === "interest") {
-      const categoryId = findCategoryId(candidates, incomeInterestPaths);
-      if (categoryId) return { categoryId, confidence: 0.99, normalizedMerchant };
-    }
-  }
-
-  const definition = curatedCategories[normalizedMerchant as keyof typeof curatedCategories] as
-    | { expense?: readonly CategoryPath[]; income?: readonly CategoryPath[] }
-    | undefined;
-  const paths = context.kind === "income" ? definition?.income : definition?.expense;
-  if (!paths?.length) return null;
-
-  const categoryId = findCategoryId(candidates, paths);
-  if (!categoryId) return null;
-  return { categoryId, confidence: 0.98, normalizedMerchant };
 };

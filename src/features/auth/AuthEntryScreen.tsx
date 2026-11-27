@@ -1,9 +1,10 @@
 import { useMemo, useState, type ReactElement } from 'react';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { runDetached } from '@/lib/async';
 
 type AuthEntryMode = 'sign-in' | 'sign-up';
 
@@ -15,8 +16,6 @@ export function AuthEntryScreen({ mode }: AuthEntryScreenProps): ReactElement {
     const { signInWithGoogle } = useAuth();
     const router = useRouter();
     const [busy, setBusy] = useState(false);
-    const { width } = useWindowDimensions();
-    const isDesktop = Platform.OS === 'web' && width >= 960;
     const isSignUp = mode === 'sign-up';
 
     const copy = useMemo(
@@ -48,48 +47,6 @@ export function AuthEntryScreen({ mode }: AuthEntryScreenProps): ReactElement {
         </View>
     );
 
-    if (isDesktop) {
-        return (
-            <SafeAreaView style={styles.desktopContainer} edges={['top', 'bottom']}>
-                <View style={styles.desktopShell}>
-                    <View style={styles.desktopIntro}>
-                        <Text style={styles.kicker}>Behavioral budgeting</Text>
-                        <Text style={styles.desktopTitle}>Cash Flow</Text>
-                        <Text style={styles.desktopSubtitle}>{copy.subtitle}</Text>
-                        {summaryCard}
-                    </View>
-
-                    <View style={styles.desktopCard}>
-                        <View style={styles.brand}>
-                            <Text style={styles.title}>{copy.title}</Text>
-                            <Text style={styles.subtitle}>OAuth only · no passwords</Text>
-                        </View>
-                        <View style={styles.actions}>
-                            <Pressable
-                                onPress={() => {
-                                    void onPressPrimary();
-                                }}
-                                disabled={busy}
-                                style={({ pressed }) => [styles.btn, pressed && styles.btnPressed, busy && styles.btnDisabled]}
-                            >
-                                {busy ? <ActivityIndicator color={colors.text} /> : <Text style={styles.btnText}>{copy.primaryAction}</Text>}
-                            </Pressable>
-
-                            <Pressable
-                                onPress={() => {
-                                    router.replace(copy.switchRoute as '/sign-in' | '/sign-up');
-                                }}
-                                style={({ pressed }) => [styles.ghostAction, pressed && styles.btnPressed]}
-                            >
-                                <Text style={styles.ghostText}>{copy.switchLabel} <Text style={styles.ghostTextAccent}>{copy.switchAction}</Text></Text>
-                            </Pressable>
-                        </View>
-                    </View>
-                </View>
-            </SafeAreaView>
-        );
-    }
-
     return (
         <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
             <View style={styles.brandCompact}>
@@ -100,9 +57,7 @@ export function AuthEntryScreen({ mode }: AuthEntryScreenProps): ReactElement {
             <View style={styles.actions}>
                 {summaryCard}
                 <Pressable
-                    onPress={() => {
-                        void onPressPrimary();
-                    }}
+                    onPress={() => runDetached(onPressPrimary(), 'auth.signIn')}
                     disabled={busy}
                     style={({ pressed }) => [styles.btn, pressed && styles.btnPressed, busy && styles.btnDisabled]}
                 >
@@ -124,27 +79,6 @@ export function AuthEntryScreen({ mode }: AuthEntryScreenProps): ReactElement {
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.bg, justifyContent: 'space-between', paddingVertical: spacing.xxl },
-    desktopContainer: { flex: 1, backgroundColor: colors.bg, justifyContent: 'center', padding: spacing.xl },
-    desktopShell: { width: '100%', maxWidth: 1240, alignSelf: 'center', flexDirection: 'row', gap: spacing.xl, alignItems: 'stretch' },
-    desktopIntro: { flex: 1.1, justifyContent: 'center', padding: spacing.xl, gap: spacing.lg },
-    desktopCard: {
-        flex: 0.9,
-        backgroundColor: 'rgba(22,22,29,0.88)',
-        borderRadius: 28,
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.09)',
-        padding: spacing.xl,
-        justifyContent: 'space-between',
-        minHeight: 520,
-        shadowColor: '#000',
-        shadowOpacity: 0.28,
-        shadowRadius: 28,
-        shadowOffset: { width: 0, height: 18 },
-    },
-    kicker: { ...typography.label, color: colors.accentAlt, textTransform: 'uppercase', letterSpacing: 2 },
-    desktopTitle: { ...typography.h1, color: colors.text, fontSize: 72, lineHeight: 74 },
-    desktopSubtitle: { ...typography.body, color: colors.textMuted, maxWidth: 560, fontSize: 18, lineHeight: 26 },
-    brand: { gap: spacing.sm },
     brandCompact: { paddingTop: spacing.xxl * 2, paddingHorizontal: spacing.xl, gap: spacing.sm },
     title: { ...typography.h1, color: colors.text, fontSize: 44 },
     subtitle: { ...typography.body, color: colors.textMuted },

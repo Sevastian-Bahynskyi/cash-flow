@@ -1,12 +1,3 @@
-[functions.parse-transaction-csv]
-verify_jwt = false
-
-[functions.parse-transaction-image]
-verify_jwt = false
-
-[functions.suggest-category]
-verify_jwt = false
-
 [functions.bank-sync]
 # Off: the gateway check rejects this project's ES256 user tokens. The handler authenticates every call itself.
 verify_jwt = false
