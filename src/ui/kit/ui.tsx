@@ -10,13 +10,11 @@ import { budgetState, type BudgetState } from '@/core/domain/budget-state';
 
 export const tap = (): void => { Haptics.selectionAsync().catch(() => undefined); };
 
-// Actions draw as plain strokes: Phosphor's duotone Plus, X, check and arrows carry a tinted square behind them.
 const ACTIONS = new Set(['add', 'close', 'back', 'chev', 'down', 'check', 'done', 'search', 'filter', 'edit', 'trash', 'more', 'swap', 'split', 'undo', 'retry', 'signout', 'export', 'import', 'in', 'out', 'moved', 'sync']);
 
-/** A Phosphor icon by meaning or stored category name: duotone for things, bold strokes for actions. */
-export function Icon({ name, size = 22, color = C.ink, weight }: { name: string | null | undefined; size?: number; color?: string; weight?: 'duotone' | 'fill' | 'regular' | 'bold' }) {
+export function Icon({ name, size = 22, color = C.ink, strong }: { name: string | null | undefined; size?: number; color?: string; strong?: boolean }): React.JSX.Element {
   const I = iconFor(name);
-  return <I size={size} color={color} weight={weight ?? (ACTIONS.has(name ?? '') ? 'bold' : 'duotone')} />;
+  return <I size={size} color={color} strokeWidth={strong ? 2.4 : ACTIONS.has(name ?? '') ? 2 : 1.8} />;
 }
 
 export function T({ children, style, k = 'body', numberOfLines, maxFontSizeMultiplier }: { children: ReactNode; style?: StyleProp<TextStyle>; k?: keyof typeof TS; numberOfLines?: number; maxFontSizeMultiplier?: number }) {
@@ -58,7 +56,7 @@ export function Header({ title, sub, back, right, overAura, wrapTitle }: { title
       <View style={st.headerRow}>
         {back ? (
           <Pressable hitSlop={12} onPress={() => { tap(); if (router.canGoBack()) router.back(); else router.replace('/'); }} style={st.iconBtn} accessibilityRole="button" accessibilityLabel="Back">
-            <Icon name="back" weight="bold" color={overAura ? '#FFFFFF' : C.ink} />
+            <Icon name="back" strong color={overAura ? '#FFFFFF' : C.ink} />
           </Pressable>
         ) : null}
         <View style={{ flex: 1 }}>
@@ -128,7 +126,7 @@ export function List({ children }: { children: ReactNode[] }) {
 /** A link row to another screen. */
 export function NavRow({ href, icon, name, sub, end }: { href: string; icon: string; name: string; sub?: string; end?: ReactNode }) {
   const router = useRouter();
-  return <Row lead={<Disc icon={icon} />} title={name} meta={sub} end={<View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>{end}<Icon name="chev" size={16} color={C.ink3} weight="bold" /></View>} onPress={() => router.push(href as never)} />;
+  return <Row lead={<Disc icon={icon} />} title={name} meta={sub} end={<View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>{end}<Icon name="chev" size={16} color={C.ink3} strong /></View>} onPress={() => router.push(href as never)} />;
 }
 
 export function Seg<K extends string>({ value, options, onChange }: { value: K; options: [K, string][]; onChange: (k: K) => void }) {
@@ -173,7 +171,7 @@ export function Sheet({ open, onClose, title, right, children }: { open: boolean
     <Modal visible={open} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: C.bg }}>
         <View style={st.sheetBar}>
-          <Pressable hitSlop={12} onPress={onClose} style={st.iconBtn} accessibilityRole="button" accessibilityLabel="Close"><Icon name="close" weight="bold" /></Pressable>
+          <Pressable hitSlop={12} onPress={onClose} style={st.iconBtn} accessibilityRole="button" accessibilityLabel="Close"><Icon name="close" strong /></Pressable>
           <T k="strong" style={{ flex: 1, textAlign: 'center' }} numberOfLines={1}>{title}</T>
           <View style={{ minWidth: 44, alignItems: 'flex-end' }}>{right}</View>
         </View>

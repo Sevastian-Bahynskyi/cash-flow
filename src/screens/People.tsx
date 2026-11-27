@@ -97,7 +97,7 @@ function People({ m }: { m: Model }) {
       {editing ? (
         <Sheet open onClose={() => setEdit(null)} title={editing.name}>
           <SheetHero amount={editing.kind === 'family' ? kr(editing.sentMinor, true) : owes(editing.balance_minor)} line={`${kr(editing.sentMinor, true)} sent, ${kr(editing.receivedMinor, true)} received`} />
-          <List>{KIND.map(([k, label, sub]) => <Row key={k} disabled={busy} selected={editing.kind === k} title={label} meta={sub} end={editing.kind === k ? <Icon name="check" weight="bold" /> : undefined} onPress={() => void setKind(editing.person_id, k)} />)}</List>
+          <List>{KIND.map(([k, label, sub]) => <Row key={k} disabled={busy} selected={editing.kind === k} title={label} meta={sub} end={editing.kind === k ? <Icon name="check" strong /> : undefined} onPress={() => void setKind(editing.person_id, k)} />)}</List>
           <Sec>Latest</Sec>
           <List>{recent(editing.person_id).map((t) => <TxRow key={t.id} t={t} m={m} onOpen={(x) => { setEdit(null); open(x); }} />)}</List>
         </Sheet>

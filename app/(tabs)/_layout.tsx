@@ -31,7 +31,7 @@ function Dock({ state, descriptors, navigation }: BottomTabBarProps) {
             accessibilityLabel={title}
             accessibilityState={{ selected: focused }}
           >
-            <Icon name={ICON[route.name]} size={26} color={focused ? C.ink : C.ink3} weight={focused ? 'fill' : 'duotone'} />
+            <Icon name={ICON[route.name]} size={26} color={focused ? C.ink : C.ink3} strong={focused} />
           </Pressable>
         );
       })}

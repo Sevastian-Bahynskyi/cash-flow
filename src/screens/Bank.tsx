@@ -186,8 +186,8 @@ function EditForm({ kind, x, t, onDone }: { kind: Kind; x: Item | null; t: Table
       {kind !== 'savings' ? <Field label={kind === 'loan' ? 'Still to repay' : 'Still owed'} keyboardType="decimal-pad" value={left} onChangeText={(v) => { setLeft(v); setE({ ...e, left: undefined }); }} error={e.left} hint={x ? undefined : 'Leave empty if nothing is paid back yet'} /> : null}
       {kind === 'savings' && savingsAccs.length > 0 ? (
         <View style={{ gap: 6 }}><T k="meta">Balance from</T>
-          <List>{[...savingsAccs.map((a) => <Row key={a.id} selected={acc === a.id} title={`${a.name ?? 'Savings'} (${a.currency})`} end={acc === a.id ? <Icon name="check" weight="bold" /> : undefined} onPress={() => setAcc(a.id)} />),
-            <Row key="none" selected={!acc} title="Not synced, I track it here" end={!acc ? <Icon name="check" weight="bold" /> : undefined} onPress={() => setAcc('')} />]}</List>
+          <List>{[...savingsAccs.map((a) => <Row key={a.id} selected={acc === a.id} title={`${a.name ?? 'Savings'} (${a.currency})`} end={acc === a.id ? <Icon name="check" strong /> : undefined} onPress={() => setAcc(a.id)} />),
+            <Row key="none" selected={!acc} title="Not synced, I track it here" end={!acc ? <Icon name="check" strong /> : undefined} onPress={() => setAcc('')} />]}</List>
         </View>
       ) : null}
       {kind === 'savings' ? <IconPick value={icon} onPick={setIcon} extra={['savings']} /> : null}

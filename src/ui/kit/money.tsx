@@ -218,7 +218,7 @@ function CategoryPick({ t, m, onClose }: { t: TransactionRow; m: Model; onClose:
   return (
     <Sheet open onClose={onClose} title={`Category for ${t.name}`}>
       <List>{m.options.filter((o) => (income ? o.parentName.toLowerCase() === 'income' && o.parentId !== o.id : o.parentName.toLowerCase() !== 'income')).map((o) => (
-        <Row key={o.id} disabled={busy} selected={o.id === t.category_id} lead={<Disc icon={o.icon} />} title={o.name} meta={o.parentId !== o.id ? o.parentName : undefined} end={o.id === t.category_id ? <Icon name="check" weight="bold" /> : undefined} onPress={() => void choose({ id: o.id, name: o.name })} />
+        <Row key={o.id} disabled={busy} selected={o.id === t.category_id} lead={<Disc icon={o.icon} />} title={o.name} meta={o.parentId !== o.id ? o.parentName : undefined} end={o.id === t.category_id ? <Icon name="check" strong /> : undefined} onPress={() => void choose({ id: o.id, name: o.name })} />
       ))}</List>
     </Sheet>
   );
@@ -252,7 +252,7 @@ function SplitSheet({ t, m, onClose }: { t: TransactionRow; m: Model; onClose: (
       ]}</List>
       <Field label="Amount for another category" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} placeholder="45" error={amount && bad ? `Less than ${kr(t.amount_minor - used)}, more than 0.` : null} />
       <List>{m.options.filter((o) => o.parentName.toLowerCase() !== 'income' && o.id !== t.category_id).map((o) => (
-        <Row key={o.id} selected={cat === o.id} lead={<Disc icon={o.icon} />} title={o.name} end={cat === o.id ? <Icon name="check" weight="bold" /> : undefined} onPress={() => setCat(o.id)} />
+        <Row key={o.id} selected={cat === o.id} lead={<Disc icon={o.icon} />} title={o.name} end={cat === o.id ? <Icon name="check" strong /> : undefined} onPress={() => setCat(o.id)} />
       ))}</List>
       <Btn label={`Split off ${v && !bad ? kr(v) : ''}`} disabled={bad || !cat} busy={busy} onPress={() => void save()} />
     </Sheet>
