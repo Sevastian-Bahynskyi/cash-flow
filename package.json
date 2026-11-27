@@ -13,6 +13,7 @@
     "lint:changed": "node ./scripts/lint-changed.cjs",
     "scan:smells": "node ./scripts/scan-smells.cjs",
     "typecheck": "tsc --noEmit",
+    "check:payday": "node scripts/check-payday.ts",
     "lockfile:check": "pnpm install --frozen-lockfile --ignore-scripts",
     "postinstall": "patch-package",
     "qa": "node scripts/qa.cjs metro",

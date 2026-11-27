@@ -10,6 +10,7 @@ import { addDays, kr, shortDate } from '@/core/fmt';
 import { C, F } from '@/ui/kit/theme';
 import { Btn, Empty, Header, Icon, IconBtn, List, Panel, Screen, Sec, Seg, T, useToast } from '@/ui/kit/ui';
 import { DayList, Gate, SyncLine, TxRow, useDetail } from '@/ui/kit/money';
+import { InboxHelp } from './InboxGuide';
 
 type Filter = 'all' | 'mine' | 'shared';
 
@@ -43,7 +44,12 @@ function Inbox({ m }: { m: Model }) {
   const ready = items.filter((t) => t.category_id).map((t) => t.id);
   return (
     <>
-      <Sec right={ready.length > 1 ? <Btn kind="link" label="All look right" disabled={Boolean(busy)} onPress={() => void confirm(ready)} /> : undefined}>Inbox, {items.length} to check</Sec>
+      <Sec right={
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+          {ready.length > 1 ? <Btn kind="link" label="All look right" disabled={Boolean(busy)} onPress={() => void confirm(ready)} /> : null}
+          <InboxHelp />
+        </View>
+      }>Inbox, {items.length} to check</Sec>
       <List animate>{items.map((t) => (
         <View key={t.id} style={{ flexDirection: 'row', alignItems: 'center' }}>
           <View style={{ flex: 1 }}><TxRow t={t} m={m} onOpen={open} /></View>

@@ -43,6 +43,7 @@ import Hourglass from 'lucide-react-native/icons/hourglass';
 import House from 'lucide-react-native/icons/house';
 import Image from 'lucide-react-native/icons/image';
 import Info from 'lucide-react-native/icons/info';
+import CircleHelp from 'lucide-react-native/icons/circle-help';
 import KeyRound from 'lucide-react-native/icons/key-round';
 import Landmark from 'lucide-react-native/icons/landmark';
 import Laptop from 'lucide-react-native/icons/laptop';
@@ -188,6 +189,7 @@ const ICONS: Readonly<Record<string, LucideIcon>> = {
   warn: TriangleAlert,
   error: CircleAlert,
   info: Info,
+  help: CircleHelp,
   done: Check,
   check: Check,
   close: X,

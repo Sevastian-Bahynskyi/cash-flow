@@ -105,8 +105,8 @@ export function fixtureTables(scenario: QaScenario): Tables {
       transaction(`utilities-${month}`, 'Electricity bill', 4, 83_000, 'utilities'),
       transaction(`market-${month}`, 'Neighbourhood market', 6, 73_000, 'market'),
       transaction(`supermarket-${month}`, 'Supermarket shop', 12, 161_000 + (month * 15_000), 'supermarket'),
-      transaction(`rail-${month}`, 'Rail pass', 16, 61_000, 'train'),
-      transaction(`gift-${month}`, 'Book and coffee', 18, 38_000, 'gifts'),
+      transaction(`rail-${month}`, 'Rail pass', 16, 61_000, 'train', { needs_review: true }),
+      transaction(`gift-${month}`, 'Book and coffee', 18, 38_000, 'gifts', { needs_review: true }),
       transaction(`unknown-${month}`, 'Uncategorized card payment', 21, 9750, null),
     );
     tables.transaction_splits.push({ id: `split-${month}`, user_id: uid, transaction_id: `gift-${month}`, category_id: 'coffee', amount_minor: 8000, note: null, created_at: day(18) });
