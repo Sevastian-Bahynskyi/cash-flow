@@ -10,10 +10,13 @@ import { budgetState, type BudgetState } from '@/core/domain/budget-state';
 
 export const tap = (): void => { Haptics.selectionAsync().catch(() => undefined); };
 
-/** A Phosphor icon by meaning or stored category name; duotone unless told otherwise. */
-export function Icon({ name, size = 22, color = C.ink, weight = 'duotone' }: { name: string | null | undefined; size?: number; color?: string; weight?: 'duotone' | 'fill' | 'regular' | 'bold' }) {
+// Actions draw as plain strokes: Phosphor's duotone Plus, X, check and arrows carry a tinted square behind them.
+const ACTIONS = new Set(['add', 'close', 'back', 'chev', 'down', 'check', 'done', 'search', 'filter', 'edit', 'trash', 'more', 'swap', 'split', 'undo', 'retry', 'signout', 'export', 'import', 'in', 'out', 'moved', 'sync']);
+
+/** A Phosphor icon by meaning or stored category name: duotone for things, bold strokes for actions. */
+export function Icon({ name, size = 22, color = C.ink, weight }: { name: string | null | undefined; size?: number; color?: string; weight?: 'duotone' | 'fill' | 'regular' | 'bold' }) {
   const I = iconFor(name);
-  return <I size={size} color={color} weight={weight} />;
+  return <I size={size} color={color} weight={weight ?? (ACTIONS.has(name ?? '') ? 'bold' : 'duotone')} />;
 }
 
 export function T({ children, style, k = 'body', numberOfLines }: { children: ReactNode; style?: StyleProp<TextStyle>; k?: keyof typeof TS; numberOfLines?: number }) {

@@ -39,7 +39,7 @@ export function TxRow({ t, m, onOpen, current }: { t: TransactionRow; m: Model; 
       onPress={() => onOpen(t)}
       selected={current}
       accessibilityLabel={`${t.name}, ${sub}, ${amount}${w === 'shared' ? `, shared with ${PARTNER}` : ''}`}
-      lead={<Disc icon={icon} bg={discBg} color={discInk}>{w === 'shared' ? <View style={{ position: 'absolute', left: -5, top: -5 }}><SharedRing size={50} /></View> : null}</Disc>}
+      lead={<Disc icon={icon} bg={discBg} color={discInk}>{w === 'shared' && !m.isTransfer(t.category_id) && !t.counterparty_person_id ? <View style={{ position: 'absolute', left: -5, top: -5 }}><SharedRing size={50} /></View> : null}</Disc>}
       title={<View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><T k="strong" numberOfLines={1} style={{ flexShrink: 1 }}>{t.name}</T>{t.needs_review ? <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: C.ahead }} accessibilityLabel="Not confirmed yet" /> : null}</View>}
       meta={sub}
       end={<View style={{ alignItems: 'flex-end' }}><Text style={{ fontFamily: F.strong, fontSize: 16, color, fontVariant: ['tabular-nums'] }}>{amount}</Text>{small ? <T k="meta" style={{ fontSize: 11 }}>{small}</T> : null}</View>}
