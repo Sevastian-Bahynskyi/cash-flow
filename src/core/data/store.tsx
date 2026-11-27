@@ -51,6 +51,15 @@ const LOAD: { [K in TableName]: (uid: string) => Promise<Tables[K]> } = {
   categories: () => all((a, b) => sb.from('categories').select('id,user_id,parent_id,name,level,is_system,icon,color').order('level').order('name').order('id').range(a, b)),
   category_overrides: () => all((a, b) => sb.from('category_overrides').select('id,user_id,category_id,name,icon,updated_at').order('id').range(a, b)),
   budgets: () => all((a, b) => sb.from('budgets').select('id,user_id,category_id,salary_cycle_id,amount_minor,notes,created_at').order('id').range(a, b)),
+  shared_budgets: async () => {
+    try {
+      return await all((a, b) => sb.from('shared_budgets').select('id,user_id,category_id,salary_cycle_id,amount_minor,notes,created_at').order('id').range(a, b));
+    } catch (e) {
+      // shortcut: until migration 20261127120000_shared_budgets is applied, the missing table reads as no shared limits; drop once it is live
+      if (e instanceof Error && /shared_budgets/.test(e.message) && /could not find|does not exist/i.test(e.message)) return [];
+      throw e;
+    }
+  },
   savings_accounts: () => all((a, b) => sb.from('savings_accounts').select('id,user_id,name,goal_minor,color,icon,bank_account_id,created_at').order('created_at').order('id').range(a, b)),
   savings_events: () => all((a, b) => sb.from('savings_events').select('id,user_id,savings_account_id,action,amount_minor,occurred_on,note,created_at').order('occurred_on').order('created_at').order('id').range(a, b)),
   loans: () => all((a, b) => sb.from('loans').select('id,user_id,name,principal_minor,remaining_minor,status,created_at').order('created_at', { ascending: false }).order('id').range(a, b)),
@@ -126,8 +135,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       try {
         const raw = await AsyncStorage.getItem(cacheKey(userId));
-        const cached = raw ? (JSON.parse(raw) as { t: Tables; at: number }) : null;
-        if (alive && cached && !tablesRef.current) { setTables(cached.t); setLoadedAt(cached.at); setStatus('ready'); }
+        const cached = raw ? (JSON.parse(raw) as { t: Omit<Tables, 'shared_budgets'> & Partial<Tables>; at: number }) : null;
+        // a device copy from before shared budgets existed has no such table yet
+        if (alive && cached && !tablesRef.current) { setTables({ shared_budgets: [], ...cached.t }); setLoadedAt(cached.at); setStatus('ready'); }
       } catch { /* no device copy */ }
       if (alive) await reload();
       if (alive) await sync();

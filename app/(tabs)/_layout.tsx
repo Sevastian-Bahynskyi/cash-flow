@@ -1,12 +1,16 @@
 import { Icon, Label, NativeTabs } from 'expo-router/unstable-native-tabs';
 import { C } from '@/ui/kit/theme';
 
-// Four places on the phone: budgets and analytics open from Cycle, the pot from People, settings pages from Settings.
+// Five places: Budgets first (limits and the bank balance), then the cycle overview, activity, the pot from People, settings.
 // The system tab bar: liquid glass on iOS 26, its own selection feel, and it tucks away while a list scrolls down.
 export default function TabsLayout() {
   return (
     <NativeTabs tintColor={C.ink} minimizeBehavior="onScrollDown" iconColor={{ default: C.ink3, selected: C.ink }} labelStyle={{ default: { color: C.ink3 }, selected: { color: C.ink } }}>
       <NativeTabs.Trigger name="index">
+        <Icon sf={{ default: 'gauge.with.dots.needle.33percent', selected: 'gauge.with.dots.needle.33percent' }} />
+        <Label>Budgets</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="cycle">
         <Icon sf={{ default: 'circle.circle', selected: 'circle.circle.fill' }} />
         <Label>Cycle</Label>
       </NativeTabs.Trigger>

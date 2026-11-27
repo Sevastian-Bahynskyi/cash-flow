@@ -56,7 +56,9 @@ function Inbox({ m }: { m: Model }) {
 }
 
 function Transactions({ m }: { m: Model }) {
-  const params = useLocalSearchParams<{ cat?: string; shared?: string; from?: string; until?: string; cycle?: string }>();
+  const params = useLocalSearchParams<{ cat?: string; shared?: string; from?: string; until?: string; cycle?: string; scope?: string }>();
+  // a drill-down from a shared budget counts joint purchases in full
+  const scope = params.scope === 'shared' ? 'shared' : 'personal';
   const open = useDetail();
   const store = useStore();
   const catParam = params.cat === 'uncategorized' || (params.cat && m.byId.has(params.cat)) ? params.cat : undefined;
@@ -70,12 +72,12 @@ function Transactions({ m }: { m: Model }) {
 
   const scoped = useMemo(() => {
     let L = [...m.tx].reverse();
-    if (catParam) L = L.filter((t) => (!from || t.occurred_on >= from) && (!until || t.occurred_on < until) && m.spendingIn(t, catParam) > 0);
+    if (catParam) L = L.filter((t) => (!from || t.occurred_on >= from) && (!until || t.occurred_on < until) && m.spendingIn(t, catParam, scope) > 0);
     if (filter === 'mine') L = L.filter((t) => !t.shared && !t.is_shared_topup);
     if (filter === 'shared') L = L.filter((t) => t.shared || t.is_shared_topup);
     if (q.trim()) L = L.filter((t) => matches(t, m, q));
     return L;
-  }, [m, catParam, from, until, filter, q]);
+  }, [m, catParam, from, until, filter, q, scope]);
 
   // This cycle first; older cycles one at a time. Searching shows every match.
   const groups = useMemo(() => {
@@ -90,7 +92,7 @@ function Transactions({ m }: { m: Model }) {
     return out;
   }, [m, scoped]);
   const visible = q.trim() || catParam ? groups : groups.slice(0, shown);
-  const total = scoped.reduce((a, t) => a + (catParam ? m.spendingIn(t, catParam) : m.mine(t)), 0);
+  const total = scoped.reduce((a, t) => a + (catParam ? m.spendingIn(t, catParam, scope) : m.mine(t)), 0);
   const catName = catParam === 'uncategorized' ? 'Uncategorized' : catParam ? m.byId.get(catParam)?.name : null;
   const cycle = m.cycles.find((item) => item.id === params.cycle) ?? m.current;
   const heading = catParam && from
@@ -112,13 +114,13 @@ function Transactions({ m }: { m: Model }) {
       {!catParam && !q.trim() ? <Inbox m={m} /> : null}
       <Seg value={filter} onChange={setFilter} options={[['all', 'All'], ['mine', 'Yours'], ['shared', 'Shared']]} />
       {(q.trim() || catParam || filter !== 'all') && scoped.length > 0 ? (
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 4 }}><T k="note">{scoped.length} {scoped.length === 1 ? 'transaction' : 'transactions'}</T><T k="note">Your spending {kr(total)}</T></View>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 4 }}><T k="note">{scoped.length} {scoped.length === 1 ? 'transaction' : 'transactions'}</T><T k="note">{scope === 'shared' ? 'Joint spending' : 'Your spending'} {kr(total)}</T></View>
       ) : null}
       {/* a new filter fades the list in rather than snapping it */}
       <Animated.View key={filter} entering={LIST_SWAP} style={{ gap: 12 }}>
       {!m.tx.length ? <Panel><Empty title="No transactions yet" sub="What you spend, what comes in and what you move to the pot arrives from your bank, day by day." /></Panel>
         : !scoped.length ? <Panel><Empty title="Nothing matches" sub="Try another name or a date like 24.11." /></Panel>
-        : catParam && from ? <DayList rows={scoped} m={m} onOpen={open} categoryId={catParam} />
+        : catParam && from ? <DayList rows={scoped} m={m} onOpen={open} categoryId={catParam} scope={scope} />
         : visible.map((g, i) => (
           <View key={g.key}>
             {i > 0 || q.trim() ? <Sec>{g.title}</Sec> : null}
