@@ -58,6 +58,12 @@ export type TransactionRow = TransactionInsert & {
   confidence?: number | null;
   needs_review?: boolean;
   counterparty_person_id?: string | null;
+  /** Left out of the trip it falls in ("Not part of the trip"). */
+  trip_exclude?: boolean;
+  /** Counted in the trip it falls in although it looks like home or online ("Count it in the trip"). */
+  trip_include?: boolean;
+  /** The bank text of the shop's branch; places are looked up by it (see trips.ts placeKey). */
+  place_key?: string | null;
   budget_effect_minor?: number;
   personal_effect_minor?: number;
   shared_effect_minor?: number;

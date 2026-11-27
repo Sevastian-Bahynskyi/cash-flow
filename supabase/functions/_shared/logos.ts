@@ -54,6 +54,33 @@ const getImage = async (url: string): Promise<Image | null> => {
   }
 };
 
+const squash = (v: string): string => v.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]/g, "");
+type AppHit = { trackName?: string; sellerName?: string; sellerUrl?: string; artworkUrl512?: string };
+/** The App Store app of this brand, if the first hits clearly belong to it: seller or app name carries the brand, or the seller's site is the shop's. */
+export const pickApp = (hits: readonly AppHit[], domain: string): AppHit | null => {
+  const root = squash(domain.split(".")[0] ?? "");
+  if (root.length < 2) return null;
+  return hits.slice(0, 3).find((h) => {
+    const host = (() => { try { return new URL(h.sellerUrl ?? "").hostname.replace(/^www\./, ""); } catch { return ""; } })();
+    const sameSite = host !== "" && squash(host.split(".")[0] ?? "") === root;
+    const named = root.length >= 3 && (squash(h.sellerName ?? "").startsWith(root) || squash(h.trackName ?? "").startsWith(root));
+    return Boolean(h.artworkUrl512) && (sameSite || named);
+  }) ?? null;
+};
+
+/** The brand's App Store icon (512 px, square): sharper than any favicon. Danish store first. */
+export const appIcon = async (domain: string, name: string): Promise<Image | null> => {
+  const term = name.replace(/\.(com|dk|de|co\.uk|eu)$/i, "").trim() || domain.split(".")[0]!;
+  try {
+    const r = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=software&country=dk&limit=3`, { signal: AbortSignal.timeout(6000) });
+    if (!r.ok) return null;
+    const hit = pickApp(((await r.json()) as { results?: AppHit[] }).results ?? [], domain);
+    return hit?.artworkUrl512 ? await getImage(hit.artworkUrl512) : null;
+  } catch {
+    return null;
+  }
+};
+
 export const fetchIcon = async (domain: string): Promise<Image | null> => {
   try {
     const page = await fetch(`https://${domain}`, { headers: { "User-Agent": UA }, redirect: "follow", signal: AbortSignal.timeout(6000) });
@@ -81,7 +108,8 @@ const prompt = (rows: Merchant[]): string => [
   "Each row is a merchant from a Danish personal bank account: row | display name | bank text | category.",
   "Give the website whose logo shows that brand. Use the brand's Danish site when it has one (netto.dk, rema1000.dk, bilka.dk), else its main site (wolt.com, apple.com).",
   "Payment rails (MobilePay, Klarna, Zettle, SumUp, Nets, PayPal) are not the merchant: name the shop behind them, or null.",
-  "domain is null for private persons, [person], own transfers, salary, bank fees, and any shop you cannot identify with confidence. A wrong logo is worse than none.",
+  "Well-known chains and brands always get their domain (Amazon, Spar, Lidl, IKEA, H&M, Shell), also when the name is shortened or has a branch or city in it.",
+  "domain is null for private persons, [person], own transfers, salary, bank fees, generic words (fuel, flowers, rent) and any small shop you cannot identify with confidence. A wrong logo is worse than none.",
   'Return strict JSON only: {"results":[{"key":"the row number","domain":"example.dk or null"}]}',
   `Rows:\n${rows.map((m, i) => `${i} | ${m.name} | ${m.bank ?? "-"} | ${m.category ?? "-"}`).join("\n")}`,
 ].join("\n\n");
@@ -104,6 +132,40 @@ export const parseDomains = (text: string | null, keys: ReadonlySet<string>): Ma
   }
   return out;
 };
+
+/** Fetches and stores a website's icon: the brand's app icon (path "<domain>.app"), else the site's own icon (path "<domain>"). */
+export async function storeIcon(db: SupabaseClient, domain: string, name: string): Promise<string | null> {
+  const app = await appIcon(domain, name);
+  const img = app ?? await fetchIcon(domain);
+  if (!img) return null;
+  const path = app ? `${domain}.app` : domain;
+  const { error } = await db.storage.from(BUCKET).upload(path, img.bytes, { contentType: img.type, upsert: true });
+  if (error) console.error("[logos] upload failed", domain, error.message);
+  return error ? null : path;
+}
+
+/** Swaps favicons for sharper app icons where the brand has an app, and retries websites that gave no icon. */
+export async function upgradeLogos(db: SupabaseClient): Promise<{ upgraded: number; tried: number }> {
+  const rows = await all<{ key: string; domain: string; path: string | null }>((a, b) => db.from("merchant_logos").select("key,domain,path").not("domain", "is", null).order("key").range(a, b));
+  const byDomain = new Map<string, { key: string; path: string | null }>();
+  for (const r of rows) if (!byDomain.has(r.domain) || (r.path && !byDomain.get(r.domain)!.path)) byDomain.set(r.domain, r);
+  let upgraded = 0;
+  const todo = [...byDomain].filter(([, r]) => !r.path?.endsWith(".app"));
+  for (const [domain, r] of todo) {
+    let path: string | null;
+    if (r.path) {
+      const img = await appIcon(domain, r.key);
+      if (!img) continue;
+      path = `${domain}.app`;
+      const { error } = await db.storage.from(BUCKET).upload(path, img.bytes, { contentType: img.type, upsert: true });
+      if (error) continue;
+    } else path = await storeIcon(db, domain, r.key);
+    if (!path || path === r.path) continue;
+    const { error } = await db.from("merchant_logos").update({ path }).eq("domain", domain);
+    if (!error) upgraded += 1;
+  }
+  return { upgraded, tried: todo.length };
+}
 
 /** Finds websites and icons for a user's merchants that have no logo row yet, most used first. */
 export async function fillLogos(db: SupabaseClient, userId: string, limit = 50, key = Deno.env.get("OPENROUTER_API_KEY")): Promise<{ checked: number; found: number }> {
@@ -129,17 +191,13 @@ export async function fillLogos(db: SupabaseClient, userId: string, limit = 50, 
 
   // One fetch per website, shared by every name that points at it (Lidl, LIDL 198 ...).
   const pathOf = new Map<string, Promise<string | null>>();
-  const lookup = async (domain: string): Promise<string | null> => {
+  const lookup = async (domain: string, name: string): Promise<string | null> => {
     const { data: cached } = await db.from("merchant_logos").select("path").eq("domain", domain).not("path", "is", null).limit(1).maybeSingle();
     if (cached?.path) return cached.path as string;
-    const img = await fetchIcon(domain);
-    if (!img) return null;
-    const { error } = await db.storage.from(BUCKET).upload(domain, img.bytes, { contentType: img.type, upsert: true });
-    if (error) console.error("[logos] upload failed", domain, error.message);
-    return error ? null : domain;
+    return await storeIcon(db, domain, name);
   };
-  const iconPath = (domain: string): Promise<string | null> => {
-    if (!pathOf.has(domain)) pathOf.set(domain, lookup(domain));
+  const iconPath = (domain: string, name: string): Promise<string | null> => {
+    if (!pathOf.has(domain)) pathOf.set(domain, lookup(domain, name));
     return pathOf.get(domain)!;
   };
 
@@ -156,7 +214,7 @@ export async function fillLogos(db: SupabaseClient, userId: string, limit = 50, 
     const domains = parseDomains(text, new Set(batch.map((_, n) => String(n))));
     const rows = await Promise.all(batch.filter((_, n) => domains.has(String(n))).map(async (m) => {
       const domain = domains.get(String(batch.indexOf(m))) ?? null;
-      const path = domain ? await iconPath(domain) : null;
+      const path = domain ? await iconPath(domain, m.name) : null;
       if (path) found += 1;
       return { user_id: userId, key: m.key, domain, path, checked_at: new Date().toISOString() };
     }));

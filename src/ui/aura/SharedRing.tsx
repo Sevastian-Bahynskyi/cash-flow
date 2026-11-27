@@ -14,20 +14,21 @@ export function SharedRing({ size, stroke = 2.5 }: { size: number; stroke?: numb
   const turn = useSharedValue(0);
   useEffect(() => {
     if (reduce) return;
-    turn.value = withRepeat(withTiming(360, { duration: 7000, easing: Easing.linear }), -1, false);
+    turn.set(withRepeat(withTiming(360, { duration: 5000, easing: Easing.linear }), -1, false));
     return () => cancelAnimation(turn);
   }, [reduce, turn]);
-  const spin = useAnimatedStyle(() => ({ transform: [{ rotate: `${turn.value}deg` }] }));
+  const spin = useAnimatedStyle(() => ({ transform: [{ rotate: `${turn.get()}deg` }] }));
   const r = size / 2 - stroke / 2;
   return (
     <Animated.View style={[{ position: 'absolute', width: size, height: size }, spin]} pointerEvents="none">
       <Svg width={size} height={size}>
         <Defs>
           <LinearGradient id="sharedRing" x1="0" y1="0" x2="1" y2="1">
+            {/* bright on one side, fading on the other, so the turn reads as a sweep */}
             <Stop offset="0" stopColor={a} />
             <Stop offset="0.35" stopColor={b} />
-            <Stop offset="0.65" stopColor={c} />
-            <Stop offset="1" stopColor={e} />
+            <Stop offset="0.7" stopColor={c} stopOpacity={0.55} />
+            <Stop offset="1" stopColor={e} stopOpacity={0.2} />
           </LinearGradient>
         </Defs>
         <Circle cx={size / 2} cy={size / 2} r={r} stroke="url(#sharedRing)" strokeWidth={stroke} fill="none" />

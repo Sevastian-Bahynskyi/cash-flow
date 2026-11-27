@@ -10,8 +10,11 @@ import { PARTNER } from '@/core/partner';
 import { normalizeMerchantLookupKey } from '@/core/domain/merchant';
 import { dayLabel, kr, minorToInput, parseAmount, shortDate, todayYmd } from '@/core/fmt';
 import { SharedRing } from '@/ui/aura/SharedRing';
+import type { CategoryOption } from '@/core/domain/categories-types';
 import { budgetColor, C, F } from './theme';
-import { Btn, Disc, Divider, Empty, Field, Icon, List, outcome, Panel, Row, Sec, Sheet, T, useToast } from './ui';
+import { Btn, Disc, Divider, Empty, Field, Icon, List, outcome, Panel, Row, Sec, Sheet, SheetHero, T, useToast } from './ui';
+import { countryName, flag } from '@/core/domain/trips';
+import { DebtSheet, LinkToDebt, debtTitle } from '@/screens/Debts';
 
 /* whose money a row is (two people, two colours) */
 type Who = 'none' | 'shared' | 'moved' | 'annain' | 'income' | 'own';
@@ -25,12 +28,13 @@ function LogoDisc({ uri, icon, color, children }: { uri: string; icon: string; c
   if (failed) return <Disc icon={icon} color={color}>{children}</Disc>;
   return (
     <View style={{ width: 40, height: 40 }}>
+      {/* the shared ring goes first, so the category badge sits on top of it */}
+      {children}
       {/* logos are drawn for white pages */}
       <Image source={{ uri }} onError={() => setFailed(true)} accessibilityIgnoresInvertColors style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#fff' }} />
       <View style={{ position: 'absolute', right: -6, bottom: -6, width: 24, height: 24, borderRadius: 12, backgroundColor: C.surface2, borderWidth: 2, borderColor: C.surface, alignItems: 'center', justifyContent: 'center' }}>
         <Icon name={icon} size={13} color={color} />
       </View>
-      {children}
     </View>
   );
 }
@@ -38,7 +42,7 @@ function LogoDisc({ uri, icon, color, children }: { uri: string; icon: string; c
 export function TxRow({ t, m, onOpen, current, categoryId, scope }: { t: TransactionRow; m: Model; onOpen: (t: TransactionRow) => void; current?: boolean; categoryId?: string; scope?: Scope }) {
   const w = whoOf(t);
   const meta = m.meta[t.category_id ?? ''];
-  const foreign = t.currency_code !== 'DKK' ? ` · ${kr(t.original_amount_minor, false, t.currency_code)}` : '';
+  const foreign = t.currency_code !== 'DKK' ? `, ${kr(t.original_amount_minor, false, t.currency_code)}` : '';
   const pending = t.status === 'pending';
   let icon: string = meta?.icon ?? (t.kind === 'income' ? 'in' : 'other');
   let sub: string, amount: string, color: string = C.ink, small: string | null = pending ? 'Pending' : null;
@@ -198,13 +202,23 @@ export function Facts({ rows }: { rows: [string, string][] }) {
   );
 }
 
-/** Big amount at the top of a sheet. */
-export const SheetHero = ({ amount, color, line }: { amount: string; color?: string; line?: string }) => (
-  <View style={{ alignItems: 'center', paddingVertical: 12, gap: 4 }}>
-    <Text style={{ fontFamily: F.num, fontSize: 52, color: color ?? C.ink, letterSpacing: -1, paddingHorizontal: 8 }} adjustsFontSizeToFit numberOfLines={1}>{amount}</Text>
-    {line ? <T k="strong" style={{ color: C.ink2, textAlign: 'center' }}>{line}</T> : null}
-  </View>
-);
+export { SheetHero };
+
+/** Categories as the Categories screen shows them: each parent in its budget colour, its children indented under it in the same colour. */
+function CategoryTree({ m, options, selected, disabled, onPick }: { m: Model; options: CategoryOption[]; selected: string | null; disabled?: boolean; onPick: (o: CategoryOption) => void }) {
+  const groups = [...new Set(options.map((o) => o.parentId))];
+  return (
+    <List>{groups.flatMap((pid) => {
+      const color = budgetColor(m.byId.get(pid));
+      const parent = options.find((o) => o.id === pid);
+      return [parent, ...options.filter((o) => o.parentId === pid && o.id !== pid)].filter((o): o is CategoryOption => Boolean(o)).map((o) => (
+        <Row key={o.id} disabled={disabled} selected={o.id === selected} title={o.name} onPress={() => onPick(o)}
+          lead={<View style={{ marginLeft: parent && o.id !== pid ? 24 : 0 }}><Disc icon={o.icon} color={color} bg={o.id === selected ? C.surface3 : undefined} /></View>}
+          end={o.id === selected ? <Icon name="check" strong /> : undefined} />
+      ));
+    })}</List>
+  );
+}
 
 function CategoryPick({ t, m, onClose }: { t: TransactionRow; m: Model; onClose: () => void }) {
   const store = useStore();
@@ -231,6 +245,14 @@ function CategoryPick({ t, m, onClose }: { t: TransactionRow; m: Model; onClose:
       toast(`${t.name} always goes to ${picked.name}`); onClose();
     } catch (e) { toast(e instanceof Error ? e.message : 'Not saved.', undefined, 'error'); } finally { setBusy(false); }
   };
+  // A pick on a trip, or a Travel category, is about this trip; never make it a rule for home.
+  const tripPick = Boolean((t as { trip_id?: string }).trip_id) || (picked ? m.parentOf(picked.id)?.name.toLowerCase() === 'travel' : false);
+  if (picked && tripPick) return (
+    <Sheet open onClose={onClose} title="Saved">
+      <SheetHero amount="Saved" line={`${t.name} is now in ${picked.name}.`} />
+      <Btn label="Done" onPress={onClose} />
+    </Sheet>
+  );
   if (picked) return (
     <Sheet open onClose={onClose} title="Saved">
       <SheetHero amount="Saved" line={`${t.name} is now in ${picked.name}.`} />
@@ -240,9 +262,8 @@ function CategoryPick({ t, m, onClose }: { t: TransactionRow; m: Model; onClose:
   );
   return (
     <Sheet open onClose={onClose} title={`Category for ${t.name}`}>
-      <List>{m.options.filter((o) => (income ? o.parentName.toLowerCase() === 'income' && o.parentId !== o.id : o.parentName.toLowerCase() !== 'income')).map((o) => (
-        <Row key={o.id} disabled={busy} selected={o.id === t.category_id} lead={<Disc icon={o.icon} />} title={o.name} meta={o.parentId !== o.id ? o.parentName : undefined} end={o.id === t.category_id ? <Icon name="check" strong /> : undefined} onPress={() => void choose({ id: o.id, name: o.name })} />
-      ))}</List>
+      <CategoryTree m={m} disabled={busy} selected={t.category_id} onPick={(o) => void choose({ id: o.id, name: o.name })}
+        options={m.options.filter((o) => (income ? o.parentName.toLowerCase() === 'income' && o.parentId !== o.id : o.parentName.toLowerCase() !== 'income'))} />
     </Sheet>
   );
 }
@@ -274,9 +295,7 @@ function SplitSheet({ t, m, onClose }: { t: TransactionRow; m: Model; onClose: (
         <Row key="rest" lead={<Disc icon={m.meta[t.category_id ?? '']?.icon ?? 'tag'} />} title={m.meta[t.category_id ?? '']?.name ?? 'Category'} meta="The rest stays here" end={<T k="num">{kr(t.amount_minor - used)}</T>} />,
       ]}</List>
       <Field label="Amount for another category" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} placeholder="45" error={amount && bad ? `Less than ${kr(t.amount_minor - used)}, more than 0.` : null} />
-      <List>{m.options.filter((o) => o.parentName.toLowerCase() !== 'income' && o.id !== t.category_id).map((o) => (
-        <Row key={o.id} selected={cat === o.id} lead={<Disc icon={o.icon} />} title={o.name} end={cat === o.id ? <Icon name="check" strong /> : undefined} onPress={() => setCat(o.id)} />
-      ))}</List>
+      <CategoryTree m={m} selected={cat} onPick={(o) => setCat(o.id)} options={m.options.filter((o) => o.parentName.toLowerCase() !== 'income' && o.id !== t.category_id)} />
       <Btn label={`Split off ${v && !bad ? kr(v) : ''}`} disabled={bad || !cat} busy={busy} onPress={() => void save()} />
     </Sheet>
   );
@@ -286,7 +305,7 @@ export function DetailBody({ t, m, onDone }: { t: TransactionRow; m: Model; onDo
   const store = useStore();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
-  const [pick, setPick] = useState<null | 'cat' | 'split'>(null);
+  const [pick, setPick] = useState<null | 'cat' | 'split' | 'debt'>(null);
   const [raw, setRaw] = useState(false);
   const w = whoOf(t);
   const meta = m.meta[t.category_id ?? ''];
@@ -299,6 +318,15 @@ export function DetailBody({ t, m, onDone }: { t: TransactionRow; m: Model; onDo
   const splits = m.splitsOf.get(t.id) ?? [];
   const back = m.paidBack.get(t.id) ?? 0;
   const day = dayLabel(t.occurred_on);
+  // Where it was bought, its trip (and its usual category when the trip moved it), and its debt.
+  const place = m.placeOf(t);
+  const where = place && !place.online && place.country_iso ? `${flag(place.country_iso)} ${place.city ? `${place.city}, ` : ''}${countryName(place.country_iso)}` : null;
+  const onTrip = (t as { trip_id?: string }).trip_id;
+  // Any purchase inside a trip's dates can be counted in or left out of it.
+  const trip = onTrip ? m.t.trips.find((x) => x.id === onTrip) : t.kind === 'expense' && !t.counterparty_person_id && !t.is_shared_topup ? m.tripOf(t) : null;
+  const [debtOpen, setDebtOpen] = useState(false);
+  const home = (t as { home_category_id?: string | null }).home_category_id;
+  const debt = m.linked.has(t.id) ? m.debts.find((d) => d.events.some((e) => e.transaction_id === t.id)) : undefined;
   const facts: [string, string][] = [
     ['Date', `${day}${day.includes(' ') ? '' : `, ${shortDate(t.occurred_on)}`}${t.status === 'pending' ? ', pending' : ''}`],
     ...(meta && !neutral ? [['Category', `${meta.label}${splits.length ? `, ${kr(t.amount_minor - splits.reduce((a, x) => a + x.amount_minor, 0))}` : ''}`] as [string, string]] : []),
@@ -309,6 +337,10 @@ export function DetailBody({ t, m, onDone }: { t: TransactionRow; m: Model; onDo
     ...(neutral ? [['Counts as spending', 'No, it’s money moved'] as [string, string]] : []),
     ...(t.currency_code !== 'DKK' ? [['Paid', kr(t.original_amount_minor, false, t.currency_code)] as [string, string]] : []),
     ...(t.comment ? [['Note', t.comment] as [string, string]] : []),
+    ...(where ? [['Where', where] as [string, string]] : []),
+    ...(trip && onTrip ? [['Trip', `${flag(trip.country_iso)} ${trip.name}`] as [string, string]] : []),
+    ...(home && m.meta[home] ? [['Usually', m.meta[home].label] as [string, string]] : []),
+    ...(debt ? [['Debt', debtTitle(debt)] as [string, string], [t.kind === 'income' ? 'Counts as income' : 'Counts as spending', 'No, it’s part of the debt'] as [string, string]] : []),
   ];
   return (
     <>
@@ -334,6 +366,12 @@ export function DetailBody({ t, m, onDone }: { t: TransactionRow; m: Model; onDo
       <List>{[
         !neutral ? <Row key="c" lead={<Disc icon="tag" />} title="Change category" onPress={() => setPick('cat')} /> : null,
         !neutral && t.kind === 'expense' ? <Row key="s" lead={<Disc icon="split" />} title="Split off a part" onPress={() => setPick('split')} /> : null,
+        trip && onTrip ? <Row key="t" disabled={busy} lead={<Disc icon="plane" />} title="Not part of the trip" meta={`It goes back to ${home && m.meta[home] ? m.meta[home].label : 'its own category'}`}
+          onPress={() => void act('Left out of the trip', () => supabase.from('transactions').update({ trip_exclude: true, trip_include: false }).eq('id', t.id))} /> : null,
+        trip && !onTrip ? <Row key="t2" disabled={busy} lead={<Disc icon="plane" />} title={`Count it in ${trip.name}`}
+          onPress={() => void act(`Counted in ${trip.name}`, () => supabase.from('transactions').update({ trip_exclude: false, trip_include: true }).eq('id', t.id))} /> : null,
+        debt ? <Row key="dd" lead={<Disc icon={debt.kind === 'loan' ? 'loan' : 'owed'} />} title="See the debt" meta={debtTitle(debt)} onPress={() => setDebtOpen(true)} /> : null,
+        t.counterparty_person_id && !debt ? <Row key="d" lead={<Disc icon="owed" />} title="Add to a debt" meta="Lent, borrowed or paid back" onPress={() => setPick('debt')} /> : null,
         t.source !== 'bank' && t.kind === 'expense' && !t.is_shared_topup ? (
           <Row key="w" disabled={busy} lead={<Disc icon={t.shared ? 'profile' : 'shared'} />} title={t.shared ? 'Make it yours only' : `Share with ${PARTNER}`}
             onPress={() => void act(t.shared ? 'Now yours only' : `Shared with ${PARTNER}`, () => supabase.from('transactions').update(t.shared ? { shared: false, shared_participant: null, is_shared_topup: false } : { shared: true, shared_participant: 'me' }).eq('id', t.id))} />
@@ -342,6 +380,8 @@ export function DetailBody({ t, m, onDone }: { t: TransactionRow; m: Model; onDo
       {t.source === 'bank' && t.shared ? <T k="note">Everything on the joint account is shared.</T> : null}
       {pick === 'cat' ? <CategoryPick t={t} m={m} onClose={() => { setPick(null); onDone?.(); }} /> : null}
       {pick === 'split' ? <SplitSheet t={t} m={m} onClose={() => setPick(null)} /> : null}
+      {pick === 'debt' ? <LinkToDebt m={m} t={t} onClose={() => setPick(null)} /> : null}
+      {debtOpen && debt ? <DebtSheet m={m} debt={debt} onClose={() => setDebtOpen(false)} /> : null}
     </>
   );
 }

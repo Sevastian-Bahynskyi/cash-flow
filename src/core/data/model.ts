@@ -6,6 +6,8 @@ import type { CategoryOption } from '@/core/domain/categories-types'
 import { findIncomeParentIds } from '@/core/domain/category-rules'
 import { buildNavigableCycles, findCycleFor, type SalaryCycle } from '@/core/domain/cycles'
 import { computeMyCostByTransactionId } from '@/core/domain/shared'
+import { applyTrips, placeOf as placeOfRow, tripOn, type PlaceRow } from '@/core/domain/trips'
+import { debtsOf, linkedIds } from '@/core/domain/debts'
 import { addDays, daysBetween, todayYmd } from '@/core/fmt'
 import { supabaseUrl } from '@/lib/supabase'
 import { useStore } from './store'
@@ -30,7 +32,16 @@ function derive(t: Tables) {
   const parentOf = (id: string | null): CategoryRow | undefined => { const c = id ? byId.get(id) : undefined; return c?.parent_id ? byId.get(c.parent_id) : c }
   const incomeParents = findIncomeParentIds(cats)
   const isTransfer = (id: string | null): boolean => (parentOf(id)?.name.toLowerCase() ?? '') === TRANSFER
-  const tx = t.transactions
+  const places = new Map<string, PlaceRow>(t.merchant_places.map((p) => [p.key, p]))
+  // Rows as the screens see them: purchases on a trip move to their Travel category (see trips.ts).
+  const tx = applyTrips(t.transactions, t.trips, places, cats, today)
+  const placeOf = (r: TransactionRow): PlaceRow | null => placeOfRow(r, places)
+  const tripOf = (r: { occurred_on: string }) => tripOn(t.trips, r.occurred_on, today)
+  const debts = debtsOf(t)
+  // Transfers paying into a debt are neither spending nor income.
+  const linked = linkedIds(debts)
+  /** The Inbox: unsure guesses from the last 30 days, newest first. */
+  const inbox = [...tx].reverse().filter((r) => r.needs_review && r.occurred_on >= addDays(today, -30))
   // Keyed like scripts/logos.ts logoKey.
   const logos = new Map(t.merchant_logos.map((l) => [l.key, `${supabaseUrl}/storage/v1/object/public/merchant-logos/${encodeURIComponent(l.path)}`]))
   const logoOf = (name: string): string | null => logos.get(name.trim().toLowerCase()) ?? null
@@ -42,7 +53,7 @@ function derive(t: Tables) {
   for (const sp of t.transaction_splits) splitsOf.set(sp.transaction_id, [...(splitsOf.get(sp.transaction_id) ?? []), sp])
   const NEUTRAL = new Set(['moved', 'topup', 'ignore'])
   /** What this row costs you: your share of a shared expense, less what people paid back; nothing for money moved, top-ups or transfers. */
-  const mine = (r: TransactionRow): number => r.kind !== 'expense' || r.is_shared_topup || NEUTRAL.has(r.movement ?? '') || isTransfer(r.category_id) ? 0
+  const mine = (r: TransactionRow): number => r.kind !== 'expense' || r.is_shared_topup || linked.has(r.id) || NEUTRAL.has(r.movement ?? '') || isTransfer(r.category_id) ? 0
     : Math.max(0, (share.get(r.id) ?? r.amount_minor) - (paidBack.get(r.id) ?? 0))
   /** What a joint purchase costs the joint account: its full amount, once. Top-ups, money moved and transfers cost nothing. */
   const joint = (r: TransactionRow): number => !r.shared || r.kind !== 'expense' || r.status === 'void' || r.is_shared_topup || NEUTRAL.has(r.movement ?? '') || isTransfer(r.category_id) ? 0 : r.amount_minor
@@ -110,7 +121,7 @@ function derive(t: Tables) {
   const days = current ? Math.max(1, daysBetween(current.startOn, current.endInclusive) + 1) : 0
   const daysLeft = current ? Math.max(0, daysBetween(today, current.endInclusive) + 1) : 0
 
-  return { t, today, options, cats, byId, meta, parentOf, logoOf, incomeParents, isTransfer, tx, share, mine, portions, spendingIn, splitsOf, paidBack, cycles, current, inCycle, prevOf, budgetsOf, bankOf, days, daysLeft,
+  return { t, today, options, cats, byId, meta, parentOf, logoOf, places, placeOf, tripOf, debts, linked, inbox, incomeParents, isTransfer, tx, share, mine, portions, spendingIn, splitsOf, paidBack, cycles, current, inCycle, prevOf, budgetsOf, bankOf, days, daysLeft,
     payday: current ? addDays(current.endInclusive, 1) : null, hasSalary: tx.some((r) => r.is_salary) }
 }
 

@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { TextInput, View } from 'react-native';
 import Animated, { FadeIn, FadeInUp, FadeOut } from 'react-native-reanimated';
-import { useLocalSearchParams } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { markSeen } from '@/core/data/inboxSeen';
 import { supabase } from '@/lib/supabase';
 import { useStore, write } from '@/core/data/store';
 import type { Model } from '@/core/data/model';
@@ -11,6 +12,7 @@ import { C, F } from '@/ui/kit/theme';
 import { Btn, Empty, Header, Icon, IconBtn, List, Panel, Screen, Sec, Seg, T, useToast } from '@/ui/kit/ui';
 import { DayList, Gate, SyncLine, TxRow, useDetail } from '@/ui/kit/money';
 import { InboxHelp } from './InboxGuide';
+import { TripNow } from './TripsKit';
 
 type Filter = 'all' | 'mine' | 'shared';
 
@@ -33,8 +35,7 @@ function Inbox({ m }: { m: Model }) {
   const toast = useToast();
   const open = useDetail();
   const [busy, setBusy] = useState<string | null>(null);
-  const since = addDays(m.today, -30);
-  const items = [...m.tx].reverse().filter((t) => t.needs_review && t.occurred_on >= since);
+  const items = m.inbox;
   if (!items.length) return null;
   const confirm = async (ids: string[]): Promise<void> => {
     setBusy(ids.length > 1 ? 'all' : ids[0]!);
@@ -75,6 +76,9 @@ function Transactions({ m }: { m: Model }) {
   const [q, setQ] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [shown, setShown] = useState(1);
+  // Looking at Activity clears the tab's count of new Inbox items.
+  const inboxIds = m.inbox.map((t) => t.id).join();
+  useFocusEffect(useCallback(() => { markSeen(inboxIds ? inboxIds.split(',') : []); }, [inboxIds]));
 
   const scoped = useMemo(() => {
     let L = [...m.tx].reverse();
@@ -117,6 +121,7 @@ function Transactions({ m }: { m: Model }) {
           <TextInput autoFocus value={q} onChangeText={setQ} placeholder="Name, note, category or date" placeholderTextColor={C.ink3} style={{ flex: 1, minHeight: 48, color: C.ink, fontFamily: F.body, fontSize: 16 }} autoCorrect={false} keyboardAppearance="dark" clearButtonMode="while-editing" returnKeyType="search" />
         </Animated.View>
       ) : null}
+      {!catParam && !q.trim() ? <TripNow m={m} /> : null}
       {!catParam && !q.trim() ? <Inbox m={m} /> : null}
       <Seg value={filter} onChange={setFilter} options={[['all', 'All'], ['mine', 'Yours'], ['shared', 'Shared']]} />
       {(q.trim() || catParam || filter !== 'all') && scoped.length > 0 ? (

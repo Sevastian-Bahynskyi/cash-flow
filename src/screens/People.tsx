@@ -13,10 +13,12 @@ import { SharedRing } from '@/ui/aura/SharedRing';
 import { C, F } from '@/ui/kit/theme';
 import { Btn, Empty, Header, Icon, List, Panel, Press, Row, Screen, Sec, Sheet, T, tap, useToast } from '@/ui/kit/ui';
 import { Gate, SheetHero, TxRow, useDetail } from '@/ui/kit/money';
+import type { Debt } from '@/core/domain/debts';
+import { DebtForm, DebtList, DebtSheet, DebtSuggestions } from './Debts';
 
 const KIND: [PersonKind, string, string][] = [
   ['settle_up', 'We settle up', 'What you send and get back keeps a running balance'],
-  ['family', 'Family', 'Ask me each time: a gift, or something they pay back'],
+  ['family', 'Family', 'Money just moves. Add a debt when it’s one'],
   ['partner', 'Partner', 'Shares the joint account with you'],
   ['ignore', 'Ignore', 'Not spending, no balance'],
 ];
@@ -33,10 +35,14 @@ function People({ m }: { m: Model }) {
   const router = useRouter();
   const [edit, setEdit] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [debt, setDebt] = useState<Debt | null>(null);
+  const [newDebt, setNewDebt] = useState<string | null | undefined>(undefined);
   const people: PersonInput[] = useMemo(() => m.t.transfer_people.map((p) => ({ id: p.id, name: p.name, kind: p.kind ?? 'settle_up', opening_balance_minor: p.opening_balance_minor ?? 0, alias_of: p.alias_of ?? null })), [m.t.transfer_people]);
-  const txs = useMemo(() => m.tx.map((t) => ({ ...t, counterparty_person_id: t.counterparty_person_id ?? null })), [m.tx]);
+  // Transfers in a debt are counted there, not in the running balance.
+  const txs = useMemo(() => m.tx.filter((t) => !m.linked.has(t.id)).map((t) => ({ ...t, counterparty_person_id: t.counterparty_person_id ?? null })), [m.tx, m.linked]);
   const balances = useMemo(() => owedBalances(people, txs), [people, txs]);
-  const taken = useMemo(() => new Set(m.t.paybacks.flatMap((p) => [p.payment_transaction_id, p.expense_transaction_id])), [m.t.paybacks]);
+  // A transfer in a debt is already explained, so it is never offered as a payback.
+  const taken = useMemo(() => new Set([...m.t.paybacks.flatMap((p) => [p.payment_transaction_id, p.expense_transaction_id]), ...m.linked]), [m.t.paybacks, m.linked]);
   const suggestions = useMemo(() => paybackSuggestions(people, txs, taken), [people, txs, taken]);
   const byId = new Map(m.tx.map((t) => [t.id, t]));
   const p = pot(m.tx.filter(m.inCycle(m.current)));
@@ -87,9 +93,14 @@ function People({ m }: { m: Model }) {
         </>
       ) : null}
 
+      <DebtSuggestions m={m} />
+
+      <Sec right={<Btn kind="link" label="New debt" onPress={() => setNewDebt(null)} />}>Debts</Sec>
+      {m.debts.length ? <DebtList m={m} onOpen={setDebt} /> : <Panel><Empty title="No debts" sub="When you lend or borrow money, add a debt and tick the transfers that belong to it." /></Panel>}
+
       <Sec>Who owes whom</Sec>
       {list.length ? <List>{list.map((b) => (
-        <Row key={b.person_id} onPress={() => setEdit(b.person_id)} lead={<Initial name={b.name} />} title={b.name} meta={b.kind === 'family' ? 'Family, asked each time' : b.lastOn ? `Last ${shortDate(b.lastOn)}` : 'No transfers yet'}
+        <Row key={b.person_id} onPress={() => setEdit(b.person_id)} lead={<Initial name={b.name} />} title={b.name} meta={b.kind === 'family' ? `Family${b.lastOn ? `, last ${shortDate(b.lastOn)}` : ''}` : b.lastOn ? `Last ${shortDate(b.lastOn)}` : 'No transfers yet'}
           end={<T k="num" style={{ color: b.balance_minor > 0 ? C.in : C.ink }}>{b.kind === 'family' ? '' : owes(b.balance_minor)}</T>} />
       ))}</List> : <Panel><Empty title="Nobody yet" sub="People you send money to by bank or MobilePay show up here." /></Panel>}
       <T k="note">From transfers to and from each person. Tap one to change what kind of person they are.</T>
@@ -97,11 +108,15 @@ function People({ m }: { m: Model }) {
       {editing ? (
         <Sheet open onClose={() => setEdit(null)} title={editing.name}>
           <SheetHero amount={editing.kind === 'family' ? kr(editing.sentMinor, true) : owes(editing.balance_minor)} line={`${kr(editing.sentMinor, true)} sent, ${kr(editing.receivedMinor, true)} received`} />
+          <DebtList m={m} personId={editing.person_id} onOpen={(d) => { setEdit(null); setDebt(d); }} />
+          <Btn kind="ghost" icon="add" label={`New debt with ${editing.name}`} onPress={() => { const id = editing.person_id; setEdit(null); setNewDebt(id); }} />
           <List>{KIND.map(([k, label, sub]) => <Row key={k} disabled={busy} selected={editing.kind === k} title={label} meta={sub} end={editing.kind === k ? <Icon name="check" strong /> : undefined} onPress={() => void setKind(editing.person_id, k)} />)}</List>
           <Sec>Latest</Sec>
           <List>{recent(editing.person_id).map((t) => <TxRow key={t.id} t={t} m={m} onOpen={(x) => { setEdit(null); open(x); }} />)}</List>
         </Sheet>
       ) : null}
+      {debt ? <DebtSheet m={m} debt={debt} onClose={() => setDebt(null)} /> : null}
+      {newDebt !== undefined ? <DebtForm m={m} personId={newDebt ?? undefined} onClose={() => setNewDebt(undefined)} /> : null}
     </Screen>
   );
 }

@@ -319,7 +319,7 @@ export function classify(ctx: Ctx, txs: BankTx[]): Map<string, Label> {
       if (person?.kind === "ignore") return { category_id: mobilePayId, movement: "ignore", confidence: 0.9, reason_source: "person", person, name: who, reason: `Money ${dir} ${who}: set to ignore` };
       if (person?.kind === "self") return { category_id: transferId, movement: "moved", confidence: 0.95, reason_source: "person", person, name: "Own transfer", reason: "Between your own accounts" };
       if (person?.kind === "family") {
-        return { category_id: mobilePayId, movement: "person", confidence: 0.5, reason_source: "person", person, name: who, needs_review: true, reason: `Money ${dir} family: you choose gift or loan` };
+        return { category_id: mobilePayId, movement: "person", confidence: 0.9, reason_source: "person", person, name: who, reason: `Money ${dir} family; add it to a debt on People if it is one` };
       }
       if (person?.kind === "partner") return { category_id: mobilePayId, movement: "person", confidence: 0.9, reason_source: "person", person, name: who, reason: `MobilePay ${dir} ${who}` };
       return { category_id: mobilePayId, movement: "person", confidence: 0.85, reason_source: "person", person, name: who, reason: `Money ${dir} ${who}` };

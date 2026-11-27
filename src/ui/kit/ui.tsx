@@ -345,3 +345,11 @@ export const st = StyleSheet.create({
   toast: { position: 'absolute', left: 16, right: 16, backgroundColor: C.ink, borderRadius: 18, paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   toastText: { fontFamily: F.body, fontSize: 15, color: C.bg, flexShrink: 1 },
 });
+
+/** Big amount at the top of a sheet. */
+export const SheetHero = ({ amount, color, line }: { amount: string; color?: string; line?: string }) => (
+  <View style={{ alignItems: 'center', paddingVertical: 12, gap: 4 }}>
+    <Text style={{ fontFamily: F.num, fontSize: 52, color: color ?? C.ink, letterSpacing: -1, paddingHorizontal: 8 }} adjustsFontSizeToFit numberOfLines={1}>{amount}</Text>
+    {line ? <T k="strong" style={{ color: C.ink2, textAlign: 'center' }}>{line}</T> : null}
+  </View>
+);

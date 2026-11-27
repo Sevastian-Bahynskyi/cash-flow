@@ -150,13 +150,13 @@ Deno.test("rung 2: salary and SU", async () => {
   assertEquals([su.movement, su.category_id], ["income", id("Benefits")]);
 });
 
-Deno.test("rung 3: people by kind; family always asks", async () => {
+Deno.test("rung 3: people by kind; family money is just moved, never asks", async () => {
   const txs = await allTxs();
   const labels = classify(ctx(), txs);
   const friendIn = labelOf(labels, find(txs, "lunar", rem(FRIEND.name)));
   assertEquals([friendIn.movement, friendIn.counterparty_person_id], ["person", "p-friend"]);
   const family = labelOf(labels, find(txs, "lunar", rem(FAMILY.name)));
-  assertEquals([family.movement, family.needs_review, family.counterparty_person_id], ["person", true, "p-family"]);
+  assertEquals([family.movement, family.needs_review, family.counterparty_person_id], ["person", false, "p-family"]);
 });
 
 Deno.test("rung 4..6: owner labels beat rules beat memory", async () => {
@@ -209,10 +209,12 @@ Deno.test("joint: everything shared except top-ups; paid_by from debtor name", a
 
 Deno.test("inbox policy: unsure rows older than 30 days never ask", async () => {
   const txs = await allTxs();
-  const family = find(txs, "lunar", rem(FAMILY.name));
-  const old = { ...family, id: "old", booking_date: "2026-10-01" };
-  const labels = classify(ctx(), [family, old]);
-  assertEquals(labelOf(labels, family).needs_review, true);
+  const base = find(txs, "lunar", rem(FAMILY.name));
+  // A shop no rung knows: no category, so it asks.
+  const unknown = { ...base, id: "unknown", amount_minor: -4200, creditor_name: "Zqxv Kiosk", debtor_name: null, remittance: "Zqxv Kiosk", mcc: null, bank_code: null };
+  const old = { ...unknown, id: "old", booking_date: "2026-10-01" };
+  const labels = classify(ctx(), [unknown, old]);
+  assertEquals(labelOf(labels, unknown).needs_review, true);
   const oldLabel = labelOf(labels, old);
   assertEquals(oldLabel.needs_review, false);
   assert(oldLabel.reason.length > 0, "reason kept");
