@@ -14,7 +14,10 @@
     "scan:smells": "node ./scripts/scan-smells.cjs",
     "typecheck": "tsc --noEmit",
     "lockfile:check": "pnpm install --frozen-lockfile --ignore-scripts",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package",
+    "qa": "node scripts/qa.cjs metro",
+    "qa:install": "node scripts/qa.cjs install",
+    "qa:open": "node scripts/qa.cjs open"
   },
   "dependencies": {
     "@expo-google-fonts/barlow": "0.4.1",

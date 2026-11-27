@@ -15,13 +15,14 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     let window = UIWindow(windowScene: windowScene)
     self.window = window
     appDelegate.window = window
-    factory.startReactNative(withModuleName: "main", in: window, launchOptions: appDelegate.launchOptions)
+    // Expo Router reads the Expo Linking registry on cold iOS launches.
     if let url = connectionOptions.urlContexts.first?.url {
-      RCTLinkingManager.application(UIApplication.shared, open: url, options: [:])
+      _ = appDelegate.application(UIApplication.shared, open: url, options: [:])
     }
     if let activity = connectionOptions.userActivities.first {
-      RCTLinkingManager.application(UIApplication.shared, continue: activity, restorationHandler: { _ in })
+      _ = appDelegate.application(UIApplication.shared, continue: activity, restorationHandler: { _ in })
     }
+    factory.startReactNative(withModuleName: "main", in: window, launchOptions: appDelegate.launchOptions)
   }
 
   func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
@@ -50,7 +51,13 @@ module.exports = function withSceneLifecycle(config) {
   });
   return withAppDelegate(config, (cfg) => {
     let src = cfg.modResults.contents;
-    if (cfg.modResults.language !== 'swift' || src.includes(MARKER)) return cfg;
+    if (cfg.modResults.language !== 'swift') return cfg;
+    const scene = src.indexOf(MARKER);
+    if (scene >= 0) {
+      const oldScene = /class SceneDelegate: UIResponder, UIWindowSceneDelegate \{[\s\S]*?\n\}/;
+      cfg.modResults.contents = src.replace(oldScene, SCENE_DELEGATE.trim());
+      return cfg;
+    }
     const start = /#if os\(iOS\) \|\| os\(tvOS\)\s*\n\s*window = UIWindow\(frame: UIScreen\.main\.bounds\)\s*\n\s*factory\.startReactNative\([\s\S]*?\)\s*\n#endif\n/;
     if (!start.test(src)) throw new Error('withSceneLifecycle: AppDelegate window start not found; update the plugin for this Expo version');
     src = src.replace(start, '    // the window is created by SceneDelegate\n    self.launchOptions = launchOptions\n');

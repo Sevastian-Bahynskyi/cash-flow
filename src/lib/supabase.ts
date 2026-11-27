@@ -1,19 +1,20 @@
 import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
+import { qaScenario } from '@/dev/scenario';
 
-const normalizeUrl = (value: string | undefined): string | undefined => value?.replace(/\/+$/, '');
+const text = (value: unknown): string | undefined => typeof value === 'string' ? value : undefined;
+const normalizeUrl = (value: unknown): string | undefined => text(value)?.replace(/\/+$/, '');
 
-const url = normalizeUrl(process.env.EXPO_PUBLIC_SUPABASE_URL);
-const publishableKey =
-  process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY ??
-  process.env.EXPO_PUBLIC_SUPABASE_KEY;
+const fixture = Boolean(qaScenario());
+const url = fixture ? 'http://127.0.0.1:1' : normalizeUrl(process.env.EXPO_PUBLIC_SUPABASE_URL);
+const publishableKey = fixture ? 'cashflow-read-only-fixture' :
+  (text(process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY) ?? text(process.env.EXPO_PUBLIC_SUPABASE_KEY));
 export const supabasePublishableKey = publishableKey;
-export const supabaseAnonKey =
-  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ??
-  process.env.EXPO_PUBLIC_SUPABASE_KEY;
+export const supabaseAnonKey = fixture ? undefined :
+  (text(process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY) ?? text(process.env.EXPO_PUBLIC_SUPABASE_KEY));
 export const supabaseUrl = url;
-export const supabaseAuthUrl = normalizeUrl(process.env.EXPO_PUBLIC_SUPABASE_AUTH_URL) ?? url;
+export const supabaseAuthUrl = fixture ? url : normalizeUrl(process.env.EXPO_PUBLIC_SUPABASE_AUTH_URL) ?? url;
 export const supabaseFunctionsUrl = url ? `${url}/functions/v1` : undefined;
 
 if (!url || !publishableKey) {
@@ -23,10 +24,11 @@ if (!url || !publishableKey) {
 }
 
 export const supabase = createClient(url, publishableKey, {
+  global: fixture ? { fetch: () => Promise.reject(new Error('These are offline examples.')) } : undefined,
   auth: {
     storage: AsyncStorage,
-    persistSession: true,
-    autoRefreshToken: true,
+    persistSession: !fixture,
+    autoRefreshToken: !fixture,
     detectSessionInUrl: false,
   },
 });

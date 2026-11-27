@@ -71,10 +71,10 @@ export function Header({ title, sub, back, right, overAura }: { title: string; s
   );
 }
 
-export function IconBtn({ name, onPress, label, color = C.ink }: { name: string; onPress: () => void; label: string; color?: string }) {
+export function IconBtn({ name, onPress, label, color = C.ink, disabled }: { name: string; onPress: () => void; label: string; color?: string; disabled?: boolean }) {
   return (
-    <Pressable hitSlop={10} onPress={() => { tap(); onPress(); }} style={st.iconBtn} accessibilityRole="button" accessibilityLabel={label}>
-      <Icon name={name} color={color} />
+    <Pressable hitSlop={10} onPress={() => { tap(); onPress(); }} style={st.iconBtn} accessibilityRole="button" accessibilityLabel={label} disabled={disabled} accessibilityState={{ disabled }}>
+      <Icon name={name} color={disabled ? C.ink3 : color} />
     </Pressable>
   );
 }
@@ -95,8 +95,8 @@ export function Disc({ icon, color = C.ink, bg = C.surface2, children }: { icon?
   );
 }
 
-export function Row({ lead, title, meta, end, onPress, disabled, selected, accessibilityLabel }: {
-  lead?: ReactNode; title: ReactNode; meta?: ReactNode; end?: ReactNode; onPress?: () => void; disabled?: boolean; selected?: boolean; accessibilityLabel?: string;
+export function Row({ lead, title, meta, end, onPress, disabled, selected, expanded, accessibilityLabel }: {
+  lead?: ReactNode; title: ReactNode; meta?: ReactNode; end?: ReactNode; onPress?: () => void; disabled?: boolean; selected?: boolean; expanded?: boolean; accessibilityLabel?: string;
 }) {
   const body = (
     <>
@@ -110,7 +110,7 @@ export function Row({ lead, title, meta, end, onPress, disabled, selected, acces
   );
   if (!onPress) return <View style={[st.row, selected && st.rowSel]}>{body}</View>;
   return (
-    <Pressable disabled={disabled} onPress={() => { tap(); onPress(); }} style={({ pressed }) => [st.row, selected && st.rowSel, pressed && { backgroundColor: C.surface2 }, disabled && { opacity: 0.5 }]} accessibilityRole="button" accessibilityLabel={accessibilityLabel}>
+    <Pressable disabled={disabled} onPress={() => { tap(); onPress(); }} style={({ pressed }) => [st.row, selected && st.rowSel, pressed && { backgroundColor: C.surface2 }, disabled && { opacity: 0.5 }]} accessibilityRole="button" accessibilityLabel={accessibilityLabel} accessibilityState={{ expanded }}>
       {body}
     </Pressable>
   );
@@ -183,7 +183,7 @@ export function Sheet({ open, onClose, title, right, children }: { open: boolean
 }
 
 /** Spent against a budget: white within it with a tick at today; over it, grey to the line and the over part in coral. */
-export function Meter({ spent, amount, share, height = 8 }: { spent: number; amount: number; share: number; height?: number }) {
+export function Meter({ spent, amount, share, height = 8, color }: { spent: number; amount: number; share: number; height?: number; color?: string }) {
   if (!amount) return null;
   const s = budgetState(spent, amount, share);
   const pct = (x: number): `${number}%` => `${Math.round(1000 * Math.min(1, Math.max(0, x))) / 10}%`;
@@ -191,12 +191,12 @@ export function Meter({ spent, amount, share, height = 8 }: { spent: number; amo
     <View style={[st.meter, { height, borderRadius: height }]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       {s === 'over' ? (
         <>
-          <View style={[st.meterFill, { width: pct(amount / spent), backgroundColor: C.ink3, borderRadius: height }]} />
+          <View style={[st.meterFill, { width: pct(amount / spent), backgroundColor: color ?? C.ink3, borderRadius: height }]} />
           <View style={[st.meterFill, { left: pct(amount / spent), width: pct(1 - amount / spent), backgroundColor: C.over, borderRadius: height }]} />
         </>
       ) : (
         <>
-          <View style={[st.meterFill, { width: pct(spent / amount), backgroundColor: s === 'ahead' ? C.ahead : C.bar, borderRadius: height }]} />
+          <View style={[st.meterFill, { width: pct(spent / amount), backgroundColor: color ?? (s === 'ahead' ? C.ahead : C.bar), borderRadius: height }]} />
           <View style={[st.today, { left: pct(share), height: height + 6, top: -3 }]} />
         </>
       )}

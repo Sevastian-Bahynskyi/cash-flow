@@ -9,7 +9,7 @@ import { PARTNER } from '@/core/partner';
 import { normalizeMerchantLookupKey } from '@/core/domain/merchant';
 import { dayLabel, kr, minorToInput, parseAmount, shortDate, todayYmd } from '@/core/fmt';
 import { SharedRing } from '@/ui/aura/SharedRing';
-import { C, F } from './theme';
+import { budgetColor, C, F } from './theme';
 import { Btn, Disc, Divider, Empty, Field, Icon, List, Panel, Row, Sec, Sheet, T, useToast } from './ui';
 
 /* whose money a row is (two people, two colours) */
@@ -18,7 +18,7 @@ export const whoOf = (t: TransactionRow): Who => t.is_shared_topup ? (t.shared_p
 export const WHO_LABEL: Record<Who, string> = { none: 'Yours', shared: `Shared with ${PARTNER}`, moved: 'Moved to the shared pot', annain: `${PARTNER}, into the shared pot`, income: 'Money in', own: 'Moved between your accounts' };
 
 /** One transaction row: whose it is, name, category, amount with sign and colour. Shared rows wear the turning ring. */
-export function TxRow({ t, m, onOpen, current }: { t: TransactionRow; m: Model; onOpen: (t: TransactionRow) => void; current?: boolean }) {
+export function TxRow({ t, m, onOpen, current, categoryId }: { t: TransactionRow; m: Model; onOpen: (t: TransactionRow) => void; current?: boolean; categoryId?: string }) {
   const w = whoOf(t);
   const meta = m.meta[t.category_id ?? ''];
   const foreign = t.currency_code !== 'DKK' ? ` · ${kr(t.original_amount_minor, false, t.currency_code)}` : '';
@@ -33,6 +33,14 @@ export function TxRow({ t, m, onOpen, current }: { t: TransactionRow; m: Model; 
     sub = (meta?.name ?? 'Income') + foreign; amount = `+${kr(t.amount_minor)}`; color = C.in; small = small ?? 'In';
   } else {
     sub = (meta?.name ?? 'Category') + foreign; amount = kr(t.amount_minor);
+    const category = categoryId ? m.byId.get(categoryId) : undefined;
+    const parent = m.parentOf(categoryId ?? t.category_id);
+    if (parent) discInk = budgetColor(parent);
+    if (categoryId) {
+      sub = category?.name ?? 'Uncategorized';
+      amount = kr(m.spendingIn(t, categoryId));
+      icon = category?.icon ?? 'other';
+    }
   }
   return (
     <Row
@@ -48,10 +56,10 @@ export function TxRow({ t, m, onOpen, current }: { t: TransactionRow; m: Model; 
 }
 
 /** Day groups with each day's spending, newest first. */
-export function DayList({ rows, m, onOpen }: { rows: TransactionRow[]; m: Model; onOpen: (t: TransactionRow) => void }) {
+export function DayList({ rows, m, onOpen, categoryId }: { rows: TransactionRow[]; m: Model; onOpen: (t: TransactionRow) => void; categoryId?: string }) {
   const days = [...new Set(rows.map((t) => t.occurred_on))].map((d) => {
     const items = rows.filter((t) => t.occurred_on === d);
-    return { d, items, tot: items.reduce((a, t) => a + m.mine(t), 0) };
+    return { d, items, tot: items.reduce((a, t) => a + (categoryId ? m.spendingIn(t, categoryId) : m.mine(t)), 0) };
   });
   // Each day's spend as a thin bar against a typical heavy day (the 90th percentile), so one rent day doesn't flatten the rest.
   const sorted = days.map((x) => x.tot).filter(Boolean).sort((a, z) => a - z);
@@ -65,7 +73,7 @@ export function DayList({ rows, m, onOpen }: { rows: TransactionRow[]; m: Model;
           {tot > 0 ? <View style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: C.track }}><View style={{ width: `${Math.min(100, (100 * tot) / top)}%`, height: 4, borderRadius: 2, backgroundColor: C.ink3 }} /></View> : <View style={{ flex: 1 }} />}
           {tot ? <T k="num" style={{ fontSize: 14, color: C.ink2 }}>{kr(tot)}</T> : null}
         </View>
-        <List>{items.map((t) => <TxRow key={t.id} t={t} m={m} onOpen={onOpen} />)}</List>
+        <List>{items.map((t) => <TxRow key={t.id} t={t} m={m} onOpen={onOpen} categoryId={categoryId} />)}</List>
       </View>
     ))}</>
   );

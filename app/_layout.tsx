@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { useFonts } from 'expo-font';
 import { BarlowCondensed_700Bold_Italic, BarlowCondensed_800ExtraBold_Italic } from '@expo-google-fonts/barlow-condensed';
 import { Barlow_500Medium, Barlow_600SemiBold, Barlow_600SemiBold_Italic, Barlow_700Bold_Italic } from '@expo-google-fonts/barlow';
@@ -13,9 +13,13 @@ import { AuthProvider, useAuth } from '@/features/auth/AuthProvider';
 import { DataProvider } from '@/core/data/store';
 import { ToastProvider } from '@/ui/kit/ui';
 import { DetailProvider } from '@/ui/kit/money';
-import { configureNotificationHandling } from '@/lib/notifications';
+import { qaScenario } from '@/dev/scenario';
+const FixtureApp = __DEV__ ? lazy(() => import('@/dev/FixtureApp')) : null;
 
-configureNotificationHandling();
+if (!qaScenario()) {
+  import('@/lib/notifications').then(({ configureNotificationHandling }) => configureNotificationHandling())
+    .catch(() => console.warn('Could not configure notifications.'));
+}
 
 function AuthGate() {
   const { session, loading } = useAuth();
@@ -47,27 +51,30 @@ function AuthGate() {
       </View>
     );
   }
+  return <DataProvider><AppStack /></DataProvider>;
+}
+
+function AppStack(): React.JSX.Element {
   return (
-    <DataProvider>
-      <ToastProvider>
-        <DetailProvider>
-          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg }, animation: 'fade' }}>
-            <Stack.Screen name="(tabs)" />
-            {['budgets', 'budgets-plan', 'where', 'shared', 'bank', 'categories', 'rules'].map((name) => (
-              <Stack.Screen key={name} name={name} options={{ animation: 'slide_from_right' }} />
-            ))}
-            <Stack.Screen name="sign-in" />
-            <Stack.Screen name="sign-up" />
-            <Stack.Screen name="auth-callback" />
-            <Stack.Screen name="oauth/consent" />
-          </Stack>
-        </DetailProvider>
-      </ToastProvider>
-    </DataProvider>
+    <ToastProvider>
+      <DetailProvider>
+        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg }, animation: 'fade' }}>
+          <Stack.Screen name="(tabs)" />
+          {['budgets', 'budget-detail', 'budgets-plan', 'spending-transactions', 'where', 'shared', 'bank', 'categories', 'rules'].map((name) => (
+            <Stack.Screen key={name} name={name} options={{ animation: 'slide_from_right' }} />
+          ))}
+          <Stack.Screen name="sign-in" />
+          <Stack.Screen name="sign-up" />
+          <Stack.Screen name="auth-callback" />
+          <Stack.Screen name="oauth/consent" />
+        </Stack>
+      </DetailProvider>
+    </ToastProvider>
   );
 }
 
-export default function RootLayout() {
+export default function RootLayout(): React.JSX.Element {
+  const scenario = qaScenario();
   const [fontsLoaded, fontError] = useFonts({
     BarlowCondensed_700Bold_Italic,
     BarlowCondensed_800ExtraBold_Italic,
@@ -85,7 +92,9 @@ export default function RootLayout() {
         <StatusBar style="light" />
         <WebBackdrop />
         <AuthProvider>
-          <AuthGate />
+          {FixtureApp && scenario
+            ? <Suspense fallback={null}><FixtureApp scenario={scenario}><AppStack /></FixtureApp></Suspense>
+            : <AuthGate />}
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

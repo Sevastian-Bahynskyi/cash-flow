@@ -43,6 +43,14 @@ function derive(t: Tables) {
     const parts = sp.map((x) => ({ category_id: x.category_id, minor: Math.round((v * x.amount_minor) / r.amount_minor) }))
     return [...parts, { category_id: r.category_id, minor: v - parts.reduce((a, x) => a + x.minor, 0) }]
   }
+  const spendingIn = (r: TransactionRow, categoryId: string): number => {
+    const category = byId.get(categoryId)
+    return portions(r).reduce((sum, part) => {
+      const parent = parentOf(part.category_id)
+      const matches = categoryId === 'uncategorized' ? !parent : category?.level === 1 ? parent?.id === categoryId : part.category_id === categoryId
+      return matches ? sum + part.minor : sum
+    }, 0)
+  }
 
   const raw = buildNavigableCycles(tx)
   const cycles: Cycle[] = raw.map((c) => {
@@ -82,7 +90,7 @@ function derive(t: Tables) {
   const days = current ? Math.max(1, daysBetween(current.startOn, current.endInclusive) + 1) : 0
   const daysLeft = current ? Math.max(0, daysBetween(today, current.endInclusive) + 1) : 0
 
-  return { t, today, options, cats, byId, meta, parentOf, incomeParents, isTransfer, tx, share, mine, portions, splitsOf, paidBack, cycles, current, inCycle, prevOf, budgetsOf, days, daysLeft,
+  return { t, today, options, cats, byId, meta, parentOf, incomeParents, isTransfer, tx, share, mine, portions, spendingIn, splitsOf, paidBack, cycles, current, inCycle, prevOf, budgetsOf, days, daysLeft,
     payday: current ? addDays(current.endInclusive, 1) : null, hasSalary: tx.some((r) => r.is_salary) }
 }
 
