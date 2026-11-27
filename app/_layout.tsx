@@ -8,7 +8,6 @@ import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { colors } from '@/ui/tokens';
-import { WebBackdrop } from '@/ui/WebBackdrop';
 import { AuthProvider, useAuth } from '@/features/auth/AuthProvider';
 import { DataProvider } from '@/core/data/store';
 import { ToastProvider } from '@/ui/kit/ui';
@@ -91,7 +90,6 @@ export default function RootLayout(): React.JSX.Element {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }}>
       <SafeAreaProvider>
         <StatusBar style="light" />
-        <WebBackdrop />
         <AuthProvider>
           {FixtureApp && scenario
             ? <Suspense fallback={null}><FixtureApp scenario={scenario}><AppStack /></FixtureApp></Suspense>

@@ -7,7 +7,7 @@ import type { BudgetRow, MerchantRuleRow, TransferPersonRow, ProfileRow, BankCon
 
 export type { TransactionRow, TransactionInsert, CategoryRow, CategoryOverrideRow, SavingsAccountRow, SavingsEventRow, LoanRow, LoanEventRow, ReceivableRow, ReceivableEventRow, BudgetRow, MerchantRuleRow, TransferPersonRow, ProfileRow, BankConnectionRow, BankAccountRow, SyncRunRow, SplitRow, PaybackRow, MerchantLogoRow }
 
-/** Everything the screens read, loaded once per session (docs/redesign/DATA.md § 3, "useOverview"). */
+/** Everything the screens read, loaded once per session. */
 export type Tables = {
   transactions: TransactionRow[]
   categories: CategoryRow[]

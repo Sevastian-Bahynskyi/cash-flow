@@ -1,4 +1,4 @@
-// Row types for tables the web app reads (docs/redesign/DATA.md § 2).
+// Row types for the tables the app reads.
 export type BudgetRow = { id: string; user_id: string; category_id: string; salary_cycle_id: string; amount_minor: number; notes: string | null; created_at: string }
 export type MerchantRuleRow = {
   id: string; user_id: string
