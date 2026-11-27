@@ -19,8 +19,8 @@ function CyclePick({ m, idx, onPick }: { m: Model; idx: number; onPick: (id: str
     <Panel style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 6 }}>
       <IconBtn name="back" label="Previous cycle" disabled={idx <= 0} onPress={() => { const p = m.cycles[idx - 1]; if (p) onPick(p.id); }} />
       <View style={{ flex: 1, alignItems: 'center' }}>
-        <T k="strong">{c?.name} cycle</T>
-        {c ? <T k="meta">{shortDate(c.startOn)} – {shortDate(c.endInclusive)}</T> : null}
+        <T k="strong" style={{ textAlign: 'center' }}>{c?.name} cycle</T>
+        {c ? <T k="meta" style={{ textAlign: 'center' }}>{shortDate(c.startOn)} – {shortDate(c.endInclusive)}</T> : null}
       </View>
       <IconBtn name="chev" label="Next cycle" disabled={idx >= m.cycles.length - 1} onPress={() => { const n = m.cycles[idx + 1]; if (n) onPick(n.id); }} />
     </Panel>
@@ -71,6 +71,8 @@ function Pace({ m, c, cat, budget }: { m: Model; c: Cycle; cat: CategoryRow; bud
 
 function BudgetList({ m, c, b }: { m: Model; c: Cycle; b: ReturnType<Model['budgetsOf']> }) {
   const router = useRouter();
+  const { fontScale } = useWindowDimensions();
+  const largeText = fontScale >= 1.75;
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const groups = m.cats.filter((cat) => cat.level === 1 && !m.incomeParents.has(cat.id) && !m.isTransfer(cat.id));
   const budgeted = new Map(b.list.map((item) => [item.id, item]));
@@ -107,17 +109,17 @@ function BudgetList({ m, c, b }: { m: Model; c: Cycle; b: ReturnType<Model['budg
         const remaining = item ? `${kr(Math.abs(item.left), true)} ${item.left < 0 ? 'over' : 'left'}${state === 'ahead' ? ', ahead of pace' : ''}` : 'No budget';
         return (
           <List key={cat.id}>{[
-            <Row key={cat.id} expanded={kids.length ? isOpen : undefined} accessibilityLabel={`${cat.name}, ${subtitle}, ${remaining}`}
+            <Row key={cat.id} expanded={kids.length ? isOpen : undefined} stackEnd={largeText} accessibilityLabel={`${cat.name}, ${subtitle}, ${remaining}`}
               onPress={() => kids.length ? setExpanded((state) => ({ ...state, [cat.id]: !isOpen })) : detail(cat.id)}
               lead={<Disc icon={cat.icon} color={color} />}
               title={<View style={{ gap: 5 }}><T k="strong">{cat.name}</T>{item ? <Meter spent={spent} amount={item.amount} share={share} height={5} color={color} /> : null}</View>}
               meta={subtitle}
-              end={<View style={{ alignItems: 'flex-end', gap: 4 }}>
+              end={<View style={{ alignItems: largeText ? 'flex-start' : 'flex-end', gap: 4 }}>
                 {item ? <StatePill left={item.left} st={state} /> : <T k="meta">No budget</T>}
                 <Icon name={isOpen ? 'down' : 'chev'} size={15} color={C.ink3} />
               </View>} />,
             ...(isOpen ? kids.map((kid) => (
-              <Row key={kid.id} lead={<View style={{ marginLeft: 22 }}><Disc icon={kid.icon} color={color} /></View>}
+              <Row key={kid.id} stackEnd={largeText} lead={<View style={{ marginLeft: largeText ? 10 : 22 }}><Disc icon={kid.icon} color={color} /></View>}
                 title={kid.name} end={<T k="num">{kr(childSpend.get(kid.id) ?? 0, true)}</T>} onPress={() => detail(kid.id)} />
             )) : []),
             ...(isOpen ? [<Row key="details" title={<T k="meta" style={{ marginLeft: 22 }}>{cat.name} budget details</T>}
@@ -141,7 +143,7 @@ function Budgets({ m }: { m: Model }) {
   const b = useMemo(() => m.budgetsOf(c), [m, c]);
   const [editing, setEditing] = useState(false);
   const sel = m.byId.get(params.cat ?? '');
-  const header = <Header back title={sel?.name ?? 'Budgets'} sub={sel ? m.parentOf(sel.id)?.id !== sel.id ? m.parentOf(sel.id)?.name : 'Budget details' : undefined} />;
+  const header = <Header back wrapTitle title={sel?.name ?? 'Budgets'} sub={sel ? m.parentOf(sel.id)?.id !== sel.id ? m.parentOf(sel.id)?.name : 'Budget details' : undefined} />;
   if (!c || !m.hasSalary) return <Screen header={header}><Panel><Empty title="No salary yet" sub="Budgets run from payday to payday. The first cycle starts when your salary arrives from the bank." /></Panel></Screen>;
 
   const picker = <CyclePick m={m} idx={cycleIdx} onPick={(id) => router.setParams({ cycle: id })} />;

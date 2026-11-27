@@ -19,8 +19,8 @@ export function Icon({ name, size = 22, color = C.ink, weight }: { name: string 
   return <I size={size} color={color} weight={weight ?? (ACTIONS.has(name ?? '') ? 'bold' : 'duotone')} />;
 }
 
-export function T({ children, style, k = 'body', numberOfLines }: { children: ReactNode; style?: StyleProp<TextStyle>; k?: keyof typeof TS; numberOfLines?: number }) {
-  return <Text style={[TS[k], style]} numberOfLines={numberOfLines}>{children}</Text>;
+export function T({ children, style, k = 'body', numberOfLines, maxFontSizeMultiplier }: { children: ReactNode; style?: StyleProp<TextStyle>; k?: keyof typeof TS; numberOfLines?: number; maxFontSizeMultiplier?: number }) {
+  return <Text style={[TS[k], style]} numberOfLines={numberOfLines} maxFontSizeMultiplier={maxFontSizeMultiplier}>{children}</Text>;
 }
 const TS = StyleSheet.create({
   body: { fontFamily: F.body, fontSize: 16, color: C.ink },
@@ -50,7 +50,7 @@ export function Screen({ children, onRefresh, header, pad = true }: { children: 
 }
 
 /** A screen title with Back when it is not a tab. */
-export function Header({ title, sub, back, right, overAura }: { title: string; sub?: string; back?: boolean; right?: ReactNode; overAura?: boolean }) {
+export function Header({ title, sub, back, right, overAura, wrapTitle }: { title: string; sub?: string; back?: boolean; right?: ReactNode; overAura?: boolean; wrapTitle?: boolean }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   return (
@@ -62,7 +62,7 @@ export function Header({ title, sub, back, right, overAura }: { title: string; s
           </Pressable>
         ) : null}
         <View style={{ flex: 1 }}>
-          <T k="title" style={overAura ? { color: '#FFFFFF' } : undefined} numberOfLines={1}>{title}</T>
+          <T k="title" style={overAura ? { color: '#FFFFFF' } : undefined} numberOfLines={wrapTitle ? undefined : 1} maxFontSizeMultiplier={wrapTitle ? 2.5 : undefined}>{title}</T>
           {sub ? <T k="meta" style={overAura ? { color: 'rgba(255,255,255,0.8)' } : undefined}>{sub}</T> : null}
         </View>
         {right}
@@ -95,17 +95,18 @@ export function Disc({ icon, color = C.ink, bg = C.surface2, children }: { icon?
   );
 }
 
-export function Row({ lead, title, meta, end, onPress, disabled, selected, expanded, accessibilityLabel }: {
-  lead?: ReactNode; title: ReactNode; meta?: ReactNode; end?: ReactNode; onPress?: () => void; disabled?: boolean; selected?: boolean; expanded?: boolean; accessibilityLabel?: string;
+export function Row({ lead, title, meta, end, onPress, disabled, selected, expanded, stackEnd, accessibilityLabel }: {
+  lead?: ReactNode; title: ReactNode; meta?: ReactNode; end?: ReactNode; onPress?: () => void; disabled?: boolean; selected?: boolean; expanded?: boolean; stackEnd?: boolean; accessibilityLabel?: string;
 }) {
   const body = (
     <>
       {lead}
       <View style={{ flex: 1, minWidth: 0 }}>
-        {typeof title === 'string' ? <T k="strong" numberOfLines={1}>{title}</T> : title}
-        {meta ? (typeof meta === 'string' ? <T k="meta" numberOfLines={1}>{meta}</T> : meta) : null}
+        {typeof title === 'string' ? <T k="strong" numberOfLines={stackEnd ? undefined : 1}>{title}</T> : title}
+        {meta ? (typeof meta === 'string' ? <T k="meta" numberOfLines={stackEnd ? undefined : 1}>{meta}</T> : meta) : null}
+        {stackEnd ? end : null}
       </View>
-      {end}
+      {stackEnd ? null : end}
     </>
   );
   if (!onPress) return <View style={[st.row, selected && st.rowSel]}>{body}</View>;
