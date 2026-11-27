@@ -40,7 +40,7 @@ export const canonicalId = (people: readonly PersonInput[], id: string): string 
 
 /**
  * Balances per canonical person: opening balance plus, for settle-up people only, money I sent (+) minus money I got (-).
- * Partner and family transfers never move a balance on their own; their opening balance still shows.
+ * Partner and family transfers never move a balance on their own (family still counts what was sent and received).
  */
 export const owedBalances = (people: readonly PersonInput[], txs: readonly PeopleTx[]): OwedBalance[] => {
   const out = new Map<string, OwedBalance>();
@@ -55,13 +55,15 @@ export const owedBalances = (people: readonly PersonInput[], txs: readonly Peopl
   for (const t of txs) {
     if (!t.counterparty_person_id || t.status === 'void') continue;
     const b = out.get(canonicalId(people, t.counterparty_person_id));
-    if (!b || b.kind !== 'settle_up') continue;
+    // Settle-up people keep a running balance; family only shows what went each way.
+    if (!b || (b.kind !== 'settle_up' && b.kind !== 'family')) continue;
+    const settle = b.kind === 'settle_up' ? 1 : 0;
     if (t.kind === 'expense') {
       b.sentMinor += t.amount_minor;
-      b.balance_minor += t.amount_minor;
+      b.balance_minor += settle * t.amount_minor;
     } else {
       b.receivedMinor += t.amount_minor;
-      b.balance_minor -= t.amount_minor;
+      b.balance_minor -= settle * t.amount_minor;
     }
     if (!b.lastOn || t.occurred_on > b.lastOn) b.lastOn = t.occurred_on;
   }

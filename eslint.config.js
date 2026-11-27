@@ -15,7 +15,7 @@ module.exports = defineConfig([
       'dist/**',
       'supabase/functions/**',
       // Deno scripts, like the functions
-      'scripts/logos.ts',
+      'scripts/merchants.ts',
       'scripts/bank/**',
       'scripts/classify/*.ts',
     ],

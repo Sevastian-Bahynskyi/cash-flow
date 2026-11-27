@@ -55,6 +55,7 @@ import ListChecks from 'lucide-react-native/icons/list-checks';
 import Lock from 'lucide-react-native/icons/lock';
 import LogOut from 'lucide-react-native/icons/log-out';
 import Mail from 'lucide-react-native/icons/mail';
+import MapIcon from 'lucide-react-native/icons/map';
 import Moon from 'lucide-react-native/icons/moon';
 import Music from 'lucide-react-native/icons/music';
 import PawPrint from 'lucide-react-native/icons/paw-print';
@@ -181,6 +182,7 @@ const ICONS: Readonly<Record<string, LucideIcon>> = {
   bell: Bell,
   lock: Lock,
   mail: Mail,
+  map: MapIcon,
   eye: Eye,
   link: Link,
   moon: Moon,

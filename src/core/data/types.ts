@@ -3,9 +3,10 @@ import type { CategoryRow, CategoryOverrideRow } from '@/core/domain/categories-
 import type { SavingsAccountRow, SavingsEventRow } from '@/core/domain/savings-types'
 import type { LoanRow, LoanEventRow } from '@/core/domain/loans-types'
 import type { ReceivableRow, ReceivableEventRow } from '@/core/domain/receivables-types'
+import type { TripRow, PlaceRow } from '@/core/domain/trips'
 import type { BudgetRow, MerchantRuleRow, TransferPersonRow, ProfileRow, BankConnectionRow, BankAccountRow, SyncRunRow, SplitRow, PaybackRow, MerchantLogoRow } from '@/core/domain/rows'
 
-export type { TransactionRow, TransactionInsert, CategoryRow, CategoryOverrideRow, SavingsAccountRow, SavingsEventRow, LoanRow, LoanEventRow, ReceivableRow, ReceivableEventRow, BudgetRow, MerchantRuleRow, TransferPersonRow, ProfileRow, BankConnectionRow, BankAccountRow, SyncRunRow, SplitRow, PaybackRow, MerchantLogoRow }
+export type { TransactionRow, TransactionInsert, CategoryRow, CategoryOverrideRow, SavingsAccountRow, SavingsEventRow, LoanRow, LoanEventRow, ReceivableRow, ReceivableEventRow, BudgetRow, MerchantRuleRow, TransferPersonRow, ProfileRow, BankConnectionRow, BankAccountRow, SyncRunRow, SplitRow, PaybackRow, MerchantLogoRow, TripRow, PlaceRow }
 
 /** Everything the screens read, loaded once per session. */
 export type Tables = {
@@ -31,5 +32,8 @@ export type Tables = {
   paybacks: PaybackRow[]
   /** Only merchants that have a logo; filled by scripts/logos.ts. */
   merchant_logos: MerchantLogoRow[]
+  trips: TripRow[]
+  /** Where merchants are; filled by the sync function. */
+  merchant_places: PlaceRow[]
 }
 export type TableName = keyof Tables

@@ -59,7 +59,7 @@ function AppStack(): React.JSX.Element {
       <DetailProvider>
         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg }, animation: 'fade' }}>
           <Stack.Screen name="(tabs)" />
-          {['budgets', 'budget-detail', 'budgets-plan', 'spending-transactions', 'where', 'shared', 'bank', 'categories', 'rules'].map((name) => (
+          {['budgets', 'budget-detail', 'budgets-plan', 'spending-transactions', 'where', 'shared', 'bank', 'categories', 'rules', 'map', 'trips', 'trip'].map((name) => (
             // the system push, with Back by a swipe from anywhere on the screen
             <Stack.Screen key={name} name={name} options={{ animation: 'default', fullScreenGestureEnabled: true }} />
           ))}

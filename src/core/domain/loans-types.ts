@@ -8,6 +8,8 @@ export type LoanRow = {
   principal_minor: number;
   remaining_minor: number;
   status: LoanStatus;
+  /** The person this debt is with, when it was made from People. */
+  person_id?: string | null;
   created_at: string;
 };
 
@@ -18,5 +20,7 @@ export type LoanEventRow = {
   kind: LoanEventKind;
   amount_minor: number;
   occurred_on: string; // YYYY-MM-DD
+  /** The bank transfer this payment is, when linked. */
+  transaction_id?: string | null;
   created_at: string;
 };

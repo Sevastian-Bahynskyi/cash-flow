@@ -12,6 +12,10 @@ const scenes = {
   cycle: 'cashflow:///cycle',
   'budget-detail': 'cashflow:///budget-detail?cat=groceries',
   spending: 'cashflow:///where',
+  activity: 'cashflow:///activity',
+  people: 'cashflow:///people',
+  map: 'cashflow:///map',
+  trips: 'cashflow:///trips',
 };
 
 function run(command, args, options = {}) {
@@ -33,7 +37,7 @@ function simulator() {
 const [action, value] = process.argv.slice(2);
 if (action === 'metro') {
   const scenario = value ?? 'budgets';
-  if (!['budgets', 'payday', 'nobank', 'empty'].includes(scenario)) throw new Error('Use pnpm qa budgets, payday, nobank or empty.');
+  if (!['budgets', 'payday', 'nobank', 'empty', 'travel'].includes(scenario)) throw new Error('Use pnpm qa budgets, payday, nobank, empty or travel.');
   run('pnpm', ['exec', 'expo', 'start', '--localhost', '--port', port], {
     env: { ...process.env, EXPO_NO_DOTENV: '1', EXPO_PUBLIC_CASHFLOW_QA: scenario },
   });
@@ -70,5 +74,5 @@ if (action === 'metro') {
   if (packager.stdout?.trim() !== 'packager-status:running') throw new Error('Start fixture Metro with pnpm qa.');
   run('xcrun', ['simctl', 'openurl', target, scenes[value]]);
 } else {
-  throw new Error('Use pnpm qa, pnpm qa:install, or pnpm qa:open budgets|shared|budget-detail|shared-detail|cycle|spending.');
+  throw new Error('Use pnpm qa, pnpm qa:install, or pnpm qa:open budgets|shared|budget-detail|shared-detail|cycle|spending|activity|people|map|trips.');
 }

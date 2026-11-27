@@ -106,7 +106,7 @@ function Where({ m }: { m: Model }) {
       </View>
     </View>
   );
-  const header = <Header back title="Where it went" />;
+  const header = <Header back title="Where it went" right={<IconBtn name="map" label="Spending map" onPress={() => router.push(w ? { pathname: '/map', params: { from: w.start, until: w.endEx } } : '/map')} />} />;
   if (!w || !data) return <Screen header={header}>{seg}<Panel><Empty title="Nothing yet" /></Panel></Screen>;
   const { list, spent, lastSpent, income, moved, run, sharedMine } = data;
   const leftOver = income - (spent - sharedMine) - moved;

@@ -8,6 +8,8 @@ export type ReceivableRow = {
   principal_minor: number;
   remaining_minor: number;
   status: ReceivableStatus;
+  /** The person this debt is with, when it was made from People. */
+  person_id?: string | null;
   created_at: string;
 };
 
@@ -18,5 +20,7 @@ export type ReceivableEventRow = {
   kind: ReceivableEventKind;
   amount_minor: number;
   occurred_on: string; // YYYY-MM-DD
+  /** The bank transfer this payment is, when linked. */
+  transaction_id?: string | null;
   created_at: string;
 };

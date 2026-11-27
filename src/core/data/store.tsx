@@ -54,9 +54,9 @@ const LOAD: { [K in TableName]: (uid: string) => Promise<Tables[K]> } = {
   shared_budgets: () => all((a, b) => sb.from('shared_budgets').select('id,user_id,category_id,salary_cycle_id,amount_minor,notes,created_at').order('id').range(a, b)),
   savings_accounts: () => all((a, b) => sb.from('savings_accounts').select('id,user_id,name,goal_minor,color,icon,bank_account_id,created_at').order('created_at').order('id').range(a, b)),
   savings_events: () => all((a, b) => sb.from('savings_events').select('id,user_id,savings_account_id,action,amount_minor,occurred_on,note,created_at').order('occurred_on').order('created_at').order('id').range(a, b)),
-  loans: () => all((a, b) => sb.from('loans').select('id,user_id,name,principal_minor,remaining_minor,status,created_at').order('created_at', { ascending: false }).order('id').range(a, b)),
+  loans: () => all((a, b) => sb.from('loans').select('id,user_id,name,principal_minor,remaining_minor,status,person_id,created_at').order('created_at', { ascending: false }).order('id').range(a, b)),
   loan_events: () => all((a, b) => sb.from('loan_events').select('*').order('occurred_on', { ascending: false }).order('created_at', { ascending: false }).order('id').range(a, b)),
-  receivables: () => all((a, b) => sb.from('receivables').select('id,user_id,name,principal_minor,remaining_minor,status,created_at').order('created_at', { ascending: false }).order('id').range(a, b)),
+  receivables: () => all((a, b) => sb.from('receivables').select('id,user_id,name,principal_minor,remaining_minor,status,person_id,created_at').order('created_at', { ascending: false }).order('id').range(a, b)),
   receivable_events: () => all((a, b) => sb.from('receivable_events').select('*').order('occurred_on', { ascending: false }).order('created_at', { ascending: false }).order('id').range(a, b)),
   merchant_category_rules: () => all((a, b) => sb.from('merchant_category_rules').select('*').order('priority', { ascending: false }).order('updated_at', { ascending: false }).order('id').range(a, b)),
   transfer_people: () => all((a, b) => sb.from('transfer_people').select('id,user_id,name,normalized_name,kind,opening_balance_minor,alias_of,created_at,updated_at').order('name').order('id').range(a, b)),
@@ -73,6 +73,8 @@ const LOAD: { [K in TableName]: (uid: string) => Promise<Tables[K]> } = {
     return data ?? [];
   },
   transaction_splits: () => all((a, b) => sb.from('transaction_splits').select('id,user_id,transaction_id,category_id,amount_minor,note,created_at').order('created_at').order('id').range(a, b)),
+  trips: () => all((a, b) => sb.from('trips').select('id,user_id,name,country_iso,start_on,end_on,created_at').order('start_on', { ascending: false }).order('id').range(a, b)),
+  merchant_places: () => all((a, b) => sb.from('merchant_places').select('key,country_iso,city,lat,lng,online').order('key').range(a, b)),
   merchant_logos: () => all((a, b) => sb.from('merchant_logos').select('key,path').not('path', 'is', null).order('key').range(a, b)),
   paybacks: () => all((a, b) => sb.from('paybacks').select('id,user_id,payment_transaction_id,expense_transaction_id,amount_minor,created_at').order('created_at').order('id').range(a, b)),
 };
@@ -128,9 +130,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       try {
         const raw = await AsyncStorage.getItem(cacheKey(userId));
-        const cached = raw ? (JSON.parse(raw) as { t: Omit<Tables, 'shared_budgets' | 'merchant_logos'> & Partial<Tables>; at: number }) : null;
+        const cached = raw ? (JSON.parse(raw) as { t: Omit<Tables, 'shared_budgets' | 'merchant_logos' | 'trips' | 'merchant_places'> & Partial<Tables>; at: number }) : null;
         // a device copy from before shared budgets existed has no such table yet
-        if (alive && cached && !tablesRef.current) { setTables({ shared_budgets: [], merchant_logos: [], ...cached.t }); setLoadedAt(cached.at); setStatus('ready'); }
+        if (alive && cached && !tablesRef.current) { setTables({ shared_budgets: [], merchant_logos: [], trips: [], merchant_places: [], ...cached.t }); setLoadedAt(cached.at); setStatus('ready'); }
       } catch { /* no device copy */ }
       if (alive) await reload();
       if (alive) await sync();

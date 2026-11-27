@@ -114,6 +114,7 @@ function SettingsBody({ m }: { m: Model }) {
         <NavRow key="b" href="/bank" icon="bank" name="Accounts & sync" sub="Banks, balances, savings goals" />,
         <NavRow key="c" href="/categories" icon="tag" name="Categories" />,
         <NavRow key="r" href="/rules" icon="rule" name="Merchant rules" />,
+        <NavRow key="t" href="/trips" icon="plane" name="Trips" sub="Spending abroad, trip by trip" />,
       ]}</List>
       <Sec>Export</Sec>
       <Export m={m} />

@@ -3,15 +3,17 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { json, preflight } from "../_shared/sync/http.ts";
 import { createEbClient, type PsuHeaders } from "../_shared/enable-banking.ts";
 import { fillLogos } from "../_shared/logos.ts";
+import { fillPlaces } from "../_shared/places.ts";
 import { classifyLabeler } from "../_shared/sync/label.ts";
 import { type SyncRun, syncUser } from "../_shared/sync/run.ts";
 
 // Two callers: pg_cron (x-cron-secret, all users) and the signed-in app (user JWT, that user, once per 15 min).
 const USER_THROTTLE_MS = 15 * 60 * 1000;
 
-/** Logos for new merchants after the response is sent; a failure only means no logo yet. */
+/** Logos and places for new merchants after the response is sent; a failure only means none yet. */
 const logosLater = (db: Parameters<typeof fillLogos>[0], userId: string): void => {
-  EdgeRuntime.waitUntil(fillLogos(db, userId).catch((e) => console.error("bank-sync: logos failed", e instanceof Error ? e.message : String(e))));
+  const warn = (what: string) => (e: unknown) => console.error(`bank-sync: ${what} failed`, e instanceof Error ? e.message : String(e));
+  EdgeRuntime.waitUntil(Promise.all([fillLogos(db, userId).catch(warn("logos")), fillPlaces(db, userId).catch(warn("places"))]));
 };
 
 const constantTimeEqual = (a: string, b: string): boolean => {
