@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { PixelRatio } from 'react-native';
+import { PixelRatio, View } from 'react-native';
 import { BlurMask, Canvas, Fill, Group, ImageShader, Shader, Text, drawAsImage, useClock, useFont, type SkImage } from '@shopify/react-native-skia';
-import { useDerivedValue, useReducedMotion } from 'react-native-reanimated';
-import { thermalEffect } from './shader';
+import { Easing, cancelAnimation, useDerivedValue, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
+import { heatEffect, thermalEffect } from './shader';
 
 // Metro resolves a font file to an asset id
 const FONT = require('@expo-google-fonts/barlow-condensed/800ExtraBold_Italic/BarlowCondensed_800ExtraBold_Italic.ttf') as number;
@@ -50,6 +50,46 @@ export function ThermalNumber({ text, width, height }: { text: string; width: nu
           </Shader>
         </Fill>
       ) : null}
+    </Canvas>
+  );
+}
+
+const BURN = { duration: 2200, easing: Easing.linear } as const;
+// the line box around the digits and where their baseline sits, as a share of the font size
+const LINE = 1.0;
+const BASE = 0.84;
+const rgb = (hex: string): number[] => [0, 2, 4].map((i) => parseInt(hex.slice(1 + i, 3 + i), 16) / 255);
+
+/** The big number: it burns in with flowing heat each time it lands on screen, then cools into its ink. */
+export function HeatNumber({ text, size, maxWidth, ink, active }: { text: string; size: number; maxWidth: number; ink: string; active: boolean }) {
+  const font = useFont(FONT, size);
+  const reduce = useReducedMotion();
+  const p = useSharedValue(reduce ? 1 : 0);
+  const pad = size * 0.1;
+  const w = (font ? font.measureText(text).width : 0) + pad * 2;
+  const h = size * LINE;
+  // shrinks to fit like adjustsFontSizeToFit, never below half
+  const fit = Math.min(1, Math.max(0.5, maxWidth / w));
+
+  useEffect(() => {
+    if (!font) return;
+    cancelAnimation(p);
+    if (reduce) { p.value = 1; return; }
+    p.value = 0;
+    if (active) p.value = withTiming(1, BURN);
+  }, [active, text, font, reduce, p]);
+
+  const color = rgb(ink);
+  const uniforms = useDerivedValue(() => ({ p: p.value, res: [w, h], ink: color }));
+
+  if (!font) return <View style={{ height: h }} />;
+  return (
+    <Canvas style={{ width: w * fit, height: h * fit }}>
+      <Group transform={[{ scale: fit }]}>
+        <Text x={pad} y={size * BASE} text={text} font={font}>
+          <Shader source={heatEffect} uniforms={uniforms} />
+        </Text>
+      </Group>
     </Canvas>
   );
 }

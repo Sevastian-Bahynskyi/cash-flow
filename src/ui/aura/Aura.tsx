@@ -5,6 +5,9 @@ import { useDerivedValue, useReducedMotion, useSharedValue, type SharedValue } f
 import { auraEffect } from './shader';
 import { moodVector, type Mood } from './moods';
 
+// fast enough that the aura is always visibly drifting, slow enough to stay calm
+const SPEED = 3;
+
 type Props = {
   /** One mood per page. */
   moods: readonly Mood[];
@@ -38,7 +41,7 @@ export function Aura({ moods, position, style }: Props) {
     const rgb = (i: number): number[] => [v(i), v(i + 1), v(i + 2)];
     return {
       res: [size.value.width, size.value.height],
-      t: reduce ? 3 : clock.value / 1000,
+      t: reduce ? 3 : (clock.value / 1000) * SPEED,
       shape: v(15),
       c0: rgb(0),
       c1: rgb(3),
