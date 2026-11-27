@@ -122,6 +122,24 @@ function Pace({ m, c, cat, budget, scope }: { m: Model; c: Cycle; cat: CategoryR
   );
 }
 
+/** Where today sits in the cycle, once above the list rather than a tick on every row. */
+function CycleDays({ m, c }: { m: Model; c: Cycle }) {
+  if (c.id !== m.current?.id) return null;
+  const days = daysBetween(c.startOn, c.endInclusive) + 1;
+  const day = Math.min(days, daysBetween(c.startOn, m.today) + 1);
+  const left = days - day;
+  return (
+    <View style={{ paddingHorizontal: 4, gap: 2 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+        <T k="note">Day {day} of {days}</T>
+        <T k="note">{left ? `${left} ${left === 1 ? 'day' : 'days'} to payday` : 'Payday tomorrow'}</T>
+      </View>
+      {/* share 1 keeps the days bar out of the ahead colour */}
+      <Meter spent={day} amount={days} share={1} height={4} color={C.ink3} />
+    </View>
+  );
+}
+
 function BudgetList({ m, c, b, scope }: { m: Model; c: Cycle; b: ReturnType<Model['budgetsOf']>; scope: Scope }) {
   const router = useRouter();
   const { fontScale } = useWindowDimensions();
@@ -222,6 +240,7 @@ function Budgets({ m, home }: { m: Model; home?: boolean }) {
           <BankLine m={m} scope={scope} isCurrent={c.id === m.current?.id} />
         </View>
         {c.real && scope === 'personal' ? <List>{[<NavRow key="plan" href={`/budgets-plan?cycle=${c.id}`} icon="sack" name="Cycle plan" />]}</List> : null}
+        <CycleDays m={m} c={c} />
         <BudgetList m={m} c={c} b={b} scope={scope} />
       </Screen>
     );
