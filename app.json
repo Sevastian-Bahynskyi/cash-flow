@@ -32,7 +32,8 @@
       "@react-native-community/datetimepicker",
       "expo-localization",
       "expo-font",
-      "expo-notifications"
+      "expo-notifications",
+      "./plugins/withPodsMinDeploymentTarget"
     ],
     "experiments": {
       "typedRoutes": true
