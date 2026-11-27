@@ -14,7 +14,10 @@
     "scan:smells": "node ./scripts/scan-smells.cjs",
     "typecheck": "tsc --noEmit",
     "lockfile:check": "pnpm install --frozen-lockfile --ignore-scripts",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package",
+    "qa": "node scripts/qa.cjs metro",
+    "qa:install": "node scripts/qa.cjs install",
+    "qa:open": "node scripts/qa.cjs open"
   },
   "dependencies": {
     "@expo-google-fonts/barlow": "0.4.1",
@@ -42,8 +45,8 @@
     "expo-sharing": "~14.0.8",
     "expo-status-bar": "~3.0.9",
     "expo-web-browser": "~15.0.11",
+    "lucide-react-native": "1.82.0",
     "patch-package": "^8.0.1",
-    "phosphor-react-native": "3.0.6",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.5",

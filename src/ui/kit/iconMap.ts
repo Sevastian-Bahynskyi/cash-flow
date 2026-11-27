@@ -1,111 +1,206 @@
-// Phosphor duotone is the app's icon set (owner pick, 27 Nov 2026). Category rows in the database hold old
-// MaterialCommunity / FontAwesome names; LEGACY and ALIAS (from web/lib/icons.ts) turn them into one meaning, then PHOSPHOR draws it.
-import type { Icon as PhosphorIcon } from 'phosphor-react-native';
+import type { LucideIcon } from 'lucide-react-native';
+import ArrowDown from 'lucide-react-native/icons/arrow-down';
+import ArrowLeftRight from 'lucide-react-native/icons/arrow-left-right';
+import ArrowUp from 'lucide-react-native/icons/arrow-up';
+import Baby from 'lucide-react-native/icons/baby';
+import Bell from 'lucide-react-native/icons/bell';
+import Bike from 'lucide-react-native/icons/bike';
+import BookOpen from 'lucide-react-native/icons/book-open';
+import Briefcase from 'lucide-react-native/icons/briefcase';
+import BriefcaseMedical from 'lucide-react-native/icons/briefcase-medical';
+import Building2 from 'lucide-react-native/icons/building-2';
+import Bus from 'lucide-react-native/icons/bus';
+import Calendar from 'lucide-react-native/icons/calendar';
+import Camera from 'lucide-react-native/icons/camera';
+import Car from 'lucide-react-native/icons/car';
+import CarTaxiFront from 'lucide-react-native/icons/car-taxi-front';
+import ChartColumn from 'lucide-react-native/icons/chart-column';
+import ChartPie from 'lucide-react-native/icons/chart-pie';
+import Check from 'lucide-react-native/icons/check';
+import ChevronDown from 'lucide-react-native/icons/chevron-down';
+import ChevronLeft from 'lucide-react-native/icons/chevron-left';
+import ChevronRight from 'lucide-react-native/icons/chevron-right';
+import CircleAlert from 'lucide-react-native/icons/circle-alert';
+import Clapperboard from 'lucide-react-native/icons/clapperboard';
+import Clock from 'lucide-react-native/icons/clock';
+import CloudOff from 'lucide-react-native/icons/cloud-off';
+import Coffee from 'lucide-react-native/icons/coffee';
+import Coins from 'lucide-react-native/icons/coins';
+import Download from 'lucide-react-native/icons/download';
+import Droplet from 'lucide-react-native/icons/droplet';
+import Dumbbell from 'lucide-react-native/icons/dumbbell';
+import Ellipsis from 'lucide-react-native/icons/ellipsis';
+import Eye from 'lucide-react-native/icons/eye';
+import Fuel from 'lucide-react-native/icons/fuel';
+import Funnel from 'lucide-react-native/icons/funnel';
+import Gamepad2 from 'lucide-react-native/icons/gamepad-2';
+import Gauge from 'lucide-react-native/icons/gauge';
+import Gift from 'lucide-react-native/icons/gift';
+import Grid3x3 from 'lucide-react-native/icons/grid-3x3';
+import HandCoins from 'lucide-react-native/icons/hand-coins';
+import Heart from 'lucide-react-native/icons/heart';
+import Hourglass from 'lucide-react-native/icons/hourglass';
+import House from 'lucide-react-native/icons/house';
+import Image from 'lucide-react-native/icons/image';
+import Info from 'lucide-react-native/icons/info';
+import KeyRound from 'lucide-react-native/icons/key-round';
+import Landmark from 'lucide-react-native/icons/landmark';
+import Laptop from 'lucide-react-native/icons/laptop';
+import Lightbulb from 'lucide-react-native/icons/lightbulb';
+import Link from 'lucide-react-native/icons/link';
+import List from 'lucide-react-native/icons/list';
+import ListChecks from 'lucide-react-native/icons/list-checks';
+import Lock from 'lucide-react-native/icons/lock';
+import LogOut from 'lucide-react-native/icons/log-out';
+import Mail from 'lucide-react-native/icons/mail';
+import Moon from 'lucide-react-native/icons/moon';
+import Music from 'lucide-react-native/icons/music';
+import PawPrint from 'lucide-react-native/icons/paw-print';
+import Pencil from 'lucide-react-native/icons/pencil';
+import PiggyBank from 'lucide-react-native/icons/piggy-bank';
+import Pill from 'lucide-react-native/icons/pill';
+import Plane from 'lucide-react-native/icons/plane';
+import Plus from 'lucide-react-native/icons/plus';
+import Receipt from 'lucide-react-native/icons/receipt';
+import RefreshCw from 'lucide-react-native/icons/refresh-cw';
+import RotateCw from 'lucide-react-native/icons/rotate-cw';
+import Search from 'lucide-react-native/icons/search';
+import Shapes from 'lucide-react-native/icons/shapes';
+import ShieldCheck from 'lucide-react-native/icons/shield-check';
+import Shirt from 'lucide-react-native/icons/shirt';
+import ShoppingBag from 'lucide-react-native/icons/shopping-bag';
+import ShoppingBasket from 'lucide-react-native/icons/shopping-basket';
+import ShoppingCart from 'lucide-react-native/icons/shopping-cart';
+import Smartphone from 'lucide-react-native/icons/smartphone';
+import Split from 'lucide-react-native/icons/split';
+import SprayCan from 'lucide-react-native/icons/spray-can';
+import StickyNote from 'lucide-react-native/icons/sticky-note';
+import Store from 'lucide-react-native/icons/store';
+import Sun from 'lucide-react-native/icons/sun';
+import Tag from 'lucide-react-native/icons/tag';
+import Ticket from 'lucide-react-native/icons/ticket';
+import TrainFront from 'lucide-react-native/icons/train-front';
+import Trash2 from 'lucide-react-native/icons/trash-2';
+import TrendingUp from 'lucide-react-native/icons/trending-up';
+import TriangleAlert from 'lucide-react-native/icons/triangle-alert';
+import Undo2 from 'lucide-react-native/icons/undo-2';
+import Upload from 'lucide-react-native/icons/upload';
+import UserRound from 'lucide-react-native/icons/user-round';
+import Users from 'lucide-react-native/icons/users';
+import Utensils from 'lucide-react-native/icons/utensils';
+import Wallet from 'lucide-react-native/icons/wallet';
+import Wifi from 'lucide-react-native/icons/wifi';
+import Wine from 'lucide-react-native/icons/wine';
+import Wrench from 'lucide-react-native/icons/wrench';
+import X from 'lucide-react-native/icons/x';
+import Zap from 'lucide-react-native/icons/zap';
 
-/* eslint-disable @typescript-eslint/no-require-imports */
-const I = {
-  Airplane: (require('phosphor-react-native/src/icons/Airplane') as { Airplane: PhosphorIcon }).Airplane,
-  ArrowClockwise: (require('phosphor-react-native/src/icons/ArrowClockwise') as { ArrowClockwise: PhosphorIcon }).ArrowClockwise,
-  ArrowCounterClockwise: (require('phosphor-react-native/src/icons/ArrowCounterClockwise') as { ArrowCounterClockwise: PhosphorIcon }).ArrowCounterClockwise,
-  ArrowDown: (require('phosphor-react-native/src/icons/ArrowDown') as { ArrowDown: PhosphorIcon }).ArrowDown,
-  ArrowUp: (require('phosphor-react-native/src/icons/ArrowUp') as { ArrowUp: PhosphorIcon }).ArrowUp,
-  ArrowsClockwise: (require('phosphor-react-native/src/icons/ArrowsClockwise') as { ArrowsClockwise: PhosphorIcon }).ArrowsClockwise,
-  ArrowsLeftRight: (require('phosphor-react-native/src/icons/ArrowsLeftRight') as { ArrowsLeftRight: PhosphorIcon }).ArrowsLeftRight,
-  ArrowsSplit: (require('phosphor-react-native/src/icons/ArrowsSplit') as { ArrowsSplit: PhosphorIcon }).ArrowsSplit,
-  Baby: (require('phosphor-react-native/src/icons/Baby') as { Baby: PhosphorIcon }).Baby,
-  Bag: (require('phosphor-react-native/src/icons/Bag') as { Bag: PhosphorIcon }).Bag,
-  Bank: (require('phosphor-react-native/src/icons/Bank') as { Bank: PhosphorIcon }).Bank,
-  Barbell: (require('phosphor-react-native/src/icons/Barbell') as { Barbell: PhosphorIcon }).Barbell,
-  Bell: (require('phosphor-react-native/src/icons/Bell') as { Bell: PhosphorIcon }).Bell,
-  Book: (require('phosphor-react-native/src/icons/Book') as { Book: PhosphorIcon }).Book,
-  Briefcase: (require('phosphor-react-native/src/icons/Briefcase') as { Briefcase: PhosphorIcon }).Briefcase,
-  Buildings: (require('phosphor-react-native/src/icons/Buildings') as { Buildings: PhosphorIcon }).Buildings,
-  Bus: (require('phosphor-react-native/src/icons/Bus') as { Bus: PhosphorIcon }).Bus,
-  Calendar: (require('phosphor-react-native/src/icons/Calendar') as { Calendar: PhosphorIcon }).Calendar,
-  Camera: (require('phosphor-react-native/src/icons/Camera') as { Camera: PhosphorIcon }).Camera,
-  Car: (require('phosphor-react-native/src/icons/Car') as { Car: PhosphorIcon }).Car,
-  CaretDown: (require('phosphor-react-native/src/icons/CaretDown') as { CaretDown: PhosphorIcon }).CaretDown,
-  CaretLeft: (require('phosphor-react-native/src/icons/CaretLeft') as { CaretLeft: PhosphorIcon }).CaretLeft,
-  CaretRight: (require('phosphor-react-native/src/icons/CaretRight') as { CaretRight: PhosphorIcon }).CaretRight,
-  Champagne: (require('phosphor-react-native/src/icons/Champagne') as { Champagne: PhosphorIcon }).Champagne,
-  ChartBar: (require('phosphor-react-native/src/icons/ChartBar') as { ChartBar: PhosphorIcon }).ChartBar,
-  ChartPieSlice: (require('phosphor-react-native/src/icons/ChartPieSlice') as { ChartPieSlice: PhosphorIcon }).ChartPieSlice,
-  Check: (require('phosphor-react-native/src/icons/Check') as { Check: PhosphorIcon }).Check,
-  Clock: (require('phosphor-react-native/src/icons/Clock') as { Clock: PhosphorIcon }).Clock,
-  CloudSlash: (require('phosphor-react-native/src/icons/CloudSlash') as { CloudSlash: PhosphorIcon }).CloudSlash,
-  Coffee: (require('phosphor-react-native/src/icons/Coffee') as { Coffee: PhosphorIcon }).Coffee,
-  Coins: (require('phosphor-react-native/src/icons/Coins') as { Coins: PhosphorIcon }).Coins,
-  DeviceMobile: (require('phosphor-react-native/src/icons/DeviceMobile') as { DeviceMobile: PhosphorIcon }).DeviceMobile,
-  DotsNine: (require('phosphor-react-native/src/icons/DotsNine') as { DotsNine: PhosphorIcon }).DotsNine,
-  DotsThree: (require('phosphor-react-native/src/icons/DotsThree') as { DotsThree: PhosphorIcon }).DotsThree,
-  DownloadSimple: (require('phosphor-react-native/src/icons/DownloadSimple') as { DownloadSimple: PhosphorIcon }).DownloadSimple,
-  Drop: (require('phosphor-react-native/src/icons/Drop') as { Drop: PhosphorIcon }).Drop,
-  Envelope: (require('phosphor-react-native/src/icons/Envelope') as { Envelope: PhosphorIcon }).Envelope,
-  Export: (require('phosphor-react-native/src/icons/Export') as { Export: PhosphorIcon }).Export,
-  Eye: (require('phosphor-react-native/src/icons/Eye') as { Eye: PhosphorIcon }).Eye,
-  FilmSlate: (require('phosphor-react-native/src/icons/FilmSlate') as { FilmSlate: PhosphorIcon }).FilmSlate,
-  FirstAidKit: (require('phosphor-react-native/src/icons/FirstAidKit') as { FirstAidKit: PhosphorIcon }).FirstAidKit,
-  ForkKnife: (require('phosphor-react-native/src/icons/ForkKnife') as { ForkKnife: PhosphorIcon }).ForkKnife,
-  Funnel: (require('phosphor-react-native/src/icons/Funnel') as { Funnel: PhosphorIcon }).Funnel,
-  GameController: (require('phosphor-react-native/src/icons/GameController') as { GameController: PhosphorIcon }).GameController,
-  GasPump: (require('phosphor-react-native/src/icons/GasPump') as { GasPump: PhosphorIcon }).GasPump,
-  Gauge: (require('phosphor-react-native/src/icons/Gauge') as { Gauge: PhosphorIcon }).Gauge,
-  Gift: (require('phosphor-react-native/src/icons/Gift') as { Gift: PhosphorIcon }).Gift,
-  HandCoins: (require('phosphor-react-native/src/icons/HandCoins') as { HandCoins: PhosphorIcon }).HandCoins,
-  Heart: (require('phosphor-react-native/src/icons/Heart') as { Heart: PhosphorIcon }).Heart,
-  Hourglass: (require('phosphor-react-native/src/icons/Hourglass') as { Hourglass: PhosphorIcon }).Hourglass,
-  House: (require('phosphor-react-native/src/icons/House') as { House: PhosphorIcon }).House,
-  Image: (require('phosphor-react-native/src/icons/Image') as { Image: PhosphorIcon }).Image,
-  Info: (require('phosphor-react-native/src/icons/Info') as { Info: PhosphorIcon }).Info,
-  Laptop: (require('phosphor-react-native/src/icons/Laptop') as { Laptop: PhosphorIcon }).Laptop,
-  Lightbulb: (require('phosphor-react-native/src/icons/Lightbulb') as { Lightbulb: PhosphorIcon }).Lightbulb,
-  Lightning: (require('phosphor-react-native/src/icons/Lightning') as { Lightning: PhosphorIcon }).Lightning,
-  Link: (require('phosphor-react-native/src/icons/Link') as { Link: PhosphorIcon }).Link,
-  ListBullets: (require('phosphor-react-native/src/icons/ListBullets') as { ListBullets: PhosphorIcon }).ListBullets,
-  ListChecks: (require('phosphor-react-native/src/icons/ListChecks') as { ListChecks: PhosphorIcon }).ListChecks,
-  Lock: (require('phosphor-react-native/src/icons/Lock') as { Lock: PhosphorIcon }).Lock,
-  MagnifyingGlass: (require('phosphor-react-native/src/icons/MagnifyingGlass') as { MagnifyingGlass: PhosphorIcon }).MagnifyingGlass,
-  Moon: (require('phosphor-react-native/src/icons/Moon') as { Moon: PhosphorIcon }).Moon,
-  MusicNote: (require('phosphor-react-native/src/icons/MusicNote') as { MusicNote: PhosphorIcon }).MusicNote,
-  Note: (require('phosphor-react-native/src/icons/Note') as { Note: PhosphorIcon }).Note,
-  PawPrint: (require('phosphor-react-native/src/icons/PawPrint') as { PawPrint: PhosphorIcon }).PawPrint,
-  PencilSimple: (require('phosphor-react-native/src/icons/PencilSimple') as { PencilSimple: PhosphorIcon }).PencilSimple,
-  PiggyBank: (require('phosphor-react-native/src/icons/PiggyBank') as { PiggyBank: PhosphorIcon }).PiggyBank,
-  Pill: (require('phosphor-react-native/src/icons/Pill') as { Pill: PhosphorIcon }).Pill,
-  Plus: (require('phosphor-react-native/src/icons/Plus') as { Plus: PhosphorIcon }).Plus,
-  Receipt: (require('phosphor-react-native/src/icons/Receipt') as { Receipt: PhosphorIcon }).Receipt,
-  Shapes: (require('phosphor-react-native/src/icons/Shapes') as { Shapes: PhosphorIcon }).Shapes,
-  ShieldCheck: (require('phosphor-react-native/src/icons/ShieldCheck') as { ShieldCheck: PhosphorIcon }).ShieldCheck,
-  ShoppingCart: (require('phosphor-react-native/src/icons/ShoppingCart') as { ShoppingCart: PhosphorIcon }).ShoppingCart,
-  SignOut: (require('phosphor-react-native/src/icons/SignOut') as { SignOut: PhosphorIcon }).SignOut,
-  SprayBottle: (require('phosphor-react-native/src/icons/SprayBottle') as { SprayBottle: PhosphorIcon }).SprayBottle,
-  Storefront: (require('phosphor-react-native/src/icons/Storefront') as { Storefront: PhosphorIcon }).Storefront,
-  Sun: (require('phosphor-react-native/src/icons/Sun') as { Sun: PhosphorIcon }).Sun,
-  TShirt: (require('phosphor-react-native/src/icons/TShirt') as { TShirt: PhosphorIcon }).TShirt,
-  Tag: (require('phosphor-react-native/src/icons/Tag') as { Tag: PhosphorIcon }).Tag,
-  Taxi: (require('phosphor-react-native/src/icons/Taxi') as { Taxi: PhosphorIcon }).Taxi,
-  Ticket: (require('phosphor-react-native/src/icons/Ticket') as { Ticket: PhosphorIcon }).Ticket,
-  Train: (require('phosphor-react-native/src/icons/Train') as { Train: PhosphorIcon }).Train,
-  Trash: (require('phosphor-react-native/src/icons/Trash') as { Trash: PhosphorIcon }).Trash,
-  TrendUp: (require('phosphor-react-native/src/icons/TrendUp') as { TrendUp: PhosphorIcon }).TrendUp,
-  User: (require('phosphor-react-native/src/icons/User') as { User: PhosphorIcon }).User,
-  Users: (require('phosphor-react-native/src/icons/Users') as { Users: PhosphorIcon }).Users,
-  Wallet: (require('phosphor-react-native/src/icons/Wallet') as { Wallet: PhosphorIcon }).Wallet,
-  Warning: (require('phosphor-react-native/src/icons/Warning') as { Warning: PhosphorIcon }).Warning,
-  WarningCircle: (require('phosphor-react-native/src/icons/WarningCircle') as { WarningCircle: PhosphorIcon }).WarningCircle,
-  WifiHigh: (require('phosphor-react-native/src/icons/WifiHigh') as { WifiHigh: PhosphorIcon }).WifiHigh,
-  Wrench: (require('phosphor-react-native/src/icons/Wrench') as { Wrench: PhosphorIcon }).Wrench,
-  X: (require('phosphor-react-native/src/icons/X') as { X: PhosphorIcon }).X,
-};
-/* eslint-enable @typescript-eslint/no-require-imports */
-
+// Stored category names predate the icon kit. Keep both legacy alias tables when changing glyphs.
 const LEGACY: Record<string, string> = {"shape-outline": "shapes", "cart-outline": "cart-shopping", "storefront-outline": "store", "silverware-fork-knife": "utensils", "coffee-outline": "mug-saucer", "train-car": "train", "bus": "bus", "taxi": "taxi", "gas-station-outline": "gas-pump", "home-outline": "house", "home-city-outline": "city", "flash-outline": "bolt", "wifi": "wifi", "cellphone": "mobile-screen-button", "meter-gas-outline": "gauge-high", "car-outline": "car", "shield-car": "shield-halved", "heart-pulse": "heart-pulse", "pill": "pills", "stethoscope": "stethoscope", "movie-open-outline": "film", "party-popper": "champagne-glasses", "shopping-outline": "bag-shopping", "tshirt-crew-outline": "shirt", "laptop": "laptop", "gift-outline": "gift", "airplane": "plane", "book-open-variant": "book-open", "dumbbell": "dumbbell", "paw-outline": "paw", "paw": "paw", "baby-face-outline": "baby", "lotion-outline": "pump-soap", "receipt-text-outline": "receipt", "wallet-outline": "wallet", "piggy-bank-outline": "piggy-bank", "bank-outline": "building-columns", "gamepad-variant-outline": "gamepad", "dots-grid": "grip", "hammer-wrench": "screwdriver-wrench", "music-note-outline": "music", "cash-plus": "money-bill-trend-up", "cash-refund": "money-bill-transfer", "swap-horizontal": "right-left", "briefcase-outline": "briefcase", "chart-line": "chart-line", "account-cash-outline": "sack-dollar", "parking": "square-parking", "bank-transfer": "money-bill-transfer", "palette-outline": "palette", "school-outline": "graduation-cap", "shield-check-outline": "shield-halved", "heart-outline": "heart", "spray-bottle": "pump-soap", "file-document-outline": "file-lines", "dots-horizontal-circle-outline": "ellipsis", "beach": "umbrella-beach", "cellphone-marker": "mobile-screen-button", "account-heart-outline": "heart"};
 const ALIAS: Record<string, string> = {"arrow-in": "in", "cal": "cal", "cart-shopping": "basket", "mug-saucer": "cup", "gas-pump": "fuel", "mobile-screen-button": "phone", "gauge-high": "drop", "shield-halved": "shield", "heart-pulse": "heart", "pills": "pill", "stethoscope": "cross", "champagne-glasses": "drinks", "bag-shopping": "bag", "book-open": "book", "pump-soap": "soap", "piggy-bank": "savings", "building-columns": "bank", "grip": "grid", "shapes": "other", "screwdriver-wrench": "wrench", "money-bill-trend-up": "trend", "chart-line": "trend", "money-bill-transfer": "moved", "right-left": "moved", "sack-dollar": "sack", "brand:mobilepay": "wallet", "brand:spotify": "music", "brand:apple-music": "music", "brand:youtube-music": "music", "brand:youtube": "film", "brand:netflix": "film", "brand:steam": "gamepad", "brand:playstation": "gamepad", "brand:paypal": "wallet", "brand:google-pay": "wallet", "brand:apple-pay": "wallet", "brand:uber": "taxi", "brand:airbnb": "house", "brand:booking": "plane", "brand:ikea": "store", "brand:reddit": "phone", "brand:tiktok": "phone", "brand:visa": "wallet", "brand:mastercard": "wallet", "square-parking": "car", "palette": "other", "graduation-cap": "book", "file-lines": "receipt", "ellipsis": "grid", "umbrella-beach": "plane"};
-const PHOSPHOR: Record<string, keyof typeof I> = {"cycle": "ChartPieSlice", "list": "ListBullets", "budgets": "Gauge", "where": "ChartBar", "shared": "Users", "bank": "Bank", "profile": "User", "add": "Plus", "in": "ArrowDown", "out": "ArrowUp", "moved": "ArrowsLeftRight", "savings": "PiggyBank", "loan": "Hourglass", "owed": "HandCoins", "other": "Shapes", "basket": "ShoppingCart", "store": "Storefront", "utensils": "ForkKnife", "cup": "Coffee", "train": "Train", "bus": "Bus", "taxi": "Taxi", "car": "Car", "fuel": "GasPump", "house": "House", "city": "Buildings", "bolt": "Lightning", "wifi": "WifiHigh", "phone": "DeviceMobile", "drop": "Drop", "shield": "ShieldCheck", "cross": "FirstAidKit", "heart": "Heart", "pill": "Pill", "film": "FilmSlate", "drinks": "Champagne", "bag": "Bag", "shirt": "TShirt", "laptop": "Laptop", "gift": "Gift", "plane": "Airplane", "book": "Book", "dumbbell": "Barbell", "paw": "PawPrint", "baby": "Baby", "soap": "SprayBottle", "receipt": "Receipt", "wallet": "Wallet", "gamepad": "GameController", "grid": "DotsNine", "wrench": "Wrench", "music": "MusicNote", "trend": "TrendUp", "briefcase": "Briefcase", "sack": "Coins", "ticket": "Ticket", "back": "CaretLeft", "chev": "CaretRight", "down": "CaretDown", "search": "MagnifyingGlass", "filter": "Funnel", "edit": "PencilSimple", "trash": "Trash", "more": "DotsThree", "cal": "Calendar", "note": "Note", "swap": "ArrowsLeftRight", "split": "ArrowsSplit", "import": "DownloadSimple", "export": "Export", "camera": "Camera", "image": "Image", "signout": "SignOut", "undo": "ArrowCounterClockwise", "retry": "ArrowClockwise", "hint": "Lightbulb", "rule": "ListChecks", "tag": "Tag", "bell": "Bell", "lock": "Lock", "mail": "Envelope", "eye": "Eye", "link": "Link", "moon": "Moon", "sun": "Sun", "offline": "CloudSlash", "warn": "Warning", "error": "WarningCircle", "info": "Info", "done": "Check", "check": "Check", "close": "X", "clock": "Clock", "sync": "ArrowsClockwise"};
-
-/** The Phosphor icon for an icon name (an app meaning, or a category's stored name). Unknown names draw "other". */
-export const iconFor = (name: string | null | undefined): PhosphorIcon => {
-  const fa = LEGACY[name ?? ''] ?? name ?? '';
-  const key = PHOSPHOR[ALIAS[fa] ?? fa] ?? PHOSPHOR.other!;
-  return I[key];
+const ICONS: Readonly<Record<string, LucideIcon>> = {
+  cycle: ChartPie,
+  list: List,
+  budgets: Gauge,
+  where: ChartColumn,
+  shared: Users,
+  bank: Landmark,
+  profile: UserRound,
+  add: Plus,
+  in: ArrowDown,
+  out: ArrowUp,
+  moved: ArrowLeftRight,
+  savings: PiggyBank,
+  loan: Hourglass,
+  owed: HandCoins,
+  other: Shapes,
+  basket: ShoppingBasket,
+  store: Store,
+  utensils: Utensils,
+  cup: Coffee,
+  train: TrainFront,
+  bus: Bus,
+  taxi: CarTaxiFront,
+  car: Car,
+  fuel: Fuel,
+  house: House,
+  city: Building2,
+  bolt: Zap,
+  wifi: Wifi,
+  phone: Smartphone,
+  drop: Droplet,
+  shield: ShieldCheck,
+  cross: BriefcaseMedical,
+  heart: Heart,
+  pill: Pill,
+  film: Clapperboard,
+  drinks: Wine,
+  bag: ShoppingBag,
+  shirt: Shirt,
+  laptop: Laptop,
+  gift: Gift,
+  plane: Plane,
+  book: BookOpen,
+  dumbbell: Dumbbell,
+  paw: PawPrint,
+  baby: Baby,
+  soap: SprayCan,
+  receipt: Receipt,
+  wallet: Wallet,
+  gamepad: Gamepad2,
+  grid: Grid3x3,
+  wrench: Wrench,
+  music: Music,
+  trend: TrendingUp,
+  briefcase: Briefcase,
+  sack: Coins,
+  ticket: Ticket,
+  back: ChevronLeft,
+  chev: ChevronRight,
+  down: ChevronDown,
+  search: Search,
+  filter: Funnel,
+  edit: Pencil,
+  trash: Trash2,
+  more: Ellipsis,
+  cal: Calendar,
+  note: StickyNote,
+  swap: ArrowLeftRight,
+  split: Split,
+  import: Download,
+  export: Upload,
+  camera: Camera,
+  image: Image,
+  signout: LogOut,
+  undo: Undo2,
+  retry: RotateCw,
+  hint: Lightbulb,
+  rule: ListChecks,
+  tag: Tag,
+  bell: Bell,
+  lock: Lock,
+  mail: Mail,
+  eye: Eye,
+  link: Link,
+  moon: Moon,
+  sun: Sun,
+  offline: CloudOff,
+  warn: TriangleAlert,
+  error: CircleAlert,
+  info: Info,
+  done: Check,
+  check: Check,
+  close: X,
+  clock: Clock,
+  sync: RefreshCw,
+  key: KeyRound,
+  bike: Bike,
+  cart: ShoppingCart,
 };
+
+export function iconFor(name: string | null | undefined): LucideIcon {
+  const raw = name ?? '';
+  const legacy = Object.hasOwn(LEGACY, raw) ? LEGACY[raw] ?? raw : raw;
+  const key = Object.hasOwn(ALIAS, legacy) ? ALIAS[legacy] ?? legacy : legacy;
+  return (Object.hasOwn(ICONS, key) ? ICONS[key] : undefined) ?? Shapes;
+}

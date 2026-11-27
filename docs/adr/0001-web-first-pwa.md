@@ -2,7 +2,7 @@
 
 Cashflow becomes a web app that installs on the Home Screen as a PWA, built the way Ordly is: Next.js App Router on Vercel, a web app manifest served by a route, a small service worker, rendered icons and Apple meta tags. It keeps the same Supabase project and data. No more native builds or store releases.
 
-**Status:** accepted 2026-11-26 by the owner. The Expo app stays untouched and keeps shipping until the owner approves the switch to the rebuilt web app.
+**Status:** superseded by the owner on 2026-11-27. Cashflow is the native Aura app. The original decision follows for history.
 
 Why this way:
 

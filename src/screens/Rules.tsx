@@ -58,7 +58,7 @@ function RuleSheet({ m, rule, onClose }: { m: Model; rule: MerchantRuleRow | nul
       {!d.block && !topup ? (
         <>
           <T k="meta">Category</T>
-          <List>{options.map((o) => <Row key={o.id} selected={d.cat === o.id} lead={<Disc icon={o.icon} />} title={o.name} meta={o.parentId !== o.id ? o.parentName : undefined} end={d.cat === o.id ? <Icon name="check" weight="bold" /> : undefined} onPress={() => { set({ cat: o.id }); setE({ ...e, cat: undefined }); }} />)}</List>
+          <List>{options.map((o) => <Row key={o.id} selected={d.cat === o.id} lead={<Disc icon={o.icon} />} title={o.name} meta={o.parentId !== o.id ? o.parentName : undefined} end={d.cat === o.id ? <Icon name="check" strong /> : undefined} onPress={() => { set({ cat: o.id }); setE({ ...e, cat: undefined }); }} />)}</List>
         </>
       ) : null}
       {e.cat ? <T k="note" style={{ color: C.over }}>{e.cat}</T> : null}

@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/features/auth/AuthProvider';
 import type { TableName, Tables } from './types';
+import { qaScenario } from '@/dev/scenario';
 
 /**
  * The user's data, loaded the way the PWA loads it (web/lib/data/store.tsx): every table once per session,
@@ -151,8 +152,17 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
+export function FixtureDataProvider({ children, tables }: { children: React.ReactNode; tables: Tables }): React.JSX.Element {
+  const value = useMemo<Store>(() => ({
+    userId: null, tables, status: 'ready', error: null, loadedAt: null, syncing: false,
+    reload: () => Promise.resolve(), sync: () => Promise.resolve(), patch: () => undefined,
+  }), [tables]);
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
 /** Runs one write; throws a readable error; refreshes the tables it touched. */
 export async function write(store: Store, tables: TableName[], run: () => PromiseLike<{ error: { message: string; code?: string } | null }>): Promise<void> {
+  if (qaScenario()) throw new Error('These are read-only examples.');
   const { error } = await run();
   if (error) {
     if (error.code === '23503') throw new Error('It’s still in use, so it can’t be deleted.');

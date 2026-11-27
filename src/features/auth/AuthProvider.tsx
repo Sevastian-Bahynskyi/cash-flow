@@ -5,6 +5,7 @@ import { Platform } from 'react-native';
 import { supabase, supabaseAuthUrl, supabaseUrl } from '@/lib/supabase';
 import { runDetached } from '@/lib/async';
 import { reportDevError } from '@/lib/errors';
+import { qaScenario } from '@/dev/scenario';
 import type { Session } from '@supabase/supabase-js';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -56,9 +57,10 @@ const buildRedirectTo = (nextPath?: string): string => {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !qaScenario());
 
   useEffect(() => {
+    if (qaScenario()) return;
     let mounted = true;
 
     runDetached(
@@ -89,6 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signInWithGoogle = useCallback(async (nextPath?: string): Promise<void> => {
+    if (qaScenario()) return;
     const redirectTo = buildRedirectTo(nextPath);
 
     if (Platform.OS === 'web') {
@@ -148,6 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async (): Promise<void> => {
+    if (qaScenario()) return;
     const { error } = await supabase.auth.signOut();
     if (error) {
       reportDevError('auth.signOut', error);

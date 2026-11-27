@@ -51,10 +51,13 @@ function Inbox({ m }: { m: Model }) {
 }
 
 function Transactions({ m }: { m: Model }) {
-  const params = useLocalSearchParams<{ cat?: string; shared?: string }>();
+  const params = useLocalSearchParams<{ cat?: string; shared?: string; from?: string; until?: string; cycle?: string }>();
   const open = useDetail();
   const store = useStore();
-  const catParam = params.cat ?? null;
+  const catParam = params.cat === 'uncategorized' || (params.cat && m.byId.has(params.cat)) ? params.cat : undefined;
+  const validDate = (value: string | undefined): string | undefined => value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : undefined;
+  const from = validDate(params.from);
+  const until = validDate(params.until);
   const [filter, setFilter] = useState<Filter>(params.shared === '1' ? 'shared' : 'all');
   const [q, setQ] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
@@ -62,12 +65,12 @@ function Transactions({ m }: { m: Model }) {
 
   const scoped = useMemo(() => {
     let L = [...m.tx].reverse();
-    if (catParam) L = L.filter((t) => m.parentOf(t.category_id)?.id === catParam && !t.is_shared_topup);
+    if (catParam) L = L.filter((t) => (!from || t.occurred_on >= from) && (!until || t.occurred_on < until) && m.spendingIn(t, catParam) > 0);
     if (filter === 'mine') L = L.filter((t) => !t.shared && !t.is_shared_topup);
     if (filter === 'shared') L = L.filter((t) => t.shared || t.is_shared_topup);
     if (q.trim()) L = L.filter((t) => matches(t, m, q));
     return L;
-  }, [m, catParam, filter, q]);
+  }, [m, catParam, from, until, filter, q]);
 
   // This cycle first; older cycles one at a time. Searching shows every match.
   const groups = useMemo(() => {
@@ -82,12 +85,16 @@ function Transactions({ m }: { m: Model }) {
     return out;
   }, [m, scoped]);
   const visible = q.trim() || catParam ? groups : groups.slice(0, shown);
-  const total = scoped.reduce((a, t) => a + m.mine(t), 0);
-  const catName = catParam ? m.byId.get(catParam)?.name : null;
+  const total = scoped.reduce((a, t) => a + (catParam ? m.spendingIn(t, catParam) : m.mine(t)), 0);
+  const catName = catParam === 'uncategorized' ? 'Uncategorized' : catParam ? m.byId.get(catParam)?.name : null;
+  const cycle = m.cycles.find((item) => item.id === params.cycle) ?? m.current;
+  const heading = catParam && from
+    ? (until ? `${shortDate(from)} – ${shortDate(addDays(until, -1))}` : `Since ${shortDate(from)}`)
+    : cycle ? `${cycle.name} cycle, ${shortDate(cycle.startOn)} – ${shortDate(cycle.endInclusive)}` : undefined;
 
   return (
     <Screen onRefresh={store.sync} header={
-      <Header title={catName ?? 'Activity'} back={Boolean(catParam)} sub={m.current ? `${m.current.name} cycle, ${shortDate(m.current.startOn)} – ${shortDate(m.current.endInclusive)}` : undefined}
+      <Header title={catName ?? 'Activity'} back={Boolean(catParam)} sub={heading}
         right={<IconBtn name={searchOpen ? 'close' : 'search'} label="Search" onPress={() => { setSearchOpen((s) => !s); if (searchOpen) setQ(''); }} />} />
     }>
       {!catParam ? <SyncLine /> : null}
@@ -104,10 +111,11 @@ function Transactions({ m }: { m: Model }) {
       ) : null}
       {!m.tx.length ? <Panel><Empty title="No transactions yet" sub="What you spend, what comes in and what you move to the pot arrives from your bank, day by day." /></Panel>
         : !scoped.length ? <Panel><Empty title="Nothing matches" sub="Try another name or a date like 24.11." /></Panel>
+        : catParam && from ? <DayList rows={scoped} m={m} onOpen={open} categoryId={catParam} />
         : visible.map((g, i) => (
           <View key={g.key}>
             {i > 0 || q.trim() ? <Sec>{g.title}</Sec> : null}
-            {g.rows.length ? <DayList rows={g.rows} m={m} onOpen={open} /> : <Panel><Empty title="Nothing yet this cycle" /></Panel>}
+            {g.rows.length ? <DayList rows={g.rows} m={m} onOpen={open} categoryId={catParam} /> : <Panel><Empty title="Nothing yet this cycle" /></Panel>}
           </View>
         ))}
       {!q.trim() && !catParam && groups.length > shown ? <Btn kind="ghost" label="Load older" onPress={() => setShown((s) => s + 1)} /> : null}

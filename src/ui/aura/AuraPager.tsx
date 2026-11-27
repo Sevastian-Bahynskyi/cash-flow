@@ -1,13 +1,14 @@
-import type { ReactNode } from 'react';
-import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { useRef, useState, type ReactNode } from 'react';
+import { type FlatList, type NativeScrollEvent, type NativeSyntheticEvent, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import Animated, { useAnimatedScrollHandler, useAnimatedStyle, useDerivedValue, useSharedValue, interpolate, Extrapolation } from 'react-native-reanimated';
+import Animated, { useAnimatedScrollHandler, useAnimatedStyle, useDerivedValue, useSharedValue, useReducedMotion, interpolate, Extrapolation } from 'react-native-reanimated';
 import { Aura } from './Aura';
 import { MOODS, type Mood } from './moods';
 import { auraFonts, bigAmount } from './type';
 
 export type AuraPage = {
   key: string;
+  navigationLabel?: string;
   mood: Mood;
   label: string;
   /** Shown left of the label, e.g. the shared mark. */
@@ -26,46 +27,98 @@ type Props = {
   /** Drawn over the aura at the top, e.g. the screen header. */
   header?: ReactNode;
   unit?: string;
+  navigation?: { currentIndex: number; onChange: (page: AuraPage) => void };
 };
 
 /** A full-width pager of money screens over one aura that morphs with the swipe. */
-export function AuraPager({ pages, height, header, unit = 'kr.' }: Props) {
-  const { width } = useWindowDimensions();
-  const x = useSharedValue(0);
-  const position = useDerivedValue(() => (width > 0 ? x.value / width : 0));
+export function AuraPager({ pages, height, header, unit = 'kr.', navigation }: Props): React.JSX.Element {
+  const { width: screenWidth } = useWindowDimensions();
+  const [width, setWidth] = useState(screenWidth);
+  const initial = navigation?.currentIndex ?? 0;
+  const [index, setIndex] = useState(initial);
+  const [firstDot, setFirstDot] = useState(Math.max(initial - 1, 0));
+  const list = useRef<FlatList<AuraPage>>(null);
+  const active = useRef(initial);
+  const reduce = useReducedMotion();
+  const x = useSharedValue(initial);
+  const position = useDerivedValue(() => x.value);
   const onScroll = useAnimatedScrollHandler((event) => {
-    x.value = event.contentOffset.x;
+    if (width) x.value = event.contentOffset.x / width;
   });
 
+  const select = (next: number): void => {
+    const page = pages[next];
+    if (!page || next === active.current) return;
+    active.current = next;
+    setIndex(next);
+    setFirstDot((first) => Math.min(first, Math.max(0, next - 1)));
+    navigation?.onChange(page);
+    Haptics.selectionAsync().catch(() => undefined);
+  };
+  const settle = (event: NativeSyntheticEvent<NativeScrollEvent>): void => {
+    select(Math.round(event.nativeEvent.contentOffset.x / width));
+  };
+
+  const dotStart = Math.max(firstDot, Math.min(index - 3, pages.length - 7));
+  const dotEnd = Math.min(pages.length, dotStart + 7);
   return (
-    <View style={{ height }}>
+    <View style={{ height }} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
       <Aura moods={pages.map((page) => page.mood)} position={position} style={StyleSheet.absoluteFill} />
-      <Animated.ScrollView
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        onScroll={onScroll}
-        scrollEventThrottle={16}
-        onMomentumScrollEnd={() => {
-          Haptics.selectionAsync().catch(() => undefined);
-        }}
-      >
-        {pages.map((page, index) => (
-          <AuraPageView key={page.key} page={page} width={width} height={height} unit={unit} index={index} position={position} />
-        ))}
-      </Animated.ScrollView>
-      {pages.length > 1 ? <Dots count={pages.length} position={position} ink={MOODS[pages[0]!.mood].ink} /> : null}
+      {pages.length === 1 && pages[0] ? (
+        <AuraPageView page={pages[0]} width={width} height={height} unit={unit} index={0} position={position} compact={!header} />
+      ) : (
+        <Animated.FlatList
+          ref={list}
+          data={pages}
+          renderItem={({ item, index: i }) => (
+            <View accessibilityElementsHidden={i !== index} importantForAccessibility={i === index ? 'auto' : 'no-hide-descendants'}>
+              <AuraPageView page={item} width={width} height={height} unit={unit} index={i} position={position} />
+            </View>
+          )}
+          keyExtractor={(page) => page.key}
+          getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
+          initialScrollIndex={initial}
+          initialNumToRender={3}
+          windowSize={5}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
+          onMomentumScrollEnd={settle}
+        />
+      )}
+      {pages.length > 1 ? (
+        <View style={styles.dots}>
+          {pages.slice(dotStart, dotEnd).map((page, i) => {
+            const target = dotStart + i;
+            return (
+              <Pressable key={page.key} style={styles.dotButton} accessibilityRole="button"
+                accessibilityLabel={page.navigationLabel ?? page.label} accessibilityState={{ selected: target === index }}
+                onPress={() => {
+                  if (target === active.current) return;
+                  list.current?.scrollToOffset({ offset: target * width, animated: !reduce });
+                  if (reduce) x.value = target;
+                  select(target);
+                }}>
+                <Dot i={target} position={position} ink={MOODS[pages[index]?.mood ?? 'calm'].ink} />
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
       {header ? <View style={styles.header} pointerEvents="box-none">{header}</View> : null}
     </View>
   );
 }
 
-function AuraPageView({ page, width, height, unit, index, position }: {
+function AuraPageView({ page, width, height, unit, index, position, compact = false }: {
+  compact?: boolean;
   page: AuraPage; width: number; height: number; unit: string; index: number; position: ReturnType<typeof useDerivedValue<number>>;
 }) {
   const ink = MOODS[page.mood].ink;
   const amount = `${page.sign ?? ''}${bigAmount(page.amountMinor)}`;
-  const size = Math.min(width * 0.32, 140);
+  const size = Math.min(width * (compact ? 0.26 : 0.32), 140);
   // the number softens and drifts as it leaves, like the prototype
   const leave = useAnimatedStyle(() => {
     const d = Math.abs(position.value - index);
@@ -76,8 +129,8 @@ function AuraPageView({ page, width, height, unit, index, position }: {
   });
 
   return (
-    <View style={[styles.page, { width, height }]} accessible accessibilityLabel={`${page.label}. ${amount} ${unit}. ${page.line}. ${page.subline ?? ''}`}>
-      <Animated.View style={[styles.mid, leave]}>
+    <View style={[styles.page, compact && styles.compact, { width, height }]} accessible accessibilityLabel={`${page.label}. ${amount} ${unit}. ${page.line}. ${page.subline ?? ''}`}>
+      <Animated.View style={[styles.mid, compact && { marginTop: 0 }, leave]}>
         <View style={styles.labelRow}>
           {page.labelMark}
           <Text style={[styles.label, { color: ink }]}>{page.label}</Text>
@@ -116,14 +169,6 @@ function AuraPageView({ page, width, height, unit, index, position }: {
   );
 }
 
-function Dots({ count, position, ink }: { count: number; position: ReturnType<typeof useDerivedValue<number>>; ink: string }) {
-  return (
-    <View style={styles.dots} pointerEvents="none">
-      {Array.from({ length: count }, (_, i) => <Dot key={i} i={i} position={position} ink={ink} />)}
-    </View>
-  );
-}
-
 function Dot({ i, position, ink }: { i: number; position: ReturnType<typeof useDerivedValue<number>>; ink: string }) {
   const style = useAnimatedStyle(() => {
     const near = Math.max(0, 1 - Math.abs(position.value - i));
@@ -135,6 +180,7 @@ function Dot({ i, position, ink }: { i: number; position: ReturnType<typeof useD
 const styles = StyleSheet.create({
   header: { position: 'absolute', top: 0, left: 0, right: 0 },
   page: { justifyContent: 'center', paddingHorizontal: 28, paddingTop: 96, paddingBottom: 48 },
+  compact: { paddingTop: 20, paddingBottom: 20 },
   mid: { alignItems: 'center', marginTop: -24 },
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
   label: { fontFamily: auraFonts.label, fontSize: 17, opacity: 0.88 },
@@ -149,6 +195,7 @@ const styles = StyleSheet.create({
   barLabel: { fontFamily: auraFonts.bodyStrong, fontSize: 13, opacity: 0.92 },
   track: { height: 8, borderRadius: 8, overflow: 'hidden' },
   fill: { height: '100%', borderRadius: 8 },
-  dots: { position: 'absolute', bottom: 18, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 7 },
+  dots: { position: 'absolute', bottom: 4, alignSelf: 'center', flexDirection: 'row', justifyContent: 'center' },
+  dotButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   dot: { height: 7, borderRadius: 7 },
 });

@@ -17,17 +17,15 @@ Scope, in the owner's words: track my money, create budgets, see whether I follo
 
 Rules that must not drift:
 
-- **Fastest add path:** amount → category → name → save. Amount field focused with the numeric keypad on open. Date, note and split stay off the happy path.
-- Category mandatory for expenses. Income is a separate type.
-- **Salary cycles** drive analytics and budgets, not calendar months (`src/lib/cycles.ts`).
+- **Transactions come from bank sync.** Keep category corrections and split spending easy. Treat income, transfers and spending as separate movements.
+- **Salary cycles** drive analytics and budgets, not calendar months (`src/core/domain/cycles.ts`).
 - **Shared fairness** is inferred from top-ups and shared spending, never a typed ratio.
 - **AI only assists.** Suggestions never block saving and are never the headline.
 - Single base currency per account. Money is integer minor units end to end.
 
 ## Stack and direction
 
-- **Today:** Expo 54 / React Native, Expo Router, TypeScript strict, Supabase JS v2; web export on Vercel.
-- **Decided:** web-first PWA like Ordly (`docs/adr/0001-web-first-pwa.md`). The redesign runs in stages (`docs/redesign/`). The Expo app stays untouched until the owner approves the switch; no new native builds or store releases.
+- **Cashflow is the native Aura app.** Expo 54 / React Native, Expo Router, TypeScript strict, Supabase JS v2. Use the [iPhone fixture workflow](docs/agents/ios-verification.md) for UI changes.
 - pnpm only (`pnpm-lock.yaml`). Run `pnpm lockfile:check` before a PR. Never commit `package-lock.json` or `yarn.lock`.
 
 ## Engineering
@@ -36,7 +34,7 @@ Rules that must not drift:
 - Functional components and hooks only. async/await only.
 - Flat, obvious structure. Local state first; shared state only when distant screens need it.
 - Direct implementation over abstraction: no repository or service layer, event bus, generic form engine or "finance framework". Add a file only when it removes real duplication.
-- Controlled inputs on the add path. Category search instant from prefetched data. No expensive work per keystroke.
+- Controlled inputs on edit flows. Category search instant from prefetched data. No expensive work per keystroke.
 - Errors handled explicitly: never an empty `catch` or an ignored `error`. Blocking flows show a clear inline error; a typed amount is never lost.
 - Every user-visible fetch has loading, empty and error states.
 - Animation never delays input.
@@ -48,11 +46,10 @@ Load only what the task needs; these load on their own when the task matches:
 | Task | Skill |
 |---|---|
 | Any UI: a screen, flow, component, prototype, chart, dashboard, report, money copy, polish, design question | `ui-ux` (`.agents/skills/ui-ux/SKILL.md`) |
-| The web app's PWA shell: manifest, service worker, icons, Apple tags, offline, install, deploy | `web-pwa` |
-| Next.js and Vercel APIs | host skills `vercel:nextjs`, `vercel:react-best-practices`; installed Next docs over memory |
 | SQL, schema, RLS, indexes, query performance | `supabase-postgres-best-practices` |
 | Splitting a diff into commits, when asked | `commit-slices` |
-| Changes to the Expo app while it still ships | `react-native` (removed once the web app replaces it) |
+| Native implementation and navigation | `react-native` |
+| Simulator verification, state fixtures or screenshots | [iPhone verification](docs/agents/ios-verification.md) |
 
 `frontend-design` and `dataviz` may help explore and draw; they never override `ui-ux`.
 
@@ -67,8 +64,7 @@ Load only what the task needs; these load on their own when the task matches:
 
 ## Git and deploy
 
-- `main` is production: `.github/workflows/vercel-deploy.yml` deploys every push to it, and a preview for every PR.
-- Work on a branch, commit in small steps, push, open a PR. Merge to `main` only when the owner says so.
+- Start from `main`, commit in small steps, push, and open a PR to `main`. Merge when the owner says so.
 - The owner's uncommitted changes are theirs: never discard, stash away or commit them.
 
 ## Design work
