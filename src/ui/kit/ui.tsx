@@ -251,7 +251,7 @@ export function Sheet({ open, onClose, title, right, children }: { open: boolean
   );
 }
 
-/** Spent against a budget: white within it with a tick at today; over it, grey to the line and the over part in coral. */
+/** Spent against a budget: white within it, amber when ahead of the days; over it, grey to the line and the over part in coral. */
 export function Meter({ spent, amount, share, height = 8, color }: { spent: number; amount: number; share: number; height?: number; color?: string }) {
   if (!amount) return null;
   const s = budgetState(spent, amount, share);
@@ -264,10 +264,7 @@ export function Meter({ spent, amount, share, height = 8, color }: { spent: numb
           <Fill width={pct(1 - amount / spent)} style={{ left: pct(amount / spent), backgroundColor: C.over, borderRadius: height }} />
         </>
       ) : (
-        <>
-          <Fill width={pct(spent / amount)} style={{ backgroundColor: color ?? (s === 'ahead' ? C.ahead : C.bar), borderRadius: height }} />
-          <View style={[st.today, { left: pct(share), height: height + 6, top: -3 }]} />
-        </>
+        <Fill width={pct(spent / amount)} style={{ backgroundColor: color ?? (s === 'ahead' ? C.ahead : C.bar), borderRadius: height }} />
       )}
     </View>
   );
@@ -344,7 +341,6 @@ export const st = StyleSheet.create({
   sheetBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingTop: 10, paddingBottom: 6 },
   meter: { backgroundColor: C.track, overflow: 'visible', position: 'relative', marginTop: 6 },
   meterFill: { position: 'absolute', top: 0, bottom: 0, left: 0 },
-  today: { position: 'absolute', width: 2, marginLeft: -1, backgroundColor: C.ink3, borderRadius: 1 },
   pill: { fontFamily: F.strong, fontSize: 14, fontVariant: ['tabular-nums'] },
   toast: { position: 'absolute', left: 16, right: 16, backgroundColor: C.ink, borderRadius: 18, paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   toastText: { fontFamily: F.body, fontSize: 15, color: C.bg, flexShrink: 1 },
