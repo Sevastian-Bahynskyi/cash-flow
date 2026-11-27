@@ -1,15 +1,17 @@
-// AI for leftovers only: rows the deterministic rungs could not place. Groq, same model as suggest-category.
+// AI for leftovers only: rows the deterministic rungs could not place. OpenRouter (OPENROUTER_API_KEY).
 // Sure (>= 0.8) answers apply; unsure ones apply as the best guess and go to the Inbox (inside its 30-day window).
 // AI never blocks: on any failure the deterministic label (no category, needs review) is returned.
 import { classify, inboxFrom, movementFor, type BankTx, type Ctx, type Label } from "./engine.ts";
 
-const MODEL = "openai/gpt-oss-120b";
+// Picked on the owner's own corrections (27 Nov 2026): DeepSeek 109/144 right, GLM Flash 100, Jev 92, gpt-oss-120b 61.
+export const MODEL = "deepseek/deepseek-v4.1-flash";
+const FALLBACK = "~z-ai/glm-flash-latest"; // OpenRouter tries it when the first model fails or is rate-limited
 const APPLY_FROM = 0.8;
-const BATCH = 25;
-const TIMEOUT_MS = 8000;
+const BATCH = 12;
+const TIMEOUT_MS = 60000;
 
 type AiResult = { id: string; categoryId: string; name: string; reason: string; confidence: number };
-type GroqPayload = { choices?: { message?: { content?: string } }[] };
+type ChatPayload = { choices?: { message?: { content?: string } }[] };
 
 const clamp = (v: number): number => Math.max(0, Math.min(1, v));
 const str = (v: unknown, max: number): string => (typeof v === "string" ? v.trim().replace(/\s+/g, " ").slice(0, max) : "");
@@ -59,7 +61,7 @@ export const scrubber = (ctx: Ctx): ((text: string | null) => string) => {
   };
 };
 
-const prompt = (ctx: Ctx, txs: BankTx[], labels: Map<string, Label>): string => {
+export const prompt = (ctx: Ctx, txs: BankTx[], labels: Map<string, Label>): string => {
   const byId = new Map(ctx.categories.map((c) => [c.id, c]));
   const scrub = scrubber(ctx);
   const categories = ctx.categories
@@ -92,28 +94,31 @@ const prompt = (ctx: Ctx, txs: BankTx[], labels: Map<string, Label>): string => 
   ].join("\n\n");
 };
 
-const callGroq = async (key: string, body: string): Promise<string | null> => {
-  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+export const callModel = async (key: string, body: string, model = MODEL): Promise<string | null> => {
+  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
     body: JSON.stringify({
-      model: MODEL,
+      models: [...new Set([model, FALLBACK])],
       temperature: 0,
-      max_tokens: 2000,
+      // a short answer per row; the cap leaves room for reasoning models
+      max_tokens: 8000,
+      reasoning: { effort: "low" },
+      response_format: { type: "json_object" },
       messages: [{ role: "system", content: "Return strict JSON only." }, { role: "user", content: body }],
     }),
     signal: AbortSignal.timeout(TIMEOUT_MS),
   });
   if (!response.ok) {
-    console.error("[classify/ai] Groq request failed", { status: response.status });
+    console.error("[classify/ai] model request failed", { status: response.status });
     return null;
   }
-  const payload = (await response.json()) as GroqPayload;
+  const payload = (await response.json()) as ChatPayload;
   return payload.choices?.[0]?.message?.content ?? null;
 };
 
 /** Labels for every given row; only rows without a deterministic category are sent to the model. */
-export async function aiLabel(ctx: Ctx, txs: BankTx[], key = Deno.env.get("GROQ_API_KEY")): Promise<Map<string, Label>> {
+export async function aiLabel(ctx: Ctx, txs: BankTx[], key = Deno.env.get("OPENROUTER_API_KEY")): Promise<Map<string, Label>> {
   const labels = classify(ctx, txs);
   const leftovers = txs.filter((t) => {
     const l = labels.get(t.id);
@@ -127,9 +132,9 @@ export async function aiLabel(ctx: Ctx, txs: BankTx[], key = Deno.env.get("GROQ_
     const batch = leftovers.slice(i, i + BATCH);
     let text: string | null = null;
     try {
-      text = await callGroq(key, prompt(ctx, batch, labels));
+      text = await callModel(key, prompt(ctx, batch, labels));
     } catch (error) {
-      console.error("[classify/ai] Groq error", error instanceof Error ? error.message : String(error));
+      console.error("[classify/ai] model error", error instanceof Error ? error.message : String(error));
     }
     if (!text) continue;
     const txById = new Map(batch.map((t) => [t.id, t]));
