@@ -27,14 +27,14 @@ export function auraPages(m: Model): AuraPage[] {
   if (b.list.length) {
     const mood = moodOf(b.left, b.used, b.total, share);
     pages.unshift({
-      key: 'cycle', mood, label: `${c.name} cycle`, amountMinor: b.left,
+      key: 'cycle', mood, label: 'Left to spend', amountMinor: b.left,
       line: mood === 'over' ? 'Over your budgets.' : mood === 'ahead' ? 'Spending faster than the days.' : 'Calm. You are under pace.',
       subline: daysLine,
       bars: [{ label: 'Money used', share: b.total ? b.used / b.total : 0 }, { label: 'Days gone', share }],
     });
   } else {
     const left = b.income - b.allMine;
-    pages.unshift({ key: 'cycle', mood: left < 0 ? 'over' : 'calm', label: `${c.name} cycle`, amountMinor: left, line: left < 0 ? 'More out than in so far.' : 'In minus your spending.', subline: daysLine, bars: [{ label: 'Days gone', share }] });
+    pages.unshift({ key: 'cycle', mood: left < 0 ? 'over' : 'calm', label: 'In minus your spending', amountMinor: left, line: left < 0 ? 'More out than in so far.' : 'In minus your spending.', subline: daysLine, bars: [{ label: 'Days gone', share }] });
   }
 
   const rank: Record<Mood, number> = { over: 0, ahead: 1, calm: 2, shared: 3, pay: 3 };

@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { StyleProp, ViewStyle } from 'react-native';
+import { View, type StyleProp, type ViewStyle } from 'react-native';
 import { Canvas, Fill, Shader, useClock } from '@shopify/react-native-skia';
 import { useDerivedValue, useReducedMotion, useSharedValue, type SharedValue } from 'react-native-reanimated';
 import { auraEffect } from './shader';
@@ -48,11 +48,14 @@ export function Aura({ moods, position, style }: Props) {
     };
   });
 
+  // Size comes from layout, not Canvas onSize: Skia 2.2.12 reads the native view in onSize before it exists and crashes.
   return (
-    <Canvas style={style} onSize={size}>
-      <Fill>
-        <Shader source={auraEffect} uniforms={uniforms} />
-      </Fill>
-    </Canvas>
+    <View style={style} onLayout={(e) => { size.value = { width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height }; }} pointerEvents="none">
+      <Canvas style={{ flex: 1 }}>
+        <Fill>
+          <Shader source={auraEffect} uniforms={uniforms} />
+        </Fill>
+      </Canvas>
+    </View>
   );
 }
