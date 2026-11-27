@@ -1,3 +1,1 @@
-import HomeScreen from '@/features/home/HomeScreen';
-
-export default HomeScreen;
+export { default } from '@/screens/Cycle';
