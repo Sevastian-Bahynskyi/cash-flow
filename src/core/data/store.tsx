@@ -72,7 +72,7 @@ const LOAD: { [K in TableName]: (uid: string) => Promise<Tables[K]> } = {
     if (error) throw new Error(error.message);
     return data ?? [];
   },
-  transaction_splits: () => all((a, b) => sb.from('transaction_splits').select('id,user_id,transaction_id,category_id,amount_minor,note,created_at').order('created_at').order('id').range(a, b)),
+  transaction_splits: () => all((a, b) => sb.from('transaction_splits').select('id,user_id,transaction_id,category_id,amount_minor,shared,note,created_at').order('created_at').order('id').range(a, b)),
   trips: () => all((a, b) => sb.from('trips').select('id,user_id,name,country_iso,start_on,end_on,created_at').order('start_on', { ascending: false }).order('id').range(a, b)),
   merchant_places: () => all((a, b) => sb.from('merchant_places').select('key,country_iso,city,lat,lng,online').order('key').range(a, b)),
   merchant_logos: () => all((a, b) => sb.from('merchant_logos').select('key,path').not('path', 'is', null).order('key').range(a, b)),

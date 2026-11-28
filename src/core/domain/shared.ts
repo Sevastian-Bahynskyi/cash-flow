@@ -167,13 +167,21 @@ export const shareForCycle = (rows: readonly ShareRow[], cycle: ShareSpan, today
   return { ratio: 0.5, source: 'default', meTopupMinor: 0, totalTopupMinor: 0 };
 };
 
+/** My share of joint spending on a day: that day's cycle's share, or half outside every cycle. */
+export const shareOn = (rows: readonly ShareRow[], cycles: readonly ShareSpan[], today: string): ((day: string) => number) => {
+  const shares = new Map(cycles.map((c) => [c.id, shareForCycle(rows, c, today).ratio]));
+  return (day) => {
+    const c = cycles.find((x) => day >= x.startOn && (x.endOnExclusive === null || day < x.endOnExclusive));
+    return c ? shares.get(c.id) ?? 0.5 : 0.5;
+  };
+};
+
 /**
  * What each expense costs me, in minor units: my share of a joint expense, nothing for top-ups,
  * own moves, ignored or void rows, the full amount otherwise. Rows outside every cycle use the default share.
  */
 export const computeMyCostByTransactionId = (rows: readonly ShareRow[], cycles: readonly ShareSpan[], today: string): Map<string, number> => {
-  const shares = new Map(cycles.map((c) => [c.id, shareForCycle(rows, c, today).ratio]));
-  const cycleOf = (day: string): ShareSpan | undefined => cycles.find((c) => day >= c.startOn && (c.endOnExclusive === null || day < c.endOnExclusive));
+  const ratioOn = shareOn(rows, cycles, today);
   const out = new Map<string, number>();
   for (const r of rows) {
     if (r.kind !== 'expense' || !counts(r) || r.is_shared_topup || NOT_SPENDING.has(r.movement ?? '')) {
@@ -184,8 +192,7 @@ export const computeMyCostByTransactionId = (rows: readonly ShareRow[], cycles: 
       out.set(r.id, r.amount_minor);
       continue;
     }
-    const c = cycleOf(r.occurred_on);
-    out.set(r.id, Math.round(r.amount_minor * (c ? shares.get(c.id) ?? 0.5 : 0.5)));
+    out.set(r.id, Math.round(r.amount_minor * ratioOn(r.occurred_on)));
   }
   return out;
 };

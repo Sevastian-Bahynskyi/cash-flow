@@ -12,7 +12,7 @@ import { dayLabel, kr, minorToInput, parseAmount, shortDate, todayYmd } from '@/
 import { SharedRing } from '@/ui/aura/SharedRing';
 import type { CategoryOption } from '@/core/domain/categories-types';
 import { budgetColor, C, F } from './theme';
-import { Btn, Disc, Divider, Empty, Field, Icon, List, outcome, Panel, Row, Sec, Sheet, SheetHero, T, useToast } from './ui';
+import { Btn, Disc, Divider, Empty, Field, Icon, List, outcome, Panel, Row, Sec, Seg, Sheet, SheetHero, T, useToast } from './ui';
 import { countryName, flag } from '@/core/domain/trips';
 import { DebtSheet, LinkToDebt, debtTitle } from '@/screens/Debts';
 
@@ -27,15 +27,14 @@ export const WHO_LABEL: Record<Who, string> = { none: 'Yours', shared: `Shared w
 function LogoDisc({ uri, icon, color, children }: { uri: string; icon: string; color: string; children?: ReactNode }) {
   const [failed, setFailed] = useState(false);
   if (failed) return <Disc icon={icon} color={color}>{children}</Disc>;
-  const ring = Boolean(children);
-  const logo = ring ? 34 : 40, badge = ring ? 18 : 24, at = ring ? 20 : 22;
   return (
     <View style={{ width: 40, height: 40 }}>
+      {/* the shared ring goes first, so the logo and the category badge sit on top of it */}
       {children}
       {/* logos are drawn for white pages */}
-      <Image source={{ uri }} onError={() => setFailed(true)} accessibilityIgnoresInvertColors style={{ position: 'absolute', left: (40 - logo) / 2, top: (40 - logo) / 2, width: logo, height: logo, borderRadius: logo / 2, backgroundColor: '#fff' }} />
-      <View style={{ position: 'absolute', left: at, top: at, width: badge, height: badge, borderRadius: badge / 2, backgroundColor: C.surface2, borderWidth: ring ? 1.5 : 2, borderColor: C.surface, alignItems: 'center', justifyContent: 'center' }}>
-        <Icon name={icon} size={ring ? 10 : 13} color={color} />
+      <Image source={{ uri }} onError={() => setFailed(true)} accessibilityIgnoresInvertColors style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#fff' }} />
+      <View style={{ position: 'absolute', left: 22, top: 22, width: 24, height: 24, borderRadius: 12, backgroundColor: C.surface2, borderWidth: 2, borderColor: C.surface, alignItems: 'center', justifyContent: 'center' }}>
+        <Icon name={icon} size={13} color={color} />
       </View>
     </View>
   );
@@ -55,13 +54,15 @@ export function TxRow({ t, m, onOpen, current, categoryId, scope }: { t: Transac
   } else if (t.kind === 'income') {
     sub = (meta?.name ?? 'Income') + foreign; amount = `+${kr(t.amount_minor)}`; color = C.in; small = small ?? 'In';
   } else {
-    sub = (meta?.name ?? 'Category') + foreign; amount = kr(t.amount_minor);
+    const more = m.splitsOf.get(t.id)?.length ?? 0;
+    sub = (meta?.name ?? 'Category') + (more ? ` and ${more} more` : '') + foreign; amount = kr(t.amount_minor);
     const category = categoryId ? m.byId.get(categoryId) : undefined;
     const parent = m.parentOf(categoryId ?? t.category_id);
     if (parent) discInk = budgetColor(parent);
     if (categoryId) {
       sub = category?.name ?? 'Uncategorized';
       amount = kr(m.spendingIn(t, categoryId, scope));
+      if (more) small = small ?? `of ${kr(t.amount_minor)}`;
       icon = category?.icon ?? 'other';
     }
   }
@@ -270,35 +271,54 @@ function CategoryPick({ t, m, onClose }: { t: TransactionRow; m: Model; onClose:
   );
 }
 
-function SplitSheet({ t, m, onClose }: { t: TransactionRow; m: Model; onClose: () => void }) {
+/** One purchase cut into parts: each part has its own category and is yours or shared. The rest stays on the purchase's category. */
+function PartsSheet({ t, m, onClose }: { t: TransactionRow; m: Model; onClose: () => void }) {
   const store = useStore();
   const toast = useToast();
   const parts = m.splitsOf.get(t.id) ?? [];
-  const used = parts.reduce((a, x) => a + x.amount_minor, 0);
+  const [edit, setEdit] = useState<string | null>(null);
+  const editing = parts.find((x) => x.id === edit);
+  const used = parts.reduce((a, x) => a + (x.id === edit ? 0 : x.amount_minor), 0);
   const [amount, setAmount] = useState('');
   const [cat, setCat] = useState<string | null>(null);
+  const [whose, setWhose] = useState<'mine' | 'shared'>(t.shared ? 'shared' : 'mine');
   const [busy, setBusy] = useState(false);
+  const left = t.amount_minor - used;
   const v = parseAmount(amount);
-  const bad = v === null || v <= 0 || v >= t.amount_minor - used;
-  const save = async (): Promise<void> => {
-    if (bad || !cat || !store.userId) return;
+  const bad = v === null || v <= 0 || v >= left;
+  const reset = (): void => { setEdit(null); setAmount(''); setCat(null); setWhose(t.shared ? 'shared' : 'mine'); };
+  const open = (id: string): void => {
+    const x = parts.find((p) => p.id === id);
+    if (!x) return;
+    setEdit(id); setAmount(minorToInput(x.amount_minor)); setCat(x.category_id); setWhose(x.shared ? 'shared' : 'mine');
+  };
+  const run = async (label: string, go: () => PromiseLike<{ error: { message: string } | null }>): Promise<void> => {
     setBusy(true);
-    try { await write(store, ['transaction_splits'], () => supabase.from('transaction_splits').insert({ user_id: store.userId, transaction_id: t.id, category_id: cat, amount_minor: v })); setAmount(''); setCat(null); toast('Split saved'); }
+    try { await write(store, ['transaction_splits'], go); reset(); toast(label); }
     catch (e) { toast(e instanceof Error ? e.message : 'Not saved.', undefined, 'error'); } finally { setBusy(false); }
   };
-  const remove = async (id: string): Promise<void> => {
-    setBusy(true);
-    try { await write(store, ['transaction_splits'], () => supabase.from('transaction_splits').delete().eq('id', id)); } catch (e) { toast(e instanceof Error ? e.message : 'Not saved.', undefined, 'error'); } finally { setBusy(false); }
+  const save = async (): Promise<void> => {
+    if (bad || !cat || !store.userId) return;
+    const row = { category_id: cat, amount_minor: v, shared: whose === 'shared' };
+    await run('Part saved', () => (edit ? supabase.from('transaction_splits').update(row).eq('id', edit) : supabase.from('transaction_splits').insert({ ...row, user_id: store.userId, transaction_id: t.id })));
   };
+  const name = (id: string | null): string => m.meta[id ?? '']?.label ?? 'Category';
+  const whoseOf = (shared: boolean): string => (shared ? `Shared with ${PARTNER}` : 'Yours');
   return (
-    <Sheet open onClose={onClose} title={`Split ${t.name}`}>
+    <Sheet open onClose={onClose} title="Parts">
+      <SheetHero amount={kr(t.amount_minor)} line={t.name} />
       <List>{[
-        ...parts.map((x) => <Row key={x.id} lead={<Disc icon={m.meta[x.category_id]?.icon ?? 'tag'} />} title={m.meta[x.category_id]?.name ?? 'Category'} end={<View style={{ alignItems: 'flex-end' }}><T k="num">{kr(x.amount_minor)}</T><Btn kind="link" label="Remove" disabled={busy} onPress={() => void remove(x.id)} /></View>} />),
-        <Row key="rest" lead={<Disc icon={m.meta[t.category_id ?? '']?.icon ?? 'tag'} />} title={m.meta[t.category_id ?? '']?.name ?? 'Category'} meta="The rest stays here" end={<T k="num">{kr(t.amount_minor - used)}</T>} />,
+        ...parts.map((x) => <Row key={x.id} selected={x.id === edit} onPress={() => open(x.id)} lead={<Disc icon={m.meta[x.category_id]?.icon ?? 'tag'} />} title={name(x.category_id)} meta={whoseOf(x.shared)} end={<T k="num">{kr(x.amount_minor)}</T>} />),
+        <Row key="rest" lead={<Disc icon={m.meta[t.category_id ?? '']?.icon ?? 'tag'} />} title={name(t.category_id)} meta={`The rest, ${whoseOf(t.shared).toLowerCase()}`} end={<T k="num">{kr(t.amount_minor - parts.reduce((a, x) => a + x.amount_minor, 0))}</T>} />,
       ]}</List>
-      <Field label="Amount for another category" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} placeholder="45" error={amount && bad ? `Less than ${kr(t.amount_minor - used)}, more than 0.` : null} />
-      <CategoryTree m={m} selected={cat} onPick={(o) => setCat(o.id)} options={m.options.filter((o) => o.parentName.toLowerCase() !== 'income' && o.id !== t.category_id)} />
-      <Btn label={`Split off ${v && !bad ? kr(v) : ''}`} disabled={bad || !cat} busy={busy} onPress={() => void save()} />
+      <Sec>{editing ? 'Change this part' : 'Add a part'}</Sec>
+      <Field label="Amount" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} placeholder="300" error={amount && v === null ? 'Type an amount, like 300 or 89,50.' : amount && bad ? `Only ${kr(left)} left.` : null} />
+      {cat ? <List>{[<Row key="c" lead={<Disc icon={m.meta[cat]?.icon ?? 'tag'} />} title={name(cat)} meta="Tap to change" onPress={() => setCat(null)} />]}</List>
+        : <CategoryTree m={m} selected={cat} onPick={(o) => setCat(o.id)} options={m.options.filter((o) => o.parentName.toLowerCase() !== 'income' && o.id !== t.category_id)} />}
+      <Seg value={whose} onChange={setWhose} options={[['mine', 'Yours'], ['shared', `Shared with ${PARTNER}`]]} />
+      <Btn label={editing ? 'Save' : `Add ${v && !bad ? kr(v) : 'part'}`} disabled={bad || !cat} busy={busy} onPress={() => void save()} />
+      {editing ? <Btn kind="ghost" label="Remove this part" disabled={busy} onPress={() => void run('Part removed', () => supabase.from('transaction_splits').delete().eq('id', editing.id))} /> : null}
+      {editing ? <Btn kind="link" label="Cancel" onPress={reset} /> : null}
     </Sheet>
   );
 }
@@ -311,7 +331,6 @@ export function DetailBody({ t, m, onDone }: { t: TransactionRow; m: Model; onDo
   const [raw, setRaw] = useState(false);
   const w = whoOf(t);
   const meta = m.meta[t.category_id ?? ''];
-  const myPart = t.amount_minor ? m.share.get(t.id) : undefined;
   const act = async (label: string, run: () => PromiseLike<{ error: { message: string } | null }>): Promise<void> => {
     setBusy(true);
     try { await write(store, ['transactions'], run); toast(label); } catch (e) { toast(e instanceof Error ? e.message : 'Not saved.', undefined, 'error'); } finally { setBusy(false); }
@@ -332,9 +351,9 @@ export function DetailBody({ t, m, onDone }: { t: TransactionRow; m: Model; onDo
   const facts: [string, string][] = [
     ['Date', `${day}${day.includes(' ') ? '' : `, ${shortDate(t.occurred_on)}`}${t.status === 'pending' ? ', pending' : ''}`],
     ...(meta && !neutral ? [['Category', `${meta.label}${splits.length ? `, ${kr(t.amount_minor - splits.reduce((a, x) => a + x.amount_minor, 0))}` : ''}`] as [string, string]] : []),
-    ...splits.map((x) => ['Split', `${m.meta[x.category_id]?.label ?? 'Category'}, ${kr(x.amount_minor)}`] as [string, string]),
+    ...splits.map((x) => ['Part', `${m.meta[x.category_id]?.label ?? 'Category'}, ${kr(x.amount_minor)}${x.shared ? `, shared` : ''}`] as [string, string]),
     ['Whose', `${WHO_LABEL[w]}${t.shared && t.paid_by ? `, paid by ${t.paid_by === 'me' ? 'you' : PARTNER}` : ''}`],
-    ...(t.shared && myPart !== undefined ? [['Your part', kr(myPart)] as [string, string]] : []),
+    ...(m.sharedSome(t) && !neutral ? [['Your part', kr(m.mine(t))] as [string, string]] : []),
     ...(back > 0 ? [['Paid back', kr(back)] as [string, string]] : []),
     ...(neutral ? [['Counts as spending', 'No, it’s money moved'] as [string, string]] : []),
     ...(t.currency_code !== 'DKK' ? [['Paid', kr(t.original_amount_minor, false, t.currency_code)] as [string, string]] : []),
@@ -367,7 +386,7 @@ export function DetailBody({ t, m, onDone }: { t: TransactionRow; m: Model; onDo
       {t.bank_transaction_id ? (raw ? <BankTextRows id={t.bank_transaction_id} /> : <Btn kind="link" label="Show the bank’s text" onPress={() => setRaw(true)} />) : null}
       <List>{[
         !neutral ? <Row key="c" lead={<Disc icon="tag" />} title="Change category" onPress={() => setPick('cat')} /> : null,
-        !neutral && t.kind === 'expense' ? <Row key="s" lead={<Disc icon="split" />} title="Split off a part" onPress={() => setPick('split')} /> : null,
+        !neutral && t.kind === 'expense' ? <Row key="s" lead={<Disc icon="split" />} title={splits.length ? 'Change parts' : 'Split into parts'} meta={splits.length ? undefined : 'Part of it was something else'} onPress={() => setPick('split')} /> : null,
         trip && onTrip ? <Row key="t" disabled={busy} lead={<Disc icon="plane" />} title="Not part of the trip" meta={`It goes back to ${home && m.meta[home] ? m.meta[home].label : 'its own category'}`}
           onPress={() => void act('Left out of the trip', () => supabase.from('transactions').update({ trip_exclude: true, trip_include: false }).eq('id', t.id))} /> : null,
         trip && !onTrip ? <Row key="t2" disabled={busy} lead={<Disc icon="plane" />} title={`Count it in ${trip.name}`}
@@ -381,7 +400,7 @@ export function DetailBody({ t, m, onDone }: { t: TransactionRow; m: Model; onDo
       ].filter(Boolean) as ReactNode[]}</List>
       {t.source === 'bank' && t.shared ? <T k="note">Everything on the joint account is shared.</T> : null}
       {pick === 'cat' ? <CategoryPick t={t} m={m} onClose={() => { setPick(null); onDone?.(); }} /> : null}
-      {pick === 'split' ? <SplitSheet t={t} m={m} onClose={() => setPick(null)} /> : null}
+      {pick === 'split' ? <PartsSheet t={t} m={m} onClose={() => setPick(null)} /> : null}
       {pick === 'debt' ? <LinkToDebt m={m} t={t} onClose={() => setPick(null)} /> : null}
       {debtOpen && debt ? <DebtSheet m={m} debt={debt} onClose={() => setDebtOpen(false)} /> : null}
     </>

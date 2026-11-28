@@ -92,7 +92,7 @@ function Where({ m }: { m: Model }) {
     const days = Math.max(1, daysBetween(w.start, w.endEx < addDays(todayYmd(), 1) ? w.endEx : addDays(todayYmd(), 1)));
     const run: number[] = []; let acc = 0;
     for (let i = 0; i < days; i++) { const d = addDays(w.start, i); for (const r of rows) if (r.occurred_on === d) acc += r.personal_effect_minor ?? (r.kind === 'income' ? r.amount_minor : -m.mine(r)); run.push(acc); }
-    const sharedMine = rows.filter((r) => r.shared).reduce((a, r) => a + m.mine(r), 0);
+    const sharedMine = rows.reduce((a, r) => a + m.portions(r).reduce((b, p) => b + (p.shared ? p.minor : 0), 0), 0);
     return { list, spent, lastSpent, income, moved, run, sharedMine };
   }, [m, w]);
 

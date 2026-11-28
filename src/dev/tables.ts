@@ -123,7 +123,7 @@ export function fixtureTables(scenario: QaScenario): Tables {
       transaction(`gift-${month}`, 'Book and coffee', 18, 38_000, 'gifts', { needs_review: true }),
       transaction(`unknown-${month}`, 'Uncategorized card payment', 21, 9750, null),
     );
-    tables.transaction_splits.push({ id: `split-${month}`, user_id: uid, transaction_id: `gift-${month}`, category_id: 'coffee', amount_minor: 8000, note: null, created_at: day(18) });
+    tables.transaction_splits.push({ id: `split-${month}`, user_id: uid, transaction_id: `gift-${month}`, category_id: 'coffee', amount_minor: 8000, shared: false, note: null, created_at: day(18) });
     for (const [category_id, limit] of Object.entries(limits)) {
       tables.budgets.push({ id: `budget-${month}-${category_id}`, user_id: uid, category_id, salary_cycle_id: salary, amount_minor: limit, notes: null, created_at: day(1) });
     }
