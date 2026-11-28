@@ -31,7 +31,7 @@ export function auraPages(m: Model): { pages: AuraPage[]; currentIndex: number }
   const share = goneShare(m, current);
   const ahead = b.list.filter((item) => budgetState(item.spent, item.amount, share) === 'ahead').length;
   const over = b.list.filter((item) => item.left < 0).length;
-  const warnings = [over ? `${over} over budget` : '', ahead ? `${ahead} spending quickly` : ''].filter(Boolean);
+  const warnings = [over ? `${over} over budget` : '', ahead ? `${ahead} going fast` : ''].filter(Boolean);
   const budget: AuraPage = {
     key: 'budget-status',
     mood: over ? 'over' : ahead ? 'ahead' : 'calm',

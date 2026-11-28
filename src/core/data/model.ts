@@ -49,8 +49,6 @@ function derive(t: Tables) {
   const raw = buildNavigableCycles(tx)
   // My share of joint spending on a day: the cycle's top-ups (trailing 90 days, then half, when a cycle has none).
   const ratioOn = shareOn(tx, raw, today)
-  const paidBack = new Map<string, number>()
-  for (const p of t.paybacks) paidBack.set(p.expense_transaction_id, (paidBack.get(p.expense_transaction_id) ?? 0) + p.amount_minor)
   const splitsOf = new Map<string, typeof t.transaction_splits>()
   for (const sp of t.transaction_splits) splitsOf.set(sp.transaction_id, [...(splitsOf.get(sp.transaction_id) ?? []), sp])
   const NEUTRAL = new Set(['moved', 'topup', 'ignore'])
@@ -58,7 +56,7 @@ function derive(t: Tables) {
   const counts = (r: TransactionRow): boolean => r.kind === 'expense' && r.status !== 'void' && !r.is_shared_topup && !linked.has(r.id) && !NEUTRAL.has(r.movement ?? '') && !isTransfer(r.category_id)
   /**
    * A row's cost by category for one scope: split parts go to their own category and are yours or shared each,
-   * the rest stays on the row's category and whose. Personal: your share of shared parts, less what people paid back.
+   * the rest stays on the row's category and whose. Personal: your share of shared parts.
    * Shared: what the joint account pays (budgets and analytics sum these).
    */
   const portions = (r: TransactionRow, scope: Scope = 'personal'): Portion[] => {
@@ -66,7 +64,7 @@ function derive(t: Tables) {
     // on a trip the row moved to Travel; its parts follow to their Travel category when there is one
     const trip = (r as { home_category_id?: string | null }).home_category_id !== undefined
     const sp = (splitsOf.get(r.id) ?? []).map((x) => ({ ...x, category_id: (trip && travelCategoryFor(cats, x.category_id)) || x.category_id }))
-    return costOf(partsOf(r, sp), scope, ratioOn(r.occurred_on), paidBack.get(r.id) ?? 0)
+    return costOf(partsOf(r, sp), scope, ratioOn(r.occurred_on))
   }
   /** What this row costs you, all parts together. */
   const mine = (r: TransactionRow): number => portions(r).reduce((a, p) => a + p.minor, 0)
@@ -105,8 +103,11 @@ function derive(t: Tables) {
     const used = list.reduce((a, b) => a + b.spent, 0)
     const unbudgeted = [...spent.entries()].filter(([id]) => !list.some((b) => b.id === id) && !incomeParents.has(id) && !isTransfer(id)).map(([id, s]) => ({ cat: byId.get(id) as CategoryRow, spent: s })).filter((x) => x.cat)
     const salary = rows.filter((r) => r.is_salary).reduce((a, r) => a + r.amount_minor, 0)
-    const income = rows.filter((r) => r.kind === 'income' && !isTransfer(r.category_id)).reduce((a, r) => a + r.amount_minor, 0)
-    const allMine = rows.reduce((a, r) => a + mine(r), 0)
+    const moneyIn = rows.filter((r) => r.kind === 'income' && !r.is_shared_topup && !linked.has(r.id) && !isTransfer(r.category_id))
+    const income = moneyIn.reduce((a, r) => a + r.amount_minor, 0)
+    // A refund gives spending back (it has no category of its own to come off).
+    const refunds = moneyIn.filter((r) => r.movement === 'refund').reduce((a, r) => a + r.amount_minor, 0)
+    const allMine = rows.reduce((a, r) => a + mine(r), 0) - refunds
     return { rows, list, total, used, left: total - used, spent, unbudgeted, salary, income, allMine }
   }
 
@@ -127,7 +128,7 @@ function derive(t: Tables) {
   const days = current ? Math.max(1, daysBetween(current.startOn, current.endInclusive) + 1) : 0
   const daysLeft = current ? Math.max(0, daysBetween(today, current.endInclusive) + 1) : 0
 
-  return { t, today, options, cats, byId, meta, parentOf, logoOf, places, placeOf, tripOf, debts, linked, inbox, incomeParents, isTransfer, tx, mine, sharedSome, portions, spendingIn, splitsOf, paidBack, cycles, current, inCycle, prevOf, budgetsOf, bankOf, days, daysLeft,
+  return { t, today, options, cats, byId, meta, parentOf, logoOf, places, placeOf, tripOf, debts, linked, inbox, incomeParents, isTransfer, tx, mine, sharedSome, portions, spendingIn, splitsOf, cycles, current, inCycle, prevOf, budgetsOf, bankOf, days, daysLeft,
     payday: current ? addDays(current.endInclusive, 1) : null, hasSalary: tx.some((r) => r.is_salary) }
 }
 
@@ -138,7 +139,13 @@ function expectedPayday(c: SalaryCycle, all: SalaryCycle[]): string | null {
 }
 
 /** The derived model for the screens; null until the first data arrives. */
+// One model per tables object, shared by every screen (each useMemo alone would rebuild it per caller).
+let last: { t: Tables; m: Model } | null = null
 export function useModel(): Model | null {
   const { tables } = useStore()
-  return useMemo(() => (tables ? derive(tables) : null), [tables])
+  return useMemo(() => {
+    if (!tables) return null
+    if (last?.t !== tables) last = { t: tables, m: derive(tables) }
+    return last.m
+  }, [tables])
 }

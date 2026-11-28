@@ -83,13 +83,13 @@ function Transactions({ m }: { m: Model }) {
   const scoped = useMemo(() => {
     let L = [...m.tx].reverse();
     if (catParam) L = L.filter((t) => (!from || t.occurred_on >= from) && (!until || t.occurred_on < until) && m.spendingIn(t, catParam, scope) > 0);
-    if (filter === 'mine') L = L.filter((t) => !t.shared && !t.is_shared_topup);
+    if (filter === 'mine') L = L.filter((t) => !t.shared && !t.is_shared_topup && t.movement !== 'topup');
     if (filter === 'shared') L = L.filter((t) => m.sharedSome(t) || t.is_shared_topup);
     if (q.trim()) L = L.filter((t) => matches(t, m, q));
     return L;
   }, [m, catParam, from, until, filter, q, scope]);
 
-  // This cycle first; older cycles one at a time. Searching shows every match.
+  // This cycle first; older cycles one at a time (searching starts with three, so a long list never renders all at once).
   const groups = useMemo(() => {
     const cycles = [...m.cycles].reverse();
     const out: { key: string; title: string; rows: TransactionRow[] }[] = [];
@@ -101,18 +101,19 @@ function Transactions({ m }: { m: Model }) {
     if (before.length) out.push({ key: 'pre', title: 'Before salary cycles', rows: before });
     return out;
   }, [m, scoped]);
-  const visible = q.trim() || catParam ? groups : groups.slice(0, shown);
+  const visible = groups.slice(0, q.trim() || catParam ? shown + 2 : shown);
   const total = scoped.reduce((a, t) => a + (catParam ? m.spendingIn(t, catParam, scope) : m.mine(t)), 0);
   const catName = catParam === 'uncategorized' ? 'Uncategorized' : catParam ? m.byId.get(catParam)?.name : null;
   const cycle = m.cycles.find((item) => item.id === params.cycle) ?? m.current;
   const heading = catParam && from
     ? (until ? `${shortDate(from)} – ${shortDate(addDays(until, -1))}` : `Since ${shortDate(from)}`)
+    : catParam ? 'All time'
     : cycle ? `${cycle.name} cycle, ${shortDate(cycle.startOn)} – ${shortDate(cycle.endInclusive)}` : undefined;
 
   return (
     <Screen onRefresh={store.sync} header={
       <Header title={catName ?? 'Activity'} back={Boolean(catParam)} sub={heading}
-        right={<IconBtn name={searchOpen ? 'close' : 'search'} label="Search" onPress={() => { setSearchOpen((s) => !s); if (searchOpen) setQ(''); }} />} />
+        right={<IconBtn name={searchOpen ? 'close' : 'search'} label={searchOpen ? 'Close search' : 'Search'} onPress={() => { setSearchOpen((s) => !s); if (searchOpen) setQ(''); }} />} />
     }>
       {!catParam ? <SyncLine /> : null}
       {searchOpen ? (
@@ -139,7 +140,7 @@ function Transactions({ m }: { m: Model }) {
           </View>
         ))}
       </Animated.View>
-      {!q.trim() && !catParam && groups.length > shown ? <Btn kind="ghost" label="Load older" onPress={() => setShown((s) => s + 1)} /> : null}
+      {!(catParam && from) && groups.length > visible.length ? <Btn kind="ghost" label="Load older" onPress={() => setShown((s) => s + 1)} /> : null}
       {!q.trim() && !catParam && groups.length > 0 && groups.length <= shown && shown > 1 ? <T k="note" style={{ textAlign: 'center' }}>Nothing older.</T> : null}
     </Screen>
   );

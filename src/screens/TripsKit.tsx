@@ -55,7 +55,7 @@ export function breakdownOf(m: Model, rows: readonly Tx[]): Part[] {
   for (const r of rows) for (const p of m.portions(r)) {
     if (!p.minor) continue;
     const c = p.category_id ? m.byId.get(p.category_id) : undefined;
-    const k = c && travel && c.parent_id === travel.id ? c.id : 'other';
+    const k = c && travel && (c.parent_id === travel.id || c.id === travel.id) ? c.id : 'other';
     sums.set(k, (sums.get(k) ?? 0) + p.minor);
   }
   return [...sums].map(([id, minor]) => {
@@ -249,7 +249,7 @@ export function TripForm({ m, trip, onClose }: { m: Model; trip?: TripRow; onClo
         <Toggle key="t" label="Still travelling" on={end === null} onChange={(v) => setEnd(v ? null : start > m.today ? start : m.today)} />,
         end !== null ? <DateRow key="e" label="End" value={end} onChange={(d) => { setEnd(d); setErr(null); }} /> : null,
       ]}</List>
-      <T k="note">{iso ? 'Purchases outside Denmark on these days go to Travel.' : 'Purchases on these days that aren’t online go to Travel.'}</T>
+      <T k="note">{iso ? 'Purchases outside Denmark on these days go to Travel.' : 'Shops more than 30 km from Aarhus go to Travel on these days.'}</T>
       <FormErr err={bad ?? err} />
       <Btn label={trip ? 'Save' : 'Start trip'} disabled={!name.trim() || Boolean(bad)} busy={trips.busy} onPress={() => void save()} />
       {pick ? <CountryPick value={iso} onClose={() => setPick(false)} onPick={(v) => { setIso(v); if (!name.trim() && v) setName(countryName(v)); }} /> : null}

@@ -282,7 +282,7 @@ function Fill({ width, style }: { width: `${number}%`; style: StyleProp<ViewStyl
 /** The words for a budget's state: colour never speaks alone. */
 export function StatePill({ left, st: s }: { left: number; st: BudgetState }) {
   const v = kr(Math.abs(left), true);
-  const [text, color] = s === 'over' ? [`${v} over`, C.over] : s === 'ahead' ? [`${v} left, ahead`, C.ahead] : s === 'none' ? ['No budget', C.ink3] : left === 0 ? ['Used up', C.ink3] : [`${v} left`, C.ink];
+  const [text, color] = s === 'over' ? [`${v} over`, C.over] : s === 'ahead' ? [`${v} left, going fast`, C.ahead] : s === 'none' ? ['No budget', C.ink3] : left === 0 ? ['Used up', C.ink3] : [`${v} left`, C.ink];
   return <Text style={[st.pill, { color }]}>{text}</Text>;
 }
 

@@ -139,7 +139,7 @@ function TripDetail({ m, id }: { m: Model; id: string }) {
       ) : null}
       <Sec>Purchases</Sec>
       {rows.length ? <DayList rows={[...rows].reverse()} m={m} onOpen={open} />
-        : <Panel><Empty title="No purchases yet" sub={isDomestic(trip) ? 'Purchases from the start date that aren’t online show up here.' : 'Purchases outside Denmark from the start date show up here.'} /></Panel>}
+        : <Panel><Empty title="No purchases yet" sub={isDomestic(trip) ? 'Shops more than 30 km from Aarhus, from the start date, show up here.' : 'Purchases outside Denmark from the start date show up here.'} /></Panel>}
       <Sec>Trip</Sec>
       <List>{[
         <Row key="e" lead={<Disc icon="edit" />} title="Edit trip" meta="Name, where, dates" onPress={() => setEdit(true)} />,

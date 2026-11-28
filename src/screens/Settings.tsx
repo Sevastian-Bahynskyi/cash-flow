@@ -27,7 +27,7 @@ async function fetchRows(from: string, to: string): Promise<ExportRow[]> {
   for (let a = 0; ; a += 1000) {
     const { data, error } = await supabase.from('transactions')
       .select('occurred_on,name,kind,converted_amount_minor,original_amount_minor,currency_code,shared,is_shared_topup,shared_participant,categories(name)')
-      .gte('occurred_on', from).lte('occurred_on', to).order('occurred_on').order('id').range(a, a + 999);
+      .gte('occurred_on', from).lte('occurred_on', to).neq('status', 'void').order('occurred_on').order('id').range(a, a + 999);
     if (error) throw new Error(error.message);
     out.push(...((data ?? []) as unknown as ExportRow[]));
     if (!data || data.length < 1000) return out;
@@ -107,6 +107,8 @@ function SettingsBody({ m }: { m: Model }) {
   const { userId } = useStore();
   const toast = useToast();
   const [out, setOut] = useState(false);
+  // signing out wipes the saved data on this phone, so it takes a second tap
+  const [sure, setSure] = useState(false);
   return (
     <Screen header={<Header title="Settings" />}>
       <Me />
@@ -119,8 +121,8 @@ function SettingsBody({ m }: { m: Model }) {
       <Sec>Export</Sec>
       <Export m={m} />
       <List>{[
-        <Row key="o" disabled={out} lead={<Disc icon="signout" color={C.over} />} title={<T k="strong" style={{ color: C.over }}>{out ? 'Signing out…' : 'Sign out'}</T>}
-          onPress={() => { setOut(true); (async () => { try { if (userId) await AsyncStorage.removeItem(`cashflow:data:${userId}`); await signOut(); } catch { setOut(false); toast('Not signed out. Check the connection and try again.', undefined, 'error'); } })().catch(() => undefined); }} />,
+        <Row key="o" disabled={out} lead={<Disc icon="signout" color={C.over} />} title={<T k="strong" style={{ color: C.over }}>{out ? 'Signing out…' : sure ? 'Tap again to sign out' : 'Sign out'}</T>}
+          onPress={() => { if (!sure) { setSure(true); return; } setOut(true); (async () => { try { if (userId) await AsyncStorage.removeItem(`cashflow:data:${userId}`); await signOut(); } catch { setOut(false); toast('Not signed out. Check the connection and try again.', undefined, 'error'); } })().catch(() => undefined); }} />,
       ]}</List>
     </Screen>
   );
