@@ -9,6 +9,8 @@ const FALLBACK = "~z-ai/glm-flash-latest"; // OpenRouter tries it when the first
 const APPLY_FROM = 0.8;
 const BATCH = 12;
 const TIMEOUT_MS = 60000;
+// All batches of one sync together; rows not reached keep their deterministic label, like on a model failure.
+const TOTAL_MS = 60000;
 
 type AiResult = { id: string; categoryId: string; name: string; reason: string; confidence: number };
 type ChatPayload = { choices?: { message?: { content?: string } }[] };
@@ -43,13 +45,10 @@ export const parseAiResults = (text: string, ids: ReadonlySet<string>, categoryI
 
 const escape = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-/** Removes what must never leave the app: names of self/partner/family people, IBANs, card suffixes, long numbers. */
+/** Removes what must never leave the app: names of every known person, IBANs, card suffixes, long numbers. */
 export const scrubber = (ctx: Ctx): ((text: string | null) => string) => {
-  const byId = new Map(ctx.people.map((p) => [p.id, p]));
-  const kindOf = (p: Ctx["people"][number]) => (p.alias_of ? byId.get(p.alias_of)?.kind ?? p.kind : p.kind);
   const tokens = new Set<string>();
   for (const p of ctx.people) {
-    if (kindOf(p) === "settle_up" || kindOf(p) === "ignore") continue;
     for (const w of `${p.name} ${p.normalized_name}`.toLowerCase().split(/[^\p{L}\p{N}]+/u)) if (w.length >= 3) tokens.add(w);
   }
   const names = tokens.size ? new RegExp(`(?<![\\p{L}\\p{N}])(${[...tokens].map(escape).join("|")})\\p{L}*`, "giu") : null;
@@ -94,7 +93,7 @@ export const prompt = (ctx: Ctx, txs: BankTx[], labels: Map<string, Label>): str
   ].join("\n\n");
 };
 
-export const callModel = async (key: string, body: string, model = MODEL): Promise<string | null> => {
+export const callModel = async (key: string, body: string, model = MODEL, timeoutMs = TIMEOUT_MS): Promise<string | null> => {
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
@@ -107,7 +106,7 @@ export const callModel = async (key: string, body: string, model = MODEL): Promi
       response_format: { type: "json_object" },
       messages: [{ role: "system", content: "Return strict JSON only." }, { role: "user", content: body }],
     }),
-    signal: AbortSignal.timeout(TIMEOUT_MS),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!response.ok) {
     console.error("[classify/ai] model request failed", { status: response.status });
@@ -128,11 +127,17 @@ export async function aiLabel(ctx: Ctx, txs: BankTx[], key = Deno.env.get("OPENR
 
   const categoryIds = new Set(ctx.categories.map((c) => c.id));
   const reviewFrom = inboxFrom(ctx.now);
+  const deadline = Date.now() + TOTAL_MS;
   for (let i = 0; i < leftovers.length; i += BATCH) {
+    const left = deadline - Date.now();
+    if (left <= 0) {
+      console.warn("[classify/ai] time is up; rows keep their deterministic label", { rows: leftovers.length - i });
+      break;
+    }
     const batch = leftovers.slice(i, i + BATCH);
     let text: string | null = null;
     try {
-      text = await callModel(key, prompt(ctx, batch, labels));
+      text = await callModel(key, prompt(ctx, batch, labels), MODEL, Math.min(TIMEOUT_MS, left));
     } catch (error) {
       console.error("[classify/ai] model error", error instanceof Error ? error.message : String(error));
     }
@@ -143,15 +148,17 @@ export async function aiLabel(ctx: Ctx, txs: BankTx[], key = Deno.env.get("OPENR
       const base = labels.get(r.id);
       if (!t || !base) continue;
       const sure = r.confidence >= APPLY_FROM;
+      const movement = movementFor(ctx.categories, r.categoryId, t.amount_minor);
       labels.set(r.id, {
         ...base,
         category_id: r.categoryId,
-        movement: movementFor(ctx.categories, r.categoryId, t.amount_minor),
+        movement,
         name: r.name || base.name,
         reason: r.reason || "Best guess by AI",
         reason_source: "ai",
         confidence: Math.round(r.confidence * 100) / 100,
-        needs_review: !sure && t.booking_date >= reviewFrom,
+        // Money moved to people or own accounts never goes to the Inbox (owner rule).
+        needs_review: !sure && movement !== "person" && movement !== "moved" && t.booking_date >= reviewFrom,
       });
     }
   }

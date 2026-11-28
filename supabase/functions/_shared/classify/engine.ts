@@ -67,6 +67,7 @@ export type Ctx = {
   people: PersonRef[];
   ownerLabels: Map<string, OwnerLabel>; // merchant_key -> your majority label (see deriveOwnerLabels)
   ownCardSuffixes: string[];
+  lastSalaryOn?: string | null; // date of the newest salary already saved; a second pay within 20 days is extra income
 };
 
 type KnowledgeMerchant = {
@@ -85,6 +86,7 @@ type Knowledge = { merchants: KnowledgeMerchant[]; patterns: KnowledgePattern[];
 export const knowledge: Knowledge = knowledgeJson;
 
 const REVIEW_BELOW = 0.7;
+const SALARY_GAP_DAYS = 20;
 const INBOX_DAYS = 30;
 const DAY_MS = 86_400_000;
 const GIRLFRIEND = "girlfriend";
@@ -101,6 +103,26 @@ export const merchantKey = (raw: string): string => {
   const after = raw.slice(raw.indexOf("*") + 1);
   if (audit === undefined || parseAuditSuggestion(audit) || !raw.includes("*") || !after.trim()) return key;
   return normalizeMerchantContext({ kind: "expense", name: after }) || key;
+};
+
+// Lunar names a transfer "Overførsel <name>"; MobilePay and MP are already stripped by merchantKey.
+const TRANSFER_PREFIX = "overforsel ";
+
+/** Keys a person's transfers carry: the name folded like a merchant key (søren = soren), bare or after the transfer prefix. */
+export const personKeys = (p: { normalized_name: string }): string[] => {
+  const key = merchantKey(p.normalized_name);
+  return key ? [key, TRANSFER_PREFIX + key] : [];
+};
+
+/** Canonical person (alias_of followed) for a merchant key, matched as personKeys builds them. */
+export const personMatcher = <P extends { id: string; normalized_name: string; alias_of: string | null }>(people: readonly P[]): ((key: string | null) => P | undefined) => {
+  const byId = new Map(people.map((p) => [p.id, p]));
+  const byKey = new Map<string, P>();
+  for (const p of people) {
+    const key = merchantKey(p.normalized_name);
+    if (key) byKey.set(key, p.alias_of ? byId.get(p.alias_of) ?? p : p);
+  }
+  return (key) => (key ? byKey.get(key) ?? (key.startsWith(TRANSFER_PREFIX) ? byKey.get(key.slice(TRANSFER_PREFIX.length)) : undefined) : undefined);
 };
 
 /** First day whose unsure rows still go to the Inbox. */
@@ -190,12 +212,15 @@ export function classify(ctx: Ctx, txs: BankTx[]): Map<string, Label> {
   const mobilePayId = cat("MobilePay", "Transfers");
   const refundId = cat("Refund", "Income");
   const incomeParent = cats.find((c) => !c.parent_id && c.name.trim().toLowerCase() === "income")?.id ?? null;
+  // A Transfers category (MobilePay "Overførsel <name>") is money between people: money in from it is no refund.
+  const isShop = (id: string | null): boolean => movementFor(cats, id, -1) === "spend";
   const isIncomeCat = (id: string | null): boolean => Boolean(id && (id === incomeParent || cats.find((c) => c.id === id)?.parent_id === incomeParent));
 
-  // People: canonical row per person (alias_of followed), matched by exact normalized name.
+  // People: canonical row per person (alias_of followed), matched by name folded like a merchant key.
   const byId = new Map(ctx.people.map((p) => [p.id, p]));
   const canonical = (p: PersonRef): PersonRef => (p.alias_of ? byId.get(p.alias_of) ?? p : p);
-  const personByKey = new Map(ctx.people.map((p) => [p.normalized_name, canonical(p)]));
+  const personOf = personMatcher(ctx.people);
+  let lastSalary = ctx.lastSalaryOn ?? null;
   const namesOf = (kind: PersonKind): string[] =>
     ctx.people.filter((p) => canonical(p).kind === kind).map((p) => normalizeAsciiText(p.normalized_name)).filter(Boolean);
   const selfNames = namesOf("self");
@@ -305,14 +330,20 @@ export function classify(ctx: Ctx, txs: BankTx[]): Map<string, Label> {
 
     // 2 income
     if (/lonoverf/.test(n) || /lonoverf/.test(low)) {
-      return { category_id: cat("Salary", "Income"), movement: "income", confidence: 0.99, reason_source: "salary", is_salary: t.amount_minor > 0, name: "Salary", reason: "Salary transfer (LØNOVERFØRSEL)" };
+      // A bonus or holiday pay days after payday must not end the salary cycle.
+      const isSalary = t.amount_minor > 0 && (lastSalary === null || dayDiff(lastSalary, t.booking_date) >= SALARY_GAP_DAYS);
+      if (isSalary) lastSalary = t.booking_date;
+      return {
+        category_id: cat("Salary", "Income"), movement: "income", confidence: 0.99, reason_source: "salary", is_salary: isSalary, name: "Salary",
+        reason: isSalary || t.amount_minor < 0 ? "Salary transfer (LØNOVERFØRSEL)" : "Extra pay (LØNOVERFØRSEL) less than 20 days after salary",
+      };
     }
     if ((n === "su" || nr === "su") && t.amount_minor > 0) {
       return { category_id: cat("Benefits", "Income"), movement: "income", confidence: 0.98, reason_source: "salary", name: "SU", reason: "SU student grant" };
     }
 
     // 3 people (by kind; family asks every time)
-    const person = refundLike ? null : personByKey.get(n) ?? (nr ? personByKey.get(nr) : undefined) ?? null;
+    const person = refundLike ? null : personOf(n) ?? personOf(nr) ?? null;
     if (person || (!refundLike && t.mcc === "4829")) {
       const dir = t.amount_minor < 0 ? "to" : "from";
       const who = person ? titleCase(person.name.toLowerCase()) : titleCase(n);
@@ -362,11 +393,13 @@ export function classify(ctx: Ctx, txs: BankTx[]): Map<string, Label> {
     if (km?.class === "ignore") return { category_id: null, movement: "ignore", confidence: km.confidence, reason_source: "rule", name: km.clean_name, reason: km.reason };
     if (km?.class === "refund") return { category_id: refundId, movement: "refund", confidence: km.confidence, reason_source: "rule", name: km.clean_name, reason: km.reason };
     if (km?.category) {
-      return { category_id: cat(km.category, km.parent), movement: "spend", merchant: km.class !== "fee", confidence: km.confidence, reason_source: "rule", name: km.clean_name, reason: km.reason };
+      const id = cat(km.category, km.parent);
+      return { category_id: id, movement: "spend", merchant: km.class !== "fee" && isShop(id), confidence: km.confidence, reason_source: "rule", name: km.clean_name, reason: km.reason };
     }
     for (const { rx, p } of knowledgePatterns) {
       if (!keys.some((k) => rx.test(k))) continue;
-      return { category_id: cat(p.category, p.parent), movement: "spend", merchant: true, confidence: p.confidence ?? 0.88, reason_source: "rule", name: p.clean_name, reason: p.reason };
+      const id = cat(p.category, p.parent);
+      return { category_id: id, movement: "spend", merchant: isShop(id), confidence: p.confidence ?? 0.88, reason_source: "rule", name: p.clean_name, reason: p.reason };
     }
 
     // 8 bank merchant code
@@ -401,7 +434,9 @@ export function classify(ctx: Ctx, txs: BankTx[]): Map<string, Label> {
     const isJoint = t.account_role === "joint";
     const payer = t.amount_minor < 0 && t.debtor_name ? normalizeAsciiText(t.debtor_name) : "";
     const paidBy = !isJoint ? (t.amount_minor < 0 ? "me" : null) : has(payer, selfNames) ? "me" : has(payer, partnerNames) ? "partner" : null;
-    const review = (d.needs_review ?? false) || (movement !== "ignore" && d.confidence < REVIEW_BELOW);
+    // Money moved to people or own accounts never asks (owner rule); it counts as moved unless added to a debt.
+    const review = movement !== "person" && movement !== "moved" &&
+      ((d.needs_review ?? false) || (movement !== "ignore" && d.confidence < REVIEW_BELOW));
 
     out.set(t.id, {
       category_id,

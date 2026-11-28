@@ -124,7 +124,8 @@ export type PendingCandidate = DatedRow & {
   remittance: string | null;
 };
 
-// One pending row per booked row: same amount, same counterparty, dates within ±5 days, closest first.
+// One pending row per booked row: same counterparty, dates within ±5 days, same amount closest first.
+// Tips and FX change the booked amount: then a single candidate within ±20% matches too.
 export const matchPendingToBooked = (
   pending: PendingCandidate[],
   booked: PendingCandidate[],
@@ -135,11 +136,16 @@ export const matchPendingToBooked = (
     const bookDate = effectiveDate(book);
     if (!bookDate) continue;
     const key = counterpartyKey(book);
-    const best = pending
-      .filter((p) => !used.has(p.id) && p.amount_minor === book.amount_minor && counterpartyKey(p) === key)
+    const near = pending
+      .filter((p) => !used.has(p.id) && counterpartyKey(p) === key)
       .map((p) => ({ p, gap: Math.abs(dayDiff(effectiveDate(p) ?? bookDate, bookDate)) }))
       .filter(({ gap }) => gap <= 5)
-      .sort((a, b) => a.gap - b.gap || a.p.id.localeCompare(b.p.id))[0];
+      .sort((a, b) => a.gap - b.gap || a.p.id.localeCompare(b.p.id));
+    const close = near.filter(({ p }) =>
+      Math.sign(p.amount_minor) === Math.sign(book.amount_minor) &&
+      Math.abs(p.amount_minor - book.amount_minor) <= Math.abs(book.amount_minor) * 0.2
+    );
+    const best = near.find(({ p }) => p.amount_minor === book.amount_minor) ?? (close.length === 1 ? close[0] : undefined);
     if (!best) continue;
     used.add(best.p.id);
     matches.push({ pendingId: best.p.id, bookedId: book.id });

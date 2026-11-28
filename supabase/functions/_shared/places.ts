@@ -95,8 +95,10 @@ export async function fillPlaces(db: SupabaseClient, userId: string, limit = 75,
     fresh.set(k, [...(fresh.get(k) ?? []), t.id]);
   }
   for (const [k, rowIds] of fresh) {
-    const { error } = await db.from("transactions").update({ place_key: k }).in("id", rowIds);
-    if (error) console.error("[places] place key not saved", error.message);
+    for (let i = 0; i < rowIds.length; i += 200) {
+      const { error } = await db.from("transactions").update({ place_key: k }).in("id", rowIds.slice(i, i + 200));
+      if (error) console.error("[places] place key not saved", error.message);
+    }
   }
   const scrub = scrubber(ctx);
   const catName = new Map(ctx.categories.map((c) => [c.id, c.name]));

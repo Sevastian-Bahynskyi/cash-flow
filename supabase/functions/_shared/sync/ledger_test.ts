@@ -74,8 +74,20 @@ Deno.test("pending->booked: same amount, counterparty (normalized), within ±5 d
     { pendingId: "p1", bookedId: "b1" },
   ]);
   assertEquals(matchPendingToBooked([cand("p1")], [cand("b1", { booking_date: "2026-11-26" })]), []);
-  assertEquals(matchPendingToBooked([cand("p1")], [cand("b1", { amount_minor: -4501 })]), []);
+  assertEquals(matchPendingToBooked([cand("p1")], [cand("b1", { amount_minor: -6000 })]), []);
   assertEquals(matchPendingToBooked([cand("p1")], [cand("b1", { creditor_name: "Other Shop" })]), []);
+});
+
+Deno.test("pending->booked: a tip or FX change matches one candidate within ±20%, never a guess between two", () => {
+  // 45.00 held, 50.00 booked (tip): the only candidate.
+  assertEquals(matchPendingToBooked([cand("p1")], [cand("b1", { amount_minor: -5000 })]), [{ pendingId: "p1", bookedId: "b1" }]);
+  assertEquals(matchPendingToBooked([cand("p1"), cand("p2", { amount_minor: -4700 })], [cand("b1", { amount_minor: -5000 })]), []);
+  // An exact amount still wins over a close one.
+  assertEquals(
+    matchPendingToBooked([cand("p-close", { amount_minor: -4800 }), cand("p-exact", { amount_minor: -5000, booking_date: "2026-11-17" })], [cand("b1", { amount_minor: -5000 })]),
+    [{ pendingId: "p-exact", bookedId: "b1" }],
+  );
+  assertEquals(matchPendingToBooked([cand("p1", { amount_minor: 4500 })], [cand("b1", { amount_minor: -5000 })]), []);
 });
 
 Deno.test("pending->booked: one pending per booked row, closest date first", () => {
