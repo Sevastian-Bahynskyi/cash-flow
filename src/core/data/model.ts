@@ -125,11 +125,10 @@ function derive(t: Tables) {
     return { minor: accounts.reduce((sum, a) => sum + (a.balance_minor ?? 0), 0), at, accounts: accounts.length }
   }
 
-  const days = current ? Math.max(1, daysBetween(current.startOn, current.endInclusive) + 1) : 0
   const daysLeft = current ? Math.max(0, daysBetween(today, current.endInclusive) + 1) : 0
 
-  return { t, today, options, cats, byId, meta, parentOf, logoOf, places, placeOf, tripOf, debts, linked, inbox, incomeParents, isTransfer, tx, mine, sharedSome, portions, spendingIn, splitsOf, cycles, current, inCycle, prevOf, budgetsOf, bankOf, days, daysLeft,
-    payday: current ? addDays(current.endInclusive, 1) : null, hasSalary: tx.some((r) => r.is_salary) }
+  return { t, today, options, cats, byId, meta, parentOf, logoOf, places, placeOf, tripOf, debts, linked, inbox, incomeParents, isTransfer, tx, mine, sharedSome, portions, spendingIn, splitsOf, cycles, current, inCycle, prevOf, budgetsOf, bankOf, daysLeft,
+    hasSalary: tx.some((r) => r.is_salary) }
 }
 
 /** Next salary is expected on the owner's Danish payday: a banking day before the month's last banking day. */

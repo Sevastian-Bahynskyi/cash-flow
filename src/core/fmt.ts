@@ -12,10 +12,8 @@ function nf(currency: string, whole: boolean): Intl.NumberFormat {
   return f
 }
 
-let base = 'DKK'
-/** The account's one base currency; set once the profile loads. */
-export const setBaseCurrency = (code: string): void => { base = code }
-export const baseCurrency = (): string => base
+/** The account's one base currency. */
+const base = 'DKK'
 
 /** "1.843 kr." / "1.843,50 kr."; `whole` drops minor units for budgets and totals. */
 export const kr = (minor: number, whole = false, currency = base): string => nf(currency, whole).format(minor / 100).replace('-', '−')
@@ -55,18 +53,3 @@ export function dayLabel(s: string): string {
   return s.slice(0, 4) === todayYmd().slice(0, 4) ? fWeekday.format(parseYmd(s)) : fShortY.format(parseYmd(s))
 }
 export const range = (a: string, bInclusive: string): string => `${shortDate(a)} – ${shortDate(bInclusive)}`
-
-/** The amount as it is being typed on the keypad ("1.234,5"), in the locale's own format with its currency sign. */
-export function typedAmount(typed: string, currency = base): string {
-  const [w = '', f] = typed.split(',')
-  const digits = f?.length ?? 0
-  const f2 = new Intl.NumberFormat(MONEY_LOCALE, { style: 'currency', currency, minimumFractionDigits: digits, maximumFractionDigits: digits })
-  const parts = f2.formatToParts(Number(`${w || '0'}.${f || '0'}`))
-  const dec = new Intl.NumberFormat(MONEY_LOCALE).formatToParts(1.5).find((p) => p.type === 'decimal')?.value ?? ','
-  let out = '', placed = false
-  for (const p of parts) {
-    out += p.value
-    if (f !== undefined && !digits && !placed && p.type === 'integer' && !parts.slice(parts.indexOf(p) + 1).some((x) => x.type === 'integer')) { out += dec; placed = true }
-  }
-  return out
-}

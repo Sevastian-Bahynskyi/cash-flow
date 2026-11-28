@@ -1,4 +1,4 @@
-// Spending map clustering. Pure, no imports, so `node src/screens/map/cluster.check.ts` can test it.
+// Spending map clustering. Pure, no imports, so `node scripts/check-cluster.ts` can test it.
 // Zoomed out a glow per country, closer a glow per city (places are city centres, so nothing finer); glows that would overlap merge into the bigger one.
 
 export type Pt = { id: string; lat: number; lng: number; minor: number; on: string; country: string | null; countryName: string; city: string | null }

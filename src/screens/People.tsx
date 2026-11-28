@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { useStore } from '@/core/data/store';
 import type { Model } from '@/core/data/model';
 import { pot } from '@/core/data/pot';
-import { canonicalId, peopleSeen, type PersonInput } from '@/core/domain/people';
+import { canonicalId, peopleSeen } from '@/core/domain/people';
 import { kr, shortDate } from '@/core/fmt';
 import { PARTNER } from '@/core/partner';
 import { SharedRing } from '@/ui/aura/SharedRing';
@@ -12,7 +12,7 @@ import { C, F } from '@/ui/kit/theme';
 import { Btn, Empty, Header, Icon, List, Panel, Press, Row, Screen, Sec, Sheet, T, tap } from '@/ui/kit/ui';
 import { Gate, TxRow, useDetail } from '@/ui/kit/money';
 import type { Debt } from '@/core/domain/debts';
-import { DebtForm, DebtList, DebtSheet, DebtSuggestions } from './Debts';
+import { DebtForm, DebtList, DebtSheet, DebtSuggestions, peopleOf } from './Debts';
 import { PersonSheet } from './Categories';
 import type { TransferPersonRow } from '@/core/data/types';
 
@@ -29,7 +29,7 @@ function People({ m }: { m: Model }) {
   const [person, setPerson] = useState<TransferPersonRow | 'new' | null>(null);
   const [debt, setDebt] = useState<Debt | null>(null);
   const [newDebt, setNewDebt] = useState<string | null | undefined>(undefined);
-  const people: PersonInput[] = useMemo(() => m.t.transfer_people.map((p) => ({ id: p.id, name: p.name, kind: p.kind ?? 'settle_up', opening_balance_minor: p.opening_balance_minor ?? 0, alias_of: p.alias_of ?? null })), [m.t.transfer_people]);
+  const people = useMemo(() => peopleOf(m), [m]);
   const balances = useMemo(() => peopleSeen(people, m.tx.map((t) => ({ ...t, counterparty_person_id: t.counterparty_person_id ?? null }))), [people, m.tx]);
   const p = pot(m, m.tx.filter(m.inCycle(m.current)));
   // Names only: a person owes or is owed only through a debt the owner made.

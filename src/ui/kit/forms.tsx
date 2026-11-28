@@ -60,7 +60,7 @@ export function DeleteAsk({ what, busy, onYes, onNo }: { what: string; busy: boo
   );
 }
 
-// The icon meanings a category can take (web/lib/icons.ts ICON_GROUPS, categories part).
+// The icon meanings a category can take.
 const PICKABLE = ['basket', 'store', 'utensils', 'cup', 'drinks', 'train', 'bus', 'taxi', 'car', 'fuel', 'house', 'city', 'bolt', 'wifi', 'phone', 'drop', 'shield', 'cross', 'heart', 'pill', 'film', 'bag', 'shirt', 'laptop', 'gift', 'plane', 'book', 'dumbbell', 'paw', 'baby', 'soap', 'receipt', 'wallet', 'gamepad', 'music', 'trend', 'briefcase', 'sack', 'ticket', 'moved', 'savings', 'grid', 'wrench', 'other'];
 
 export function IconPick({ value, onPick, extra = [] }: { value: string; onPick: (name: string) => void; extra?: string[] }) {

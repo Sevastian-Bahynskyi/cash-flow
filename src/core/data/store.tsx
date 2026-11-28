@@ -7,7 +7,7 @@ import type { TableName, Tables } from './types';
 import { qaScenario } from '@/dev/scenario';
 
 /**
- * The user's data, loaded the way the PWA loads it (web/lib/data/store.tsx): every table once per session,
+ * The user's data: every table once per session,
  * kept on the device so the app opens with the last numbers, refreshed per table after a write. RLS scopes every query.
  * Transactions come only from the bank, so there is no offline write queue here.
  */

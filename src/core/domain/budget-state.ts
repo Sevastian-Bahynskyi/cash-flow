@@ -1,4 +1,4 @@
-// Where a budget stands (web/components/Marks.tsx and marks-a/pace.ts), shared by every screen.
+// Where a budget stands, shared by every screen.
 import { daysBetween } from '@/core/fmt';
 import type { Cycle, Model } from '@/core/data/model';
 

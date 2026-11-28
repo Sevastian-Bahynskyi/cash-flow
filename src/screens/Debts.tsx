@@ -23,7 +23,7 @@ const WORD: Record<string, string> = { borrowed: 'Borrowed', lent: 'Lent', repai
 export const debtTitle = (d: Pick<Debt, 'kind' | 'name'>): string => (d.kind === 'loan' ? `You owe ${d.name}` : `${d.name} owes you`);
 export const debtLine = (d: Debt): string => (d.status === 'closed' ? 'Settled' : `${kr(d.remaining_minor, true)} left of ${kr(d.principal_minor, true)}`);
 
-const peopleOf = (m: Model): PersonInput[] => m.t.transfer_people.map((p) => ({ id: p.id, name: p.name, kind: p.kind ?? 'settle_up', opening_balance_minor: p.opening_balance_minor ?? 0, alias_of: p.alias_of ?? null }));
+export const peopleOf = (m: Model): PersonInput[] => m.t.transfer_people.map((p) => ({ id: p.id, name: p.name, kind: p.kind ?? 'settle_up', alias_of: p.alias_of ?? null }));
 /** A person and every name variant that points at them. */
 const idsOf = (people: PersonInput[], id: string): Set<string> => new Set(people.filter((p) => canonicalId(people, p.id) === id).map((p) => p.id).concat(id));
 

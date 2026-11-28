@@ -6,17 +6,12 @@ export type PersonInput = {
   id: string;
   name: string;
   kind: PersonKind;
-  opening_balance_minor: number;
   alias_of: string | null;
 };
 
 export type PeopleTx = {
-  id: string;
-  kind: 'expense' | 'income';
-  amount_minor: number;
   occurred_on: string;
   counterparty_person_id: string | null;
-  movement?: string | null;
   status?: string | null;
 };
 
