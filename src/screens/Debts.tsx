@@ -262,7 +262,7 @@ export function DebtSuggestions({ m }: { m: Model }) {
       <Sec>Part of a debt?</Sec>
       <List>{list.map(({ debt, tx }) => (
         <Row key={tx.id} title={`${tx.kind === 'income' ? `${debt.name} sent` : `You sent ${debt.name}`} ${kr(tx.amount_minor)}`}
-          meta={`${shortDate(tx.occurred_on)}. ${debtTitle(debt)}. Add it as ${WORD[eventKindFor(debt.kind, tx)]?.toLowerCase()}?`}
+          meta={`${shortDate(tx.occurred_on)}. Add it to “${debtTitle(debt)}”?`}
           end={<View style={{ flexDirection: 'row', gap: 4 }}><Btn kind="link" label="No" onPress={() => dismiss(tx.id)} /><Btn kind="ghost" label="Add" disabled={busy} onPress={() => void link(debt, [tx as TransactionRow])} /></View>} />
       ))}</List>
     </>
