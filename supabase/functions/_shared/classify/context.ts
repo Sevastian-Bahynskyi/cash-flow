@@ -18,18 +18,21 @@ const fail = (what: string, message: string): never => {
 
 export async function loadContext(db: SupabaseClient, userId: string, now = new Date().toISOString().slice(0, 10)): Promise<Ctx> {
   // Categories include the system rows (user_id null); rules, memory, people and profile are per user only.
-  const [cats, rules, memory, people, profile] = await Promise.all([
+  const [cats, rules, memory, people, profile, salary] = await Promise.all([
     db.from("categories").select("id, name, parent_id").or(`user_id.eq.${userId},user_id.is.null`).overrideTypes<CategoryRef[], { merge: false }>(),
     db.from("merchant_category_rules").select("pattern, kind, category_id, canonical_merchant, is_blocked").eq("user_id", userId).overrideTypes<RuleRow[], { merge: false }>(),
     db.from("merchant_category_memory").select("normalized_merchant, kind, category_id, canonical_merchant, support_ratio").eq("user_id", userId).overrideTypes<MemoryRow[], { merge: false }>(),
     db.from("transfer_people").select("id, name, normalized_name, kind, alias_of").eq("user_id", userId).overrideTypes<PersonRow[], { merge: false }>(),
     db.from("profiles").select("own_card_suffixes").eq("user_id", userId).maybeSingle().overrideTypes<{ own_card_suffixes: string[] } | null, { merge: false }>(),
+    db.from("transactions").select("occurred_on").eq("user_id", userId).eq("is_salary", true).neq("status", "void")
+      .order("occurred_on", { ascending: false }).limit(1).overrideTypes<{ occurred_on: string }[], { merge: false }>(),
   ]);
   if (cats.error) fail("categories", cats.error.message);
   if (rules.error) fail("rules", rules.error.message);
   if (memory.error) fail("memory", memory.error.message);
   if (people.error) fail("people", people.error.message);
   if (profile.error) fail("profile", profile.error.message);
+  if (salary.error) fail("last salary", salary.error.message);
 
   // Your hand-entered rows only; bank rows never vote on your own labels.
   const manual: { name: string; category_id: string }[] = [];
@@ -57,5 +60,6 @@ export async function loadContext(db: SupabaseClient, userId: string, now = new 
     people: (people.data ?? []).map((p) => ({ ...p, kind: toKind(p.kind) })),
     ownerLabels: deriveOwnerLabels(manual.map((r) => ({ merchant_key: merchantKey(r.name), category_id: r.category_id })), categories),
     ownCardSuffixes: profile.data?.own_card_suffixes ?? [],
+    lastSalaryOn: salary.data?.[0]?.occurred_on ?? null,
   };
 }

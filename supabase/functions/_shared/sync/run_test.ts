@@ -243,6 +243,53 @@ Deno.test({ name: "pending -> booked under a new entry_reference: mirror re-poin
   }
 }});
 
+Deno.test({ name: "pending -> booked with a tip: mirror re-points and takes the booked amount", ...opts, fn: async () => {
+  const w = await world(["revolutPersonal"]);
+  try {
+    await syncUser(db, w.eb, noLabels, w.userId, "cron", null);
+    const dump = [...w.bank.dumps.values()][0];
+    assert(dump);
+    const pending = dump.raw.find((r) => r.status === "PDNG");
+    assert(pending);
+    const pendingRow = must("pending", await db.from("bank_transactions").select("id").eq("user_id", w.userId).eq("ext_id", pending.entry_reference ?? "").single<{ id: string }>());
+    const before = (await txs(w.userId)).find((t) => t.bank_transaction_id === pendingRow.id);
+    assert(before);
+
+    const tipped = (Number(pending.transaction_amount.amount) * 1.1).toFixed(2);
+    dump.raw = dump.raw.filter((r) => r !== pending);
+    dump.raw.push({
+      ...pending, entry_reference: "20000000-0000-4000-8000-00000000b00d", status: "BOOK", booking_date: "2026-11-21", value_date: "2026-11-21",
+      transaction_amount: { ...pending.transaction_amount, amount: tipped },
+    });
+    const run = await syncUser(db, w.eb, noLabels, w.userId, "cron", null);
+    assertEquals(run.ok, true, run.error ?? "");
+
+    const after = (await txs(w.userId)).find((t) => t.id === before.id);
+    assertEquals(after?.status, "booked");
+    assertEquals([after?.amount_minor, after?.original_amount_minor], [Math.round(Number(tipped) * 100), Math.round(Number(tipped) * 100)]);
+    assertEquals((await txs(w.userId)).length, nonZeroRows(w.bank), "no extra mirror for the booked row");
+  } finally {
+    await w.cleanup();
+  }
+}});
+
+Deno.test({ name: "sync: a row in a currency without a rate is skipped, the rest still mirror", ...opts, fn: async () => {
+  const w = await world(["revolutPersonal"]);
+  try {
+    const dump = [...w.bank.dumps.values()][0];
+    const sample = dump?.raw.find((r) => r.status === "BOOK" && Number(r.transaction_amount.amount) !== 0);
+    assert(dump && sample);
+    dump.raw.push({ ...sample, entry_reference: "20000000-0000-4000-8000-00000000b0se", transaction_amount: { currency: "SEK", amount: "100.00" } });
+    const run = await syncUser(db, w.eb, noLabels, w.userId, "cron", null);
+    assertEquals(run.ok, true, run.error ?? "");
+    const rows = await txs(w.userId);
+    assertEquals(rows.length, nonZeroRows(w.bank) - 1);
+    assert(rows.every((t) => t.currency_code !== "SEK"));
+  } finally {
+    await w.cleanup();
+  }
+}});
+
 Deno.test({ name: "PDNG unseen for 10 days -> EXPIRED, mirror void with zero budget effect", ...opts, fn: async () => {
   const w = await world(["revolutPersonal"]);
   try {
