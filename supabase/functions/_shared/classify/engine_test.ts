@@ -237,3 +237,34 @@ Deno.test("no personal facts in the engine: names and cards come only from ctx",
   const t = find(txs, "joint", (x) => x.bank_code === "TOPUP" && rem("*9001")(x));
   assertEquals(labelOf(labels, t).shared_participant, "gf");
 });
+
+// A bare Lunar row (no bank code): money in names the payer, money out the payee.
+const lunarRow = (rowId: string, amount: number, text: string, date = "2026-11-20"): BankTx => ({
+  id: rowId, account_role: "personal", bank: "lunar", amount_minor: amount, currency: "DKK", booking_date: date,
+  creditor_name: amount < 0 ? text : null, debtor_name: amount > 0 ? text : null, remittance: text, mcc: null, bank_code: null,
+});
+
+Deno.test("unknown person: incoming 'Overførsel MobilePay <name>' is money moved, not a refund", () => {
+  const t = lunarRow("in", 25000, "Overførsel MobilePay Zorn Quibble");
+  const l = labelOf(classify(ctx(), [t]), t);
+  assertEquals([l.movement, l.category_id, l.needs_review], ["person", id("MobilePay"), false]);
+});
+
+Deno.test("people: æøå names match the ascii bank text, with or without the 'Overførsel' prefix", () => {
+  // The app saves the name as typed (søren); the bank key folds it (soren).
+  const soren = { id: "p-soren", name: "Søren Hansen", normalized_name: "søren hansen", kind: "settle_up" as const, alias_of: null };
+  const rows = [lunarRow("prefixed", -15000, "Overførsel Søren Hansen"), lunarRow("plain", 15000, "SOREN HANSEN")];
+  const labels = classify(ctx({ people: [...ctx().people, soren] }), rows);
+  for (const t of rows) assertEquals([labelOf(labels, t).movement, labelOf(labels, t).counterparty_person_id], ["person", "p-soren"], t.id);
+});
+
+Deno.test("salary: a second LØNOVERFØRSEL within 20 days is extra income and starts no cycle", () => {
+  const pay = lunarRow("pay", 2500000, "LØNOVERFØRSEL", "2026-10-30");
+  const bonus = lunarRow("bonus", 120000, "LØNOVERFØRSEL", "2026-11-03");
+  const next = lunarRow("next", 2500000, "LØNOVERFØRSEL", "2026-11-28");
+  const labels = classify(ctx(), [pay, bonus, next]);
+  assertEquals([pay, bonus, next].map((t) => labelOf(labels, t).is_salary), [true, false, true]);
+  assertEquals(labelOf(labels, bonus).movement, "income");
+  // The newest saved salary counts too.
+  assertEquals(labelOf(classify(ctx({ lastSalaryOn: "2026-10-25" }), [bonus]), bonus).is_salary, false);
+});

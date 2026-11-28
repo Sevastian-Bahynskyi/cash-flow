@@ -2,6 +2,7 @@
 // The service-role client is passed in; every query here is filtered by user_id.
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import type { EbAccountDetails, EbClient, PsuHeaders } from "../enable-banking.ts";
+import { personKeys, personMatcher, type PersonKind } from "../classify/engine.ts";
 import { linkHistory } from "../link-history.ts";
 import {
   accountRole,
@@ -12,6 +13,7 @@ import {
   matchPendingToBooked,
   pickBalance,
   copenhagenToday,
+  type DatedRow,
   toLedgerRows,
   toMinor,
 } from "./ledger.ts";
@@ -105,6 +107,18 @@ const DKK_PER = { DKK: 1, EUR: 7.46 } as const;
 
 const MIRROR_STATUS: Record<"BOOK" | "PDNG", "booked" | "pending"> = { BOOK: "booked", PDNG: "pending" };
 
+type AmountRow = DatedRow & { amount_minor: number; currency: string };
+
+// The bank's latest amount and date for a mirrored row; null for a currency without a rate.
+const mirrorAmounts = (row: AmountRow) => {
+  const rate = DKK_PER[row.currency as keyof typeof DKK_PER];
+  if (rate === undefined) return null;
+  const date = effectiveDate(row);
+  const original = Math.abs(row.amount_minor);
+  const converted = Math.round(original * rate);
+  return { amount_minor: converted, original_amount_minor: original, converted_amount_minor: converted, ...(date ? { occurred_on: date } : {}) };
+};
+
 const errorMessage = (error: unknown): string => (error instanceof Error ? error.message : String(error)).slice(0, 500);
 
 const fail = (what: string, error: { message: string } | null): void => {
@@ -141,6 +155,14 @@ const setMirrorStatus = async (
     const { error } = await db.from("transactions").update({ status }).eq("user_id", userId).in("bank_transaction_id", ids);
     fail("transactions status", error);
   }
+};
+
+// Tips and FX settle after the hold: a bank-made row takes the booked amount. Hand-entered rows keep theirs.
+const setMirrorAmounts = async (db: SupabaseClient, userId: string, bankId: string, row: AmountRow): Promise<void> => {
+  const values = mirrorAmounts(row);
+  if (!values) return;
+  const { error } = await db.from("transactions").update(values).eq("user_id", userId).eq("source", "bank").eq("bank_transaction_id", bankId);
+  fail("transactions amount", error);
 };
 
 // Accounts are keyed by identification_hash: a re-consent updates uid/connection, never duplicates.
@@ -235,7 +257,7 @@ const syncAccount = async (
   }
 
   const insertedBooked: string[] = [];
-  const statusChanges: { id: string; status: "BOOK" | "PDNG" }[] = [];
+  const statusChanges: { id: string; ext_id: string; status: "BOOK" | "PDNG" }[] = [];
   let inserted = 0;
   for (const rows of chunks(fetched, CHUNK)) {
     const payload = rows.map((row) => ({
@@ -258,7 +280,7 @@ const syncAccount = async (
         inserted += 1;
         if (row.status === "BOOK") insertedBooked.push(row.id);
       } else if (before.status !== row.status && (row.status === "BOOK" || row.status === "PDNG")) {
-        statusChanges.push({ id: row.id, status: row.status });
+        statusChanges.push({ id: row.id, ext_id: row.ext_id, status: row.status });
       }
     }
   }
@@ -266,6 +288,10 @@ const syncAccount = async (
   // Same ext_id changed state (e.g. Revolut PDNG -> BOOK, or an expired row came back).
   for (const status of ["BOOK", "PDNG"] as const) {
     await setMirrorStatus(db, userId, statusChanges.filter((c) => c.status === status).map((c) => c.id), MIRROR_STATUS[status]);
+  }
+  for (const change of statusChanges) {
+    const row = byExtId.get(change.ext_id);
+    if (change.status === "BOOK" && row) await setMirrorAmounts(db, userId, change.id, row);
   }
 
   // Pending -> booked under a new ext_id: the mirrored row moves to the booked bank row.
@@ -280,6 +306,7 @@ const syncAccount = async (
       fail("booked select", error);
       booked.push(...(data ?? []));
     }
+    const bookedById = new Map(booked.map((row) => [row.id, row]));
     for (const match of matchPendingToBooked(pending, booked)) {
       const { error } = await db
         .from("bank_transactions")
@@ -293,6 +320,8 @@ const syncAccount = async (
         .eq("user_id", userId)
         .eq("bank_transaction_id", match.pendingId);
       fail("transactions repoint", repointError);
+      const bookedRow = bookedById.get(match.bookedId);
+      if (bookedRow) await setMirrorAmounts(db, userId, match.bookedId, bookedRow);
     }
   }
 
@@ -420,6 +449,11 @@ const mirrorNewRows = async (
       const account = accounts.get(row.account_id);
       if (!date || !account || linked.has(row.id) || row.amount_minor === 0) return [];
       if (cutoff !== null && date <= cutoff) return [];
+      // No rate for it: log it and leave it in the ledger, so the other rows still mirror.
+      if (!(row.currency in DKK_PER)) {
+        console.warn("[sync] row not mirrored: unsupported currency", { id: row.id, currency: row.currency });
+        return [];
+      }
       return [{ row, date, account }];
     })
     .sort((a, b) => a.date.localeCompare(b.date) || a.row.id.localeCompare(b.row.id));
@@ -447,7 +481,6 @@ const mirrorNewRows = async (
   const inserts = rows.map(({ row, date }) => {
     const label = labels.get(row.id);
     const rate = DKK_PER[row.currency as keyof typeof DKK_PER];
-    if (rate === undefined) throw new Error(`unsupported currency ${row.currency}`);
     const original = Math.abs(row.amount_minor);
     const converted = Math.round(original * rate);
     // Old schema: a shared top-up is an 'expense' (personal money into the pot) and never 'shared'.
@@ -489,6 +522,54 @@ const mirrorNewRows = async (
     fail("transactions insert", insertError);
   }
   return inserts.length;
+};
+
+type PersonRow = { id: string; name: string; normalized_name: string; kind: PersonKind; alias_of: string | null };
+type UnlinkedRow = { id: string; merchant_key: string };
+
+// People added after their transfers were mirrored: link those rows (same matching as the classifier),
+// and a plain spend in MobilePay/Transfer becomes money moved to that person, out of the Inbox. Linked rows are skipped next time.
+const linkPeople = async (db: SupabaseClient, userId: string): Promise<number> => {
+  const { data: people, error } = await db.from("transfer_people").select("id, name, normalized_name, kind, alias_of").eq("user_id", userId)
+    .overrideTypes<PersonRow[], { merge: false }>();
+  fail("people select", error);
+  const match = personMatcher(people ?? []);
+  const keys = [...new Set((people ?? []).flatMap(personKeys))];
+  if (keys.length === 0) return 0;
+
+  const rows: UnlinkedRow[] = [];
+  for (const batch of chunks(keys, CHUNK)) {
+    rows.push(...await selectAll<UnlinkedRow>("unlinked select", (from, to) =>
+      db.from("transactions").select("id, merchant_key").eq("user_id", userId).is("counterparty_person_id", null)
+        .in("merchant_key", batch).order("id").range(from, to).overrideTypes<UnlinkedRow[], { merge: false }>()));
+  }
+  const byPerson = new Map<string, string[]>();
+  for (const row of rows) {
+    const person = match(row.merchant_key);
+    // Own accounts and ignored names are not people money moves to.
+    if (!person || person.kind === "self" || person.kind === "ignore") continue;
+    byPerson.set(person.id, [...(byPerson.get(person.id) ?? []), row.id]);
+  }
+  if (byPerson.size === 0) return 0;
+
+  const { data: cats, error: catsError } = await db.from("categories").select("id").eq("is_system", true).in("name", ["MobilePay", "Transfer"])
+    .overrideTypes<{ id: string }[], { merge: false }>();
+  fail("categories select", catsError);
+  const transferCats = (cats ?? []).map((c) => c.id);
+  let linked = 0;
+  for (const [personId, ids] of byPerson) {
+    for (const batch of chunks(ids, CHUNK)) {
+      const { error: linkError } = await db.from("transactions").update({ counterparty_person_id: personId })
+        .eq("user_id", userId).is("counterparty_person_id", null).in("id", batch);
+      fail("people link", linkError);
+      linked += batch.length;
+      if (transferCats.length === 0) continue;
+      const { error: moveError } = await db.from("transactions").update({ movement: "person", needs_review: false })
+        .eq("user_id", userId).eq("movement", "spend").in("category_id", transferCats).in("id", batch);
+      fail("people movement", moveError);
+    }
+  }
+  return linked;
 };
 
 const RUN_COLUMNS = "id, trigger, started_at, finished_at, ok, error, accounts, fetched, inserted";
@@ -617,6 +698,7 @@ export const syncUser = async (
 
     if (anyFirstSync) await linkManualHistory(db, userId);
     await mirrorNewRows(db, userId, labeler, accounts);
+    await linkPeople(db, userId);
   } catch (error) {
     errors.push(errorMessage(error));
   }
