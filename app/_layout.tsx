@@ -63,6 +63,7 @@ function AppStack(): React.JSX.Element {
             // the system push, with Back by a swipe from anywhere on the screen
             <Stack.Screen key={name} name={name} options={{ animation: 'default', fullScreenGestureEnabled: true }} />
           ))}
+          <Stack.Screen name="guide" options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />
           <Stack.Screen name="sign-in" />
           <Stack.Screen name="sign-up" />
           <Stack.Screen name="auth-callback" />
