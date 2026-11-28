@@ -287,8 +287,12 @@ function Plan({ m }: { m: Model }) {
   const header = <Header back title="Cycle plan" />;
   if (!c) return <Screen header={header}><Panel><Empty title="No salary yet" sub="The plan starts with your first salary." /></Panel></Screen>;
   const ifAll = b.salary - b.total;
-  const real = b.salary - b.allMine;
-  const flow: [string, string, string?][] = [['Money in', plus(b.income, true), C.in], ['If every budget is fully spent', ifAll < 0 ? kr(ifAll, true) : `${kr(ifAll, true)} to save`], ['Real available to save, after what you spent', kr(real, true), real < 0 ? C.over : undefined]];
+  // What can be saved: the salary minus what is spent and the room still left in budgets (a budget will be used up).
+  // A finished cycle has no room left: it is simply what was saved.
+  const room = c.endOnExclusive && c.endOnExclusive <= m.today ? 0 : b.list.reduce((s, x) => s + Math.max(0, x.left), 0);
+  const real = b.salary - b.allMine - room;
+  const flow: [string, string, string?][] = [['Money in', plus(b.income, true), C.in], ['If every budget is fully spent', ifAll < 0 ? kr(ifAll, true) : `${kr(ifAll, true)} to save`],
+    room ? ['Available to save, after budgets and what you spent', kr(real, true), real < 0 ? C.over : undefined] : ['Saved this cycle', kr(real, true), real < 0 ? C.over : undefined]];
   return (
     <Screen header={header}>
       <CyclePick m={m} idx={idx} onPick={(id) => router.setParams({ cycle: id })} />
