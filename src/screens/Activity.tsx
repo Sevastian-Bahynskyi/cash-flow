@@ -1,8 +1,7 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { TextInput, View } from 'react-native';
 import Animated, { FadeIn, FadeInUp, FadeOut } from 'react-native-reanimated';
-import { useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { markSeen } from '@/core/data/inboxSeen';
+import { useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useStore, write } from '@/core/data/store';
 import type { Model } from '@/core/data/model';
@@ -76,9 +75,6 @@ function Transactions({ m }: { m: Model }) {
   const [q, setQ] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [shown, setShown] = useState(1);
-  // Looking at Activity clears the tab's count of new Inbox items.
-  const inboxIds = m.inbox.map((t) => t.id).join();
-  useFocusEffect(useCallback(() => { markSeen(inboxIds ? inboxIds.split(',') : []); }, [inboxIds]));
 
   const scoped = useMemo(() => {
     let L = [...m.tx].reverse();
