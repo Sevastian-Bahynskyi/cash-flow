@@ -5,8 +5,9 @@ import { applyCategoryOverrides, buildCategoryMeta, getDisplayCategoryName, type
 import type { CategoryOption } from '@/core/domain/categories-types'
 import { findIncomeParentIds } from '@/core/domain/category-rules'
 import { buildNavigableCycles, findCycleFor, type SalaryCycle } from '@/core/domain/cycles'
-import { computeMyCostByTransactionId } from '@/core/domain/shared'
-import { applyTrips, placeOf as placeOfRow, tripOn, type PlaceRow } from '@/core/domain/trips'
+import { shareOn } from '@/core/domain/shared'
+import { costOf, partsOf, type Portion } from '@/core/domain/splits'
+import { applyTrips, placeOf as placeOfRow, travelCategoryFor, tripOn, type PlaceRow } from '@/core/domain/trips'
 import { debtsOf, linkedIds } from '@/core/domain/debts'
 import { addDays, daysBetween, todayYmd } from '@/core/fmt'
 import { supabaseUrl } from '@/lib/supabase'
@@ -45,26 +46,32 @@ function derive(t: Tables) {
   // Keyed like scripts/logos.ts logoKey.
   const logos = new Map(t.merchant_logos.map((l) => [l.key, `${supabaseUrl}/storage/v1/object/public/merchant-logos/${encodeURIComponent(l.path)}`]))
   const logoOf = (name: string): string | null => logos.get(name.trim().toLowerCase()) ?? null
-  // My cost of each expense: joint spending at my share of the cycle's top-ups (trailing 90 days, then half, when a cycle has none).
-  const share = computeMyCostByTransactionId(tx, buildNavigableCycles(tx), today)
+  const raw = buildNavigableCycles(tx)
+  // My share of joint spending on a day: the cycle's top-ups (trailing 90 days, then half, when a cycle has none).
+  const ratioOn = shareOn(tx, raw, today)
   const paidBack = new Map<string, number>()
   for (const p of t.paybacks) paidBack.set(p.expense_transaction_id, (paidBack.get(p.expense_transaction_id) ?? 0) + p.amount_minor)
   const splitsOf = new Map<string, typeof t.transaction_splits>()
   for (const sp of t.transaction_splits) splitsOf.set(sp.transaction_id, [...(splitsOf.get(sp.transaction_id) ?? []), sp])
   const NEUTRAL = new Set(['moved', 'topup', 'ignore'])
-  /** What this row costs you: your share of a shared expense, less what people paid back; nothing for money moved, top-ups or transfers. */
-  const mine = (r: TransactionRow): number => r.kind !== 'expense' || r.is_shared_topup || linked.has(r.id) || NEUTRAL.has(r.movement ?? '') || isTransfer(r.category_id) ? 0
-    : Math.max(0, (share.get(r.id) ?? r.amount_minor) - (paidBack.get(r.id) ?? 0))
-  /** What a joint purchase costs the joint account: its full amount, once. Top-ups, money moved and transfers cost nothing. */
-  const joint = (r: TransactionRow): number => !r.shared || r.kind !== 'expense' || r.status === 'void' || r.is_shared_topup || NEUTRAL.has(r.movement ?? '') || isTransfer(r.category_id) ? 0 : r.amount_minor
-  /** A row's cost by category for one scope: split parts go to their own category, the rest stays on the row's (budgets and analytics sum these). */
-  const portions = (r: TransactionRow, scope: Scope = 'personal'): { category_id: string | null; minor: number }[] => {
-    const v = scope === 'shared' ? joint(r) : mine(r)
-    const sp = splitsOf.get(r.id)
-    if (!v || !sp?.length || !r.amount_minor) return [{ category_id: r.category_id, minor: v }]
-    const parts = sp.map((x) => ({ category_id: x.category_id, minor: Math.round((v * x.amount_minor) / r.amount_minor) }))
-    return [...parts, { category_id: r.category_id, minor: v - parts.reduce((a, x) => a + x.minor, 0) }]
+  /** Spending at all: not money moved, top-ups, transfers, void rows or transfers paying into a debt. */
+  const counts = (r: TransactionRow): boolean => r.kind === 'expense' && r.status !== 'void' && !r.is_shared_topup && !linked.has(r.id) && !NEUTRAL.has(r.movement ?? '') && !isTransfer(r.category_id)
+  /**
+   * A row's cost by category for one scope: split parts go to their own category and are yours or shared each,
+   * the rest stays on the row's category and whose. Personal: your share of shared parts, less what people paid back.
+   * Shared: what the joint account pays (budgets and analytics sum these).
+   */
+  const portions = (r: TransactionRow, scope: Scope = 'personal'): Portion[] => {
+    if (!counts(r)) return [{ category_id: r.category_id, gross: r.amount_minor, shared: r.shared, minor: 0 }]
+    // on a trip the row moved to Travel; its parts follow to their Travel category when there is one
+    const trip = (r as { home_category_id?: string | null }).home_category_id !== undefined
+    const sp = (splitsOf.get(r.id) ?? []).map((x) => ({ ...x, category_id: (trip && travelCategoryFor(cats, x.category_id)) || x.category_id }))
+    return costOf(partsOf(r, sp), scope, ratioOn(r.occurred_on), paidBack.get(r.id) ?? 0)
   }
+  /** What this row costs you, all parts together. */
+  const mine = (r: TransactionRow): number => portions(r).reduce((a, p) => a + p.minor, 0)
+  /** Some of it is shared with the partner: the whole row or one of its parts. */
+  const sharedSome = (r: TransactionRow): boolean => r.shared || (splitsOf.get(r.id) ?? []).some((x) => x.shared)
   const spendingIn = (r: TransactionRow, categoryId: string, scope: Scope = 'personal'): number => {
     const category = byId.get(categoryId)
     return portions(r, scope).reduce((sum, part) => {
@@ -74,7 +81,6 @@ function derive(t: Tables) {
     }, 0)
   }
 
-  const raw = buildNavigableCycles(tx)
   const cycles: Cycle[] = raw.map((c) => {
     const real = isReal(c)
     const endInclusive = c.endOnExclusive ? addDays(c.endOnExclusive, -1) : expectedPayday(c, raw) ? addDays(expectedPayday(c, raw) as string, -1) : today
@@ -121,7 +127,7 @@ function derive(t: Tables) {
   const days = current ? Math.max(1, daysBetween(current.startOn, current.endInclusive) + 1) : 0
   const daysLeft = current ? Math.max(0, daysBetween(today, current.endInclusive) + 1) : 0
 
-  return { t, today, options, cats, byId, meta, parentOf, logoOf, places, placeOf, tripOf, debts, linked, inbox, incomeParents, isTransfer, tx, share, mine, portions, spendingIn, splitsOf, paidBack, cycles, current, inCycle, prevOf, budgetsOf, bankOf, days, daysLeft,
+  return { t, today, options, cats, byId, meta, parentOf, logoOf, places, placeOf, tripOf, debts, linked, inbox, incomeParents, isTransfer, tx, mine, sharedSome, portions, spendingIn, splitsOf, paidBack, cycles, current, inCycle, prevOf, budgetsOf, bankOf, days, daysLeft,
     payday: current ? addDays(current.endInclusive, 1) : null, hasSalary: tx.some((r) => r.is_salary) }
 }
 

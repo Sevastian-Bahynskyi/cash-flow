@@ -84,7 +84,7 @@ function Transactions({ m }: { m: Model }) {
     let L = [...m.tx].reverse();
     if (catParam) L = L.filter((t) => (!from || t.occurred_on >= from) && (!until || t.occurred_on < until) && m.spendingIn(t, catParam, scope) > 0);
     if (filter === 'mine') L = L.filter((t) => !t.shared && !t.is_shared_topup);
-    if (filter === 'shared') L = L.filter((t) => t.shared || t.is_shared_topup);
+    if (filter === 'shared') L = L.filter((t) => m.sharedSome(t) || t.is_shared_topup);
     if (q.trim()) L = L.filter((t) => matches(t, m, q));
     return L;
   }, [m, catParam, from, until, filter, q, scope]);

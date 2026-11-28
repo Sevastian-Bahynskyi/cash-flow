@@ -15,7 +15,7 @@ export type BankAccountRow = { id: string; connection_id: string; name: string |
 /** A merchant's cached logo: `path` is the object in the public merchant-logos bucket. */
 export type MerchantLogoRow = { key: string; path: string }
 export type SyncRunRow = { id: string; trigger: 'cron' | 'user'; started_at: string; finished_at: string | null; ok: boolean | null; error: string | null }
-export type SplitRow = { id: string; user_id: string; transaction_id: string; category_id: string; amount_minor: number; note: string | null; created_at: string }
+export type SplitRow = { id: string; user_id: string; transaction_id: string; category_id: string; amount_minor: number; shared: boolean; note: string | null; created_at: string }
 export type PaybackRow = { id: string; user_id: string; payment_transaction_id: string; expense_transaction_id: string; amount_minor: number; created_at: string }
 export type ProfileRow = { display_name: string | null; avatar_url: string | null }
 
