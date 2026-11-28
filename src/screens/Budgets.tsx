@@ -7,7 +7,7 @@ import { useStore } from '@/core/data/store';
 import type { Cycle, Model, Scope } from '@/core/data/model';
 import type { CategoryRow, TransactionRow } from '@/core/data/types';
 import { budgetState, goneShare } from '@/core/domain/budget-state';
-import { dayLabel, daysBetween, kr, plus, shortDate, ymd } from '@/core/fmt';
+import { dayLabel, daysBetween, kr, shortDate, ymd } from '@/core/fmt';
 import { AuraPager } from '@/ui/aura/AuraPager';
 import { moodForPace, type Mood } from '@/ui/aura/moods';
 import { budgetColor, C, F } from '@/ui/kit/theme';
@@ -56,7 +56,7 @@ function BankLine({ m, scope, isCurrent }: { m: Model; scope: Scope; isCurrent: 
             <T k="meta">Includes money from earlier cycles</T>
             <T k="meta" style={stale ? { color: C.ahead } : undefined}>{synced}</T>
           </>
-        ) : <T k="meta">{`The bank hasn’t sent a balance for your ${which} yet. Open Bank to sync or connect it.`}</T>}
+        ) : <T k="meta">{`The bank hasn’t sent a balance for your ${which} yet. Open Settings, Accounts & sync, to sync it.`}</T>}
       </Panel>
     </Press>
   );
@@ -177,7 +177,7 @@ function BudgetList({ m, c, b, scope }: { m: Model; c: Cycle; b: ReturnType<Mode
         const color = budgetColor(cat);
         const subtitle = item ? `${kr(spent, true)} of ${kr(item.amount, true)}` : `${kr(spent, true)} spent`;
         const state = item ? budgetState(spent, item.amount, share) : 'none';
-        const remaining = item ? `${kr(Math.abs(item.left), true)} ${item.left < 0 ? 'over' : 'left'}${state === 'ahead' ? ', ahead of pace' : ''}` : 'No budget';
+        const remaining = item ? `${kr(Math.abs(item.left), true)} ${item.left < 0 ? 'over' : 'left'}${state === 'ahead' ? ', going fast' : ''}` : 'No budget';
         return (
           <List key={cat.id} animate>{[
             <Row key={cat.id} expanded={kids.length ? isOpen : undefined} stackEnd={largeText} accessibilityLabel={`${cat.name}, ${subtitle}, ${remaining}`}
@@ -291,8 +291,8 @@ function Plan({ m }: { m: Model }) {
   // A finished cycle has no room left: it is simply what was saved.
   const room = c.endOnExclusive && c.endOnExclusive <= m.today ? 0 : b.list.reduce((s, x) => s + Math.max(0, x.left), 0);
   const real = b.salary - b.allMine - room;
-  const flow: [string, string, string?][] = [['Money in', plus(b.income, true), C.in], ['If every budget is fully spent', ifAll < 0 ? kr(ifAll, true) : `${kr(ifAll, true)} to save`],
-    room ? ['Available to save, after budgets and what you spent', kr(real, true), real < 0 ? C.over : undefined] : ['Saved this cycle', kr(real, true), real < 0 ? C.over : undefined]];
+  const flow: [string, string, string?][] = [['If every budget is fully spent', ifAll < 0 ? kr(ifAll, true) : `${kr(ifAll, true)} to save`],
+    room ? ['Available to save', kr(real, true), real < 0 ? C.over : undefined] : ['Saved this cycle', kr(real, true), real < 0 ? C.over : undefined]];
   return (
     <Screen header={header}>
       <CyclePick m={m} idx={idx} onPick={(id) => router.setParams({ cycle: id })} />

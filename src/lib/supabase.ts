@@ -10,12 +10,8 @@ const fixture = Boolean(qaScenario());
 const url = fixture ? 'http://127.0.0.1:1' : normalizeUrl(process.env.EXPO_PUBLIC_SUPABASE_URL);
 const publishableKey = fixture ? 'cashflow-read-only-fixture' :
   (text(process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY) ?? text(process.env.EXPO_PUBLIC_SUPABASE_KEY));
-export const supabasePublishableKey = publishableKey;
-export const supabaseAnonKey = fixture ? undefined :
-  (text(process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY) ?? text(process.env.EXPO_PUBLIC_SUPABASE_KEY));
 export const supabaseUrl = url;
 export const supabaseAuthUrl = fixture ? url : normalizeUrl(process.env.EXPO_PUBLIC_SUPABASE_AUTH_URL) ?? url;
-export const supabaseFunctionsUrl = url ? `${url}/functions/v1` : undefined;
 
 if (!url || !publishableKey) {
   throw new Error(

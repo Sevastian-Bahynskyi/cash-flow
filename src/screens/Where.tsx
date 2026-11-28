@@ -87,11 +87,19 @@ function Where({ m }: { m: Model }) {
       return { id, name: cat?.name ?? 'Uncategorized', icon: cat?.icon, color: budgetColor(cat), s, l: was.get(id) ?? 0 };
     }).sort((a, b) => b.s - a.s);
     const spent = list.reduce((a, x) => a + x.s, 0), lastSpent = [...was.values()].reduce((a, v) => a + v, 0);
-    const income = rows.filter((r) => r.kind === 'income' && !m.isTransfer(r.category_id)).reduce((a, r) => a + r.amount_minor, 0);
-    const moved = rows.filter((r) => r.kind === 'expense' && (r.is_shared_topup || r.movement === 'moved' || r.movement === 'topup' || m.isTransfer(r.category_id)) && r.shared_participant !== 'gf').reduce((a, r) => a + r.amount_minor, 0);
+    // Money in: income that isn't a transfer, a top-up or part of a debt.
+    const inn = (r: TransactionRow): boolean => r.kind === 'income' && !r.is_shared_topup && !m.linked.has(r.id) && !m.isTransfer(r.category_id);
+    // What you put in the pot: the joint account's side of your top-up (the personal side is the same money).
+    const potIn = (r: TransactionRow): boolean => r.is_shared_topup && r.kind === 'expense' && r.shared_participant !== 'gf';
+    // Your spending outside the pot: the pot already paid your share of shared purchases.
+    const own = (r: TransactionRow): number => m.portions(r).reduce((a, p) => a + (p.shared ? 0 : p.minor), 0);
+    const income = rows.filter(inn).reduce((a, r) => a + r.amount_minor, 0);
+    const moved = rows.filter(potIn).reduce((a, r) => a + r.amount_minor, 0);
     const days = Math.max(1, daysBetween(w.start, w.endEx < addDays(todayYmd(), 1) ? w.endEx : addDays(todayYmd(), 1)));
     const run: number[] = []; let acc = 0;
-    for (let i = 0; i < days; i++) { const d = addDays(w.start, i); for (const r of rows) if (r.occurred_on === d) acc += r.personal_effect_minor ?? (r.kind === 'income' ? r.amount_minor : -m.mine(r)); run.push(acc); }
+    const byDay = new Map<string, number>();
+    for (const r of rows) byDay.set(r.occurred_on, (byDay.get(r.occurred_on) ?? 0) + (inn(r) ? r.amount_minor : potIn(r) ? -r.amount_minor : -own(r)));
+    for (let i = 0; i < days; i++) { acc += byDay.get(addDays(w.start, i)) ?? 0; run.push(acc); }
     const sharedMine = rows.reduce((a, r) => a + m.portions(r).reduce((b, p) => b + (p.shared ? p.minor : 0), 0), 0);
     return { list, spent, lastSpent, income, moved, run, sharedMine };
   }, [m, w]);
@@ -136,10 +144,10 @@ function Where({ m }: { m: Model }) {
             {w.prev ? <T k="meta">{!x.l ? `Nothing in ${w.prevLabel}` : x.s === x.l ? `The same as ${w.prevLabel}` : `${word(x.s - x.l)} than ${w.prevLabel}, ${kr(x.l, true)}`}</T> : null}
           </View>
         ))}</Panel>
-        <T k="note">The tick shows {w.prevLabel || 'the period before'}. Your part of shared expenses counts. Not counted as spending: {kr(moved, true)} moved to the pot, to savings or between accounts.</T>
+        <T k="note">The tick shows {w.prevLabel || 'the period before'}. Your share of shared purchases counts.</T>
       </>}
       <Sec>Money in and out</Sec>
-      <List>{([['Money in', plus(income, true), C.in], ['Your spending', kr(spent, true)], ['Moved, not spent', kr(moved, true), C.ink2], ['Left over', leftOver > 0 ? plus(leftOver, true) : kr(leftOver, true)]] as [string, string, string?][]).map(([k, v, color]) => (
+      <List>{([['Money in', plus(income, true), C.in], ['Spent from your own accounts', kr(spent - sharedMine, true)], ['Put in the pot', kr(moved, true)], ['Left over', leftOver > 0 ? plus(leftOver, true) : kr(leftOver, true)]] as [string, string, string?][]).map(([k, v, color]) => (
         <Row key={k} title={<T>{k}</T>} end={<T k="num" style={color ? { color } : undefined}>{v}</T>} />
       ))}</List>
       {run.length > 1 ? (

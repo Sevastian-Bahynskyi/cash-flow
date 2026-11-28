@@ -97,7 +97,7 @@ function CategorySheet({ m, edit, budgetOf, onOpen, onClose }: { m: Model; edit:
   );
 }
 
-function PersonSheet({ p, onClose }: { p: TransferPersonRow | null; onClose: () => void }) {
+export function PersonSheet({ p, onClose }: { p: TransferPersonRow | null; onClose: () => void }) {
   const { userId } = useStore();
   const { busy, err, save } = useSaver();
   const [name, setName] = useState(p?.name ?? '');
@@ -125,7 +125,6 @@ function PersonSheet({ p, onClose }: { p: TransferPersonRow | null; onClose: () 
 
 function Categories({ m }: { m: Model }) {
   const [edit, setEdit] = useState<Edit | null>(null);
-  const [person, setPerson] = useState<TransferPersonRow | 'new' | null>(null);
   const budgets = m.current ? m.t.budgets.filter((b) => b.salary_cycle_id === m.current?.id) : [];
   const budgetOf = (id: string): number | undefined => budgets.find((b) => b.category_id === id)?.amount_minor;
   const parents = m.cats.filter((c) => c.level === 1);
@@ -139,7 +138,6 @@ function Categories({ m }: { m: Model }) {
   };
   const tree = (list: CategoryRow[]) => list.flatMap((p) => [row(p, false), ...childrenOf(p.id).map((c) => row(c, true))]);
   const exp = parents.filter((p) => !m.incomeParents.has(p.id)), inc = parents.filter((p) => m.incomeParents.has(p.id));
-  const people = m.t.transfer_people;
   return (
     <Screen header={<Header back title="Categories" right={<IconBtn name="add" label="New category" onPress={() => setEdit({ id: null, parentId: null })} />} />}>
       <Sec>Expenses</Sec>
@@ -147,12 +145,7 @@ function Categories({ m }: { m: Model }) {
       <Btn kind="ghost" icon="add" label="New category" onPress={() => setEdit({ id: null, parentId: null })} />
       <Sec>Income</Sec>
       {inc.length ? <List>{tree(inc)}</List> : <Panel><Empty title="No income categories." sub="" /></Panel>}
-      <Sec>People</Sec>
-      {people.length ? <List>{people.map((p) => <Row key={p.id} onPress={() => setPerson(p)} lead={<Disc icon="profile" />} title={p.name} end={<Icon name="chev" size={16} color={C.ink3} />} />)}</List> : <Panel><Empty title="No people added yet." sub="" /></Panel>}
-      <Btn kind="ghost" icon="add" label="Add person" onPress={() => setPerson('new')} />
-      <T k="note">Transfers to or from these people go under Transfers, not spending.</T>
       {edit ? <CategorySheet key={edit.id ?? `new-${edit.parentId}`} m={m} edit={edit} budgetOf={budgetOf} onOpen={setEdit} onClose={() => setEdit(null)} /> : null}
-      {person ? <PersonSheet key={person === 'new' ? 'new' : person.id} p={person === 'new' ? null : person} onClose={() => setPerson(null)} /> : null}
     </Screen>
   );
 }

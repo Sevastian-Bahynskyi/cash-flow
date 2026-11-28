@@ -4,16 +4,16 @@ import { supabase } from '@/lib/supabase';
 import { useStore } from '@/core/data/store';
 import type { Model } from '@/core/data/model';
 import type { MerchantRuleRow } from '@/core/data/types';
-import { findSharedTopupCategoryOption, isAllowedIncomeCategoryOption, isIncomeCategoryOption } from '@/core/domain/category-rules';
+import { isAllowedIncomeCategoryOption, isIncomeCategoryOption } from '@/core/domain/category-rules';
 import { normalizeMerchantLookupKey } from '@/core/domain/merchant';
 import { C, F } from '@/ui/kit/theme';
 import { Btn, Disc, Empty, Field, Header, Icon, IconBtn, List, Panel, Row, Screen, Seg, Sheet, T } from '@/ui/kit/ui';
-import { Gate } from '@/ui/kit/money';
+import { CategoryTree, Gate } from '@/ui/kit/money';
 import { DeleteAsk, FormErr, Toggle, useSaver } from '@/ui/kit/forms';
 
 type Kind = 'expense' | 'income';
 type Match = MerchantRuleRow['match_type'];
-type Draft = { pattern: string; match: Match; kind: Kind; cat: string | null; block: boolean; topup: boolean; note: string };
+type Draft = { pattern: string; kind: Kind; cat: string | null; block: boolean; note: string };
 const MATCH: Record<Match, string> = { exact: 'Is exactly', prefix: 'Starts with', contains: 'Contains', regex: 'Matches a pattern' };
 const whatOf = (r: MerchantRuleRow, m: Model): string => (r.is_blocked ? 'No suggestions' : r.is_shared_topup ? 'Top-up to the pot' : m.meta[r.category_id ?? '']?.name ?? 'Category');
 const iconOf = (r: MerchantRuleRow, m: Model): string => (r.is_blocked ? 'close' : r.is_shared_topup ? 'moved' : m.meta[r.category_id ?? '']?.icon ?? 'other');
@@ -21,23 +21,21 @@ const iconOf = (r: MerchantRuleRow, m: Model): string => (r.is_blocked ? 'close'
 function RuleSheet({ m, rule, onClose }: { m: Model; rule: MerchantRuleRow | null; onClose: () => void }) {
   const { userId } = useStore();
   const { busy, err, save } = useSaver();
-  const [d, setD] = useState<Draft>({ pattern: rule?.pattern ?? '', match: rule?.match_type ?? 'exact', kind: rule?.kind ?? 'expense', cat: rule?.category_id ?? null, block: rule?.is_blocked ?? false, topup: rule?.is_shared_topup ?? false, note: rule?.notes ?? '' });
+  const [d, setD] = useState<Draft>({ pattern: rule?.pattern ?? '', kind: rule?.kind ?? 'expense', cat: rule?.category_id ?? null, block: rule?.is_blocked ?? false, note: rule?.notes ?? '' });
   const [e, setE] = useState<{ pattern?: string; cat?: string }>({});
   const [ask, setAsk] = useState(false);
   const set = (p: Partial<Draft>): void => setD((x) => ({ ...x, ...p }));
-  const topup = d.kind === 'expense' && d.topup;
   const options = m.options.filter((o) => (d.kind === 'income' ? isAllowedIncomeCategoryOption(o) : !isIncomeCategoryOption(o)));
   const go = async (): Promise<void> => {
-    // Rules match the normalized merchant key, so store the pattern the same way.
+    // Rules match the normalized merchant key exactly (the classifier knows no other match), so store the pattern the same way.
     const pattern = normalizeMerchantLookupKey(d.pattern) || d.pattern.trim().toLowerCase();
-    const topupCat = topup ? findSharedTopupCategoryOption(m.options)?.id ?? null : null;
-    const cat = d.block ? null : topup ? topupCat : d.cat;
+    const cat = d.block ? null : d.cat;
     const next: typeof e = {};
     if (pattern.length < 2) next.pattern = 'Type at least two letters of the merchant’s name.';
-    if (!d.block && !cat) next.cat = topup ? 'There is no Top up category to put it in.' : 'Pick a category.';
+    if (!d.block && !cat) next.cat = 'Pick a category.';
     setE(next);
     if (Object.keys(next).length) return;
-    const fields = { kind: d.kind, match_type: d.match, pattern, canonical_merchant: pattern, category_id: cat, is_blocked: d.block, is_shared_topup: topup, notes: d.note.trim() || null, updated_at: new Date().toISOString() };
+    const fields = { kind: d.kind, match_type: 'exact' as Match, pattern, canonical_merchant: pattern, category_id: cat, is_blocked: d.block, is_shared_topup: false, notes: d.note.trim() || null, updated_at: new Date().toISOString() };
     const ok = await save('Rule saved', [[['merchant_category_rules'], () => (rule
       ? supabase.from('merchant_category_rules').update(fields).eq('id', rule.id)
       : supabase.from('merchant_category_rules').upsert({ user_id: userId, match_target: 'normalized_merchant', priority: 300, source: 'manual', ...fields }, { onConflict: 'user_id,kind,match_target,match_type,pattern' }))]]);
@@ -47,18 +45,16 @@ function RuleSheet({ m, rule, onClose }: { m: Model; rule: MerchantRuleRow | nul
   return (
     <Sheet open onClose={onClose} title={rule ? 'Edit rule' : 'New rule'}>
       <Field label="Merchant name" value={d.pattern} onChangeText={(v) => { set({ pattern: v }); setE({ ...e, pattern: undefined }); }} placeholder="for example netto" autoCapitalize="none" autoCorrect={false} hint="Matched without caring about capitals" error={e.pattern} />
-      <T k="meta">Match when the name</T>
-      <Seg value={d.match} onChange={(v) => set({ match: v })} options={[['exact', 'Is exactly'], ['prefix', 'Starts with'], ['contains', 'Contains']]} />
       <T k="meta">Type</T>
-      <Seg value={d.kind} onChange={(v) => set({ kind: v, cat: null, topup: false })} options={[['expense', 'Expense'], ['income', 'Income']]} />
+      <Seg value={d.kind} onChange={(v) => set({ kind: v, cat: null })} options={[['expense', 'Expense'], ['income', 'Income']]} />
       <Panel>
         <Toggle on={d.block} onChange={(v) => { set({ block: v }); setE({ ...e, cat: undefined }); }} label="Don’t suggest a category" sub="No suggestion for this merchant" />
-        {d.kind === 'expense' ? <Toggle on={d.topup} onChange={(v) => { set({ topup: v }); setE({ ...e, cat: undefined }); }} label="It’s a top-up to the pot" sub="Counted as money moved, not spending" /> : null}
       </Panel>
-      {!d.block && !topup ? (
+      {!d.block ? (
         <>
           <T k="meta">Category</T>
-          <List>{options.map((o) => <Row key={o.id} selected={d.cat === o.id} lead={<Disc icon={o.icon} />} title={o.name} meta={o.parentId !== o.id ? o.parentName : undefined} end={d.cat === o.id ? <Icon name="check" strong /> : undefined} onPress={() => { set({ cat: o.id }); setE({ ...e, cat: undefined }); }} />)}</List>
+          {d.cat ? <List>{[<Row key="c" lead={<Disc icon={m.meta[d.cat]?.icon ?? 'tag'} />} title={m.meta[d.cat]?.label ?? 'Category'} meta="Tap to change" onPress={() => set({ cat: null })} />]}</List>
+            : <CategoryTree m={m} options={options} selected={d.cat} onPick={(o) => { set({ cat: o.id }); setE({ ...e, cat: undefined }); }} />}
         </>
       ) : null}
       {e.cat ? <T k="note" style={{ color: C.over }}>{e.cat}</T> : null}

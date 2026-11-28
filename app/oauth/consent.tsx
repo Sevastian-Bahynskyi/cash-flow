@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import * as Linking from 'expo-linking';
 import { useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { colors, radius, spacing, typography } from '@/ui/tokens';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -74,7 +74,7 @@ export default function OAuthConsentScreen() {
 
   useEffect(() => {
     if (!loading && session) {
-      void loadAuthorization();
+      loadAuthorization().catch(() => undefined);
     }
   }, [loading, session, loadAuthorization]);
 
@@ -131,7 +131,7 @@ export default function OAuthConsentScreen() {
         <Pressable
           style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
           onPress={() => {
-            void signInWithGoogle(nextPath);
+            signInWithGoogle(nextPath).catch(() => undefined);
           }}
         >
           <Text style={styles.primaryText}>Continue with Google</Text>
@@ -182,7 +182,7 @@ export default function OAuthConsentScreen() {
           style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed, busy && styles.disabled]}
           disabled={busy}
           onPress={() => {
-            void handleDecision('deny');
+            handleDecision('deny').catch(() => undefined);
           }}
         >
           <Text style={styles.secondaryText}>Deny</Text>
@@ -191,7 +191,7 @@ export default function OAuthConsentScreen() {
           style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed, busy && styles.disabled]}
           disabled={busy || !details}
           onPress={() => {
-            void handleDecision('approve');
+            handleDecision('approve').catch(() => undefined);
           }}
         >
           <Text style={styles.primaryText}>Approve</Text>

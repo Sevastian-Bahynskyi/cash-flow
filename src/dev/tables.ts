@@ -63,7 +63,6 @@ export function fixtureTables(scenario: QaScenario): Tables {
     bank_accounts: [],
     sync_runs: [],
     transaction_splits: [],
-    paybacks: [],
   };
   if (scenario === 'empty') return tables;
 

@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Image, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Text, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
@@ -19,7 +19,7 @@ import { DebtSheet, LinkToDebt, debtTitle } from '@/screens/Debts';
 /* whose money a row is (two people, two colours) */
 type Who = 'none' | 'shared' | 'moved' | 'annain' | 'income' | 'own';
 export const whoOf = (t: TransactionRow): Who => t.is_shared_topup ? (t.shared_participant === 'gf' ? 'annain' : 'moved') : t.movement === 'moved' ? 'own' : t.kind === 'income' ? 'income' : t.shared ? 'shared' : 'none';
-export const WHO_LABEL: Record<Who, string> = { none: 'Yours', shared: `Shared with ${PARTNER}`, moved: 'Moved to the shared pot', annain: `${PARTNER}, into the shared pot`, income: 'Money in', own: 'Moved between your accounts' };
+export const WHO_LABEL: Record<Who, string> = { none: 'Yours', shared: `Shared with ${PARTNER}`, moved: 'Put in the pot', annain: `${PARTNER} put in the pot`, income: 'Money in', own: 'Moved between your accounts' };
 
 /** One transaction row: whose it is, name, category, amount with sign and colour. Shared rows wear the turning ring. */
 /** The merchant's logo with its category as a small badge; the plain category disc when the logo fails to load.
@@ -55,7 +55,7 @@ export function TxRow({ t, m, onOpen, current, categoryId, scope }: { t: Transac
     sub = (meta?.name ?? 'Income') + foreign; amount = `+${kr(t.amount_minor)}`; color = C.in; small = small ?? 'In';
   } else {
     const more = m.splitsOf.get(t.id)?.length ?? 0;
-    sub = (meta?.name ?? 'Category') + (more ? ` and ${more} more` : '') + foreign; amount = kr(t.amount_minor);
+    sub = (meta?.name ?? 'No category') + (more ? ` and ${more} more` : '') + foreign; amount = kr(t.amount_minor);
     const category = categoryId ? m.byId.get(categoryId) : undefined;
     const parent = m.parentOf(categoryId ?? t.category_id);
     if (parent) discInk = budgetColor(parent);
@@ -72,7 +72,7 @@ export function TxRow({ t, m, onOpen, current, categoryId, scope }: { t: Transac
     <Row
       onPress={() => onOpen(t)}
       selected={current}
-      accessibilityLabel={`${t.name}, ${sub}, ${amount}${w === 'shared' ? `, shared with ${PARTNER}` : ''}`}
+      accessibilityLabel={`${t.name}, ${sub}, ${amount}${w === 'shared' ? `, shared with ${PARTNER}` : ''}${t.needs_review ? ', not confirmed yet' : ''}`}
       lead={logo ? <LogoDisc uri={logo} icon={icon} color={discInk}>{ring}</LogoDisc> : <Disc icon={icon} bg={discBg} color={discInk}>{ring}</Disc>}
       title={<View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><T k="strong" numberOfLines={1} style={{ flexShrink: 1 }}>{t.name}</T>{t.needs_review ? <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: C.ahead }} accessibilityLabel="Not confirmed yet" /> : null}</View>}
       meta={sub}
@@ -208,7 +208,7 @@ export function Facts({ rows }: { rows: [string, string][] }) {
 export { SheetHero };
 
 /** Categories as the Categories screen shows them: each parent in its budget colour, its children indented under it in the same colour. */
-function CategoryTree({ m, options, selected, disabled, onPick }: { m: Model; options: CategoryOption[]; selected: string | null; disabled?: boolean; onPick: (o: CategoryOption) => void }) {
+export function CategoryTree({ m, options, selected, disabled, onPick }: { m: Model; options: CategoryOption[]; selected: string | null; disabled?: boolean; onPick: (o: CategoryOption) => void }) {
   const groups = [...new Set(options.map((o) => o.parentId))];
   return (
     <List>{groups.flatMap((pid) => {
@@ -302,7 +302,7 @@ function PartsSheet({ t, m, onClose }: { t: TransactionRow; m: Model; onClose: (
     const row = { category_id: cat, amount_minor: v, shared: whose === 'shared' };
     await run('Part saved', () => (edit ? supabase.from('transaction_splits').update(row).eq('id', edit) : supabase.from('transaction_splits').insert({ ...row, user_id: store.userId, transaction_id: t.id })));
   };
-  const name = (id: string | null): string => m.meta[id ?? '']?.label ?? 'Category';
+  const name = (id: string | null): string => m.meta[id ?? '']?.label ?? 'No category';
   const whoseOf = (shared: boolean): string => (shared ? `Shared with ${PARTNER}` : 'Yours');
   return (
     <Sheet open onClose={onClose} title="Parts">
@@ -314,7 +314,7 @@ function PartsSheet({ t, m, onClose }: { t: TransactionRow; m: Model; onClose: (
       <Sec>{editing ? 'Change this part' : 'Add a part'}</Sec>
       <Field label="Amount" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} placeholder="300" error={amount && v === null ? 'Type an amount, like 300 or 89,50.' : amount && bad ? `Only ${kr(left)} left.` : null} />
       {cat ? <List>{[<Row key="c" lead={<Disc icon={m.meta[cat]?.icon ?? 'tag'} />} title={name(cat)} meta="Tap to change" onPress={() => setCat(null)} />]}</List>
-        : <CategoryTree m={m} selected={cat} onPick={(o) => setCat(o.id)} options={m.options.filter((o) => o.parentName.toLowerCase() !== 'income' && o.id !== t.category_id)} />}
+        : <CategoryTree m={m} selected={cat} onPick={(o) => setCat(o.id)} options={m.options.filter((o) => o.parentName.toLowerCase() !== 'income')} />}
       <Seg value={whose} onChange={setWhose} options={[['mine', 'Yours'], ['shared', `Shared with ${PARTNER}`]]} />
       <Btn label={editing ? 'Save' : `Add ${v && !bad ? kr(v) : 'part'}`} disabled={bad || !cat} busy={busy} onPress={() => void save()} />
       {editing ? <Btn kind="ghost" label="Remove this part" disabled={busy} onPress={() => void run('Part removed', () => supabase.from('transaction_splits').delete().eq('id', editing.id))} /> : null}
@@ -336,8 +336,9 @@ export function DetailBody({ t, m, onDone }: { t: TransactionRow; m: Model; onDo
     try { await write(store, ['transactions'], run); toast(label); } catch (e) { toast(e instanceof Error ? e.message : 'Not saved.', undefined, 'error'); } finally { setBusy(false); }
   };
   const neutral = t.is_shared_topup || t.movement === 'moved' || t.movement === 'ignore';
+  // money to or from a person counts as moved, unless it is given a spending category or added to a debt
+  const toPerson = t.movement === 'person' && m.isTransfer(t.category_id);
   const splits = m.splitsOf.get(t.id) ?? [];
-  const back = m.paidBack.get(t.id) ?? 0;
   const day = dayLabel(t.occurred_on);
   // Where it was bought, its trip (and its usual category when the trip moved it), and its debt.
   const place = m.placeOf(t);
@@ -352,10 +353,9 @@ export function DetailBody({ t, m, onDone }: { t: TransactionRow; m: Model; onDo
     ['Date', `${day}${day.includes(' ') ? '' : `, ${shortDate(t.occurred_on)}`}${t.status === 'pending' ? ', pending' : ''}`],
     ...(meta && !neutral ? [['Category', `${meta.label}${splits.length ? `, ${kr(t.amount_minor - splits.reduce((a, x) => a + x.amount_minor, 0))}` : ''}`] as [string, string]] : []),
     ...splits.map((x) => ['Part', `${m.meta[x.category_id]?.label ?? 'Category'}, ${kr(x.amount_minor)}${x.shared ? `, shared` : ''}`] as [string, string]),
-    ['Whose', `${WHO_LABEL[w]}${t.shared && t.paid_by ? `, paid by ${t.paid_by === 'me' ? 'you' : PARTNER}` : ''}`],
-    ...(m.sharedSome(t) && !neutral ? [['Your part', kr(m.mine(t))] as [string, string]] : []),
-    ...(back > 0 ? [['Paid back', kr(back)] as [string, string]] : []),
-    ...(neutral ? [['Counts as spending', 'No, it’s money moved'] as [string, string]] : []),
+    ...(w === 'income' || w === 'own' ? [] : [['Whose', `${WHO_LABEL[w]}${t.shared && t.paid_by ? `, paid by ${t.paid_by === 'me' ? 'you' : PARTNER}` : ''}`] as [string, string]]),
+    ...(m.sharedSome(t) && !neutral ? [['Your share', kr(m.mine(t))] as [string, string]] : []),
+    ...(neutral || (toPerson && !debt) ? [['Counts as spending', 'No, it’s money moved'] as [string, string]] : []),
     ...(t.currency_code !== 'DKK' ? [['Paid', kr(t.original_amount_minor, false, t.currency_code)] as [string, string]] : []),
     ...(t.comment ? [['Note', t.comment] as [string, string]] : []),
     ...(where ? [['Where', where] as [string, string]] : []),
@@ -386,7 +386,7 @@ export function DetailBody({ t, m, onDone }: { t: TransactionRow; m: Model; onDo
       {t.bank_transaction_id ? (raw ? <BankTextRows id={t.bank_transaction_id} /> : <Btn kind="link" label="Show the bank’s text" onPress={() => setRaw(true)} />) : null}
       <List>{[
         !neutral ? <Row key="c" lead={<Disc icon="tag" />} title="Change category" onPress={() => setPick('cat')} /> : null,
-        !neutral && t.kind === 'expense' ? <Row key="s" lead={<Disc icon="split" />} title={splits.length ? 'Change parts' : 'Split into parts'} meta={splits.length ? undefined : 'Part of it was something else'} onPress={() => setPick('split')} /> : null,
+        !neutral && !toPerson && t.kind === 'expense' ? <Row key="s" lead={<Disc icon="split" />} title={splits.length ? 'Change parts' : 'Split into parts'} meta={splits.length ? undefined : 'Part of it was something else'} onPress={() => setPick('split')} /> : null,
         trip && onTrip ? <Row key="t" disabled={busy} lead={<Disc icon="plane" />} title="Not part of the trip" meta={`It goes back to ${home && m.meta[home] ? m.meta[home].label : 'its own category'}`}
           onPress={() => void act('Left out of the trip', () => supabase.from('transactions').update({ trip_exclude: true, trip_include: false }).eq('id', t.id))} /> : null,
         trip && !onTrip ? <Row key="t2" disabled={busy} lead={<Disc icon="plane" />} title={`Count it in ${trip.name}`}
@@ -452,4 +452,3 @@ export function RichNote({ text }: { text: string }) {
 
 export { Empty, Sec };
 export const Loading = () => <View style={{ padding: 24, alignItems: 'center' }}><ActivityIndicator color={C.ink} /></View>;
-export const Tappable = Pressable;

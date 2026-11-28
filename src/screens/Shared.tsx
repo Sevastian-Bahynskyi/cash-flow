@@ -22,12 +22,14 @@ function Shared({ m }: { m: Model }) {
   const [per, setPer] = useState<Per>('cycle');
   const year = m.today.slice(0, 4);
   const rows = per === 'cycle' ? m.tx.filter(m.inCycle(m.current)) : per === 'year' ? m.tx.filter((r) => r.occurred_on.startsWith(year)) : m.tx;
-  const p = pot(rows);
+  const p = pot(m, rows);
   const byCat = new Map<string, number>();
-  for (const r of p.spentRows) { const c = m.parentOf(r.category_id); if (c) byCat.set(c.id, (byCat.get(c.id) ?? 0) + r.amount_minor); }
+  for (const r of p.spentRows) for (const x of m.portions(r, 'shared')) { const c = m.parentOf(x.category_id); if (c && x.minor) byCat.set(c.id, (byCat.get(c.id) ?? 0) + x.minor); }
+  // the period's dates, for the drill-down to its purchases
+  const span = per === 'cycle' && m.current ? { from: m.current.startOn, ...(m.current.endOnExclusive ? { until: m.current.endOnExclusive } : {}) } : per === 'year' ? { from: `${year}-01-01`, until: `${Number(year) + 1}-01-01` } : {};
   const cats = [...byCat.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
   const max = cats[0]?.[1] ?? 1;
-  const recent = [...rows].reverse().filter((r) => r.shared || r.is_shared_topup);
+  const recent = [...rows].reverse().filter((r) => m.sharedSome(r) || r.is_shared_topup);
   const tops = [...p.topups].reverse();
   const label = per === 'cycle' ? `${m.current?.name ?? 'This'} cycle` : per === 'year' ? year : 'All time';
   const header = <Header overAura back title={`With ${PARTNER}`} sub={label} />;
@@ -47,15 +49,15 @@ function Shared({ m }: { m: Model }) {
         {empty ? <Panel><Empty title={`Nothing shared ${per === 'cycle' ? 'this cycle' : per === 'year' ? `in ${year}` : 'yet'}`} sub="Top-ups into the joint account and what you spend from it arrive from the bank." /></Panel> : (
           <>
             <Panel style={{ padding: 16, gap: 6 }}>
-              <T>Your part of {kr(p.sharedExpenseTotal, true)} spent together is <T k="strong">{kr(p.userEffectiveShare, true)}</T></T>
-              <T k="note">{p.totalTopupTotal ? `It follows what you each put in: ${p.myPct} of every 100 kr. is yours.` : 'Nothing was put in yet, so it’s split half and half.'} Nobody types a ratio.</T>
+              <T>Your share of {kr(p.sharedExpenseTotal, true)} spent together is <T k="strong">{kr(p.userEffectiveShare, true)}</T></T>
+              <T k="note">{p.totalTopupTotal ? `It follows what you each put in the pot: about ${p.myPct} of every 100 kr. is yours.` : 'Nothing was put in yet, so it’s split half and half.'} Nobody types a ratio.</T>
             </Panel>
             <Sec>Spent together</Sec>
             <Panel style={{ padding: 16, gap: 14 }}>{cats.length ? cats.map(([id, s]) => {
               const c = m.byId.get(id);
               const mine = (100 * s * p.userShareRatio) / max, hers = (100 * s * (1 - p.userShareRatio)) / max;
               return c ? (
-                <Press key={id} scale={0.98} onPress={() => { tap(); router.push(`/activity?shared=1&cat=${id}` as never); }} style={{ gap: 6 }} accessibilityRole="button">
+                <Press key={id} scale={0.98} onPress={() => { tap(); router.push({ pathname: '/spending-transactions', params: { cat: id, scope: 'shared', ...span } }); }} style={{ gap: 6 }} accessibilityRole="button">
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Icon name={c.icon} size={18} /><T k="strong" style={{ flex: 1 }}>{c.name}</T><T k="num">{kr(s, true)}</T></View>
                   <View style={{ flexDirection: 'row', height: 8, borderRadius: 4, overflow: 'hidden', backgroundColor: C.track }}>
                     <View style={{ width: `${mine}%`, backgroundColor: C.ink }} /><View style={{ width: `${hers}%`, backgroundColor: C.partner }} />
@@ -63,14 +65,14 @@ function Shared({ m }: { m: Model }) {
                 </Press>
               ) : null;
             }) : <Empty title="Nothing spent together yet." sub="" />}
-              {cats.length ? <View style={{ flexDirection: 'row', gap: 16 }}><T k="meta">● Your part</T><T k="meta" style={{ color: C.partner }}>● {PARTNER}’s part</T></View> : null}
+              {cats.length ? <View style={{ flexDirection: 'row', gap: 16 }}><T k="meta">● Your share</T><T k="meta" style={{ color: C.partner }}>● {PARTNER}’s share</T></View> : null}
             </Panel>
             <Sec>Into the pot</Sec>
             {tops.length ? <List>{tops.slice(0, 12).map((t) => (
               <Row key={t.id} onPress={() => open(t)} lead={<View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: t.shared_participant === 'gf' ? C.partner : C.ink, alignItems: 'center', justifyContent: 'center' }}><Icon name="in" color={C.bg} /></View>}
-                title={t.shared_participant === 'gf' ? `${PARTNER} moved in` : 'You moved in'} meta={shortDate(t.occurred_on)} end={<T k="num">{kr(t.amount_minor, true)}</T>} />
+                title={t.shared_participant === 'gf' ? `${PARTNER} put in` : 'You put in'} meta={shortDate(t.occurred_on)} end={<T k="num">{kr(t.amount_minor, true)}</T>} />
             ))}</List> : <Panel><Empty title={`No top-ups ${per === 'cycle' ? 'this cycle' : 'yet'}.`} sub="" /></Panel>}
-            <Sec right={<Btn kind="link" label="All" onPress={() => router.push('/activity?shared=1' as never)} />}>Latest together</Sec>
+            <Sec right={<Btn kind="link" label="All" onPress={() => router.push('/spending-transactions?shared=1' as never)} />}>Latest together</Sec>
             {recent.length ? <List>{recent.slice(0, 8).map((t) => <TxRow key={t.id} t={t} m={m} onOpen={open} />)}</List> : <Panel><Empty title="Nothing yet." sub="" /></Panel>}
           </>
         )}

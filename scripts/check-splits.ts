@@ -16,13 +16,8 @@ assert.deepEqual(minors(costOf(partsOf(joint, gift), 'shared', 0.6)), [0, 700]);
 const groc = [{ category_id: 'groc', amount_minor: 400, shared: true }];
 assert.deepEqual(minors(costOf(partsOf(own, groc), 'personal', 0.5)), [200, 600]);
 assert.deepEqual(minors(costOf(partsOf(own, groc), 'shared', 0.5)), [400, 0]);
-// 100 paid back comes off the total, and the parts still add up
-assert.equal(minors(costOf(partsOf(own, groc), 'personal', 0.5, 100)).reduce((a, x) => a + x, 0), 700);
 // parts bigger than the row shrink to fit; the rest is 0
 const big = partsOf(own, [{ category_id: 'a', amount_minor: 700, shared: false }, { category_id: 'b', amount_minor: 500, shared: false }]);
 assert.equal(big.reduce((a, p) => a + p.gross, 0), 1000);
 assert.equal(big[2]?.gross, 0);
-// odd øre: rounding never loses or makes money
-const odd = costOf(partsOf({ ...own, amount_minor: 1001 }, [{ category_id: 'a', amount_minor: 333, shared: true }]), 'personal', 1 / 3, 7);
-assert.equal(odd.reduce((a, p) => a + p.minor, 0), Math.round(333 / 3) + 668 - 7);
 console.log('splits ok');

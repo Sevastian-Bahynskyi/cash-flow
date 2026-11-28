@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
+import { normalizeTransferPersonName } from '@/core/domain/rows';
 import { useStore } from '@/core/data/store';
 import type { Model } from '@/core/data/model';
 import type { TransactionRow } from '@/core/data/types';
@@ -22,7 +23,7 @@ const WORD: Record<string, string> = { borrowed: 'Borrowed', lent: 'Lent', repai
 export const debtTitle = (d: Pick<Debt, 'kind' | 'name'>): string => (d.kind === 'loan' ? `You owe ${d.name}` : `${d.name} owes you`);
 export const debtLine = (d: Debt): string => (d.status === 'closed' ? 'Settled' : `${kr(d.remaining_minor, true)} left of ${kr(d.principal_minor, true)}`);
 
-const peopleOf = (m: Model): PersonInput[] => m.t.transfer_people.map((p) => ({ id: p.id, name: p.name, kind: p.kind ?? 'settle_up', opening_balance_minor: p.opening_balance_minor ?? 0, alias_of: p.alias_of ?? null }));
+export const peopleOf = (m: Model): PersonInput[] => m.t.transfer_people.map((p) => ({ id: p.id, name: p.name, kind: p.kind ?? 'settle_up', alias_of: p.alias_of ?? null }));
 /** A person and every name variant that points at them. */
 const idsOf = (people: PersonInput[], id: string): Set<string> => new Set(people.filter((p) => canonicalId(people, p.id) === id).map((p) => p.id).concat(id));
 
@@ -117,8 +118,11 @@ export function DebtForm({ m, personId, from, onClose }: { m: Model; personId?: 
     if (nums.principal_minor <= 0) { setErr(kind === 'owed' ? 'Add how much you lent, or tick the transfer you lent it with.' : 'Add how much you borrowed, or tick the transfer you got it with.'); return; }
     const d = DEBT_TABLES[kind];
     let id: string | null = null;
+    // A typed name becomes a person, so their bank transfers can be added to this debt later.
+    let pid = who;
     const ok = await save('Debt saved', [
-      [[d.table], async () => { const r = await supabase.from(d.table).insert({ user_id: userId, name: n, person_id: who, ...nums }).select('id').single<{ id: string }>(); id = r.data?.id ?? null; return r; }],
+      ...(who ? [] : [[['transfer_people'], async () => { const r = await supabase.from('transfer_people').insert({ user_id: userId, name: n, normalized_name: normalizeTransferPersonName(n) }).select('id').single<{ id: string }>(); pid = r.data?.id ?? null; return r; }]] as Parameters<typeof save>[1]),
+      [[d.table], async () => { const r = await supabase.from(d.table).insert({ user_id: userId, name: n, person_id: pid, ...nums }).select('id').single<{ id: string }>(); id = r.data?.id ?? null; return r; }],
       ...(start > 0 ? [[[d.events], () => supabase.from(d.events).insert({ [d.fk]: id, user_id: userId, kind: d.more, amount_minor: start, occurred_on: todayYmd() })]] as Parameters<typeof save>[1] : []),
       ...(events.length ? [[[d.events], () => supabase.from(d.events).insert(events.map((x) => ({ ...x, [d.fk]: id })))]] as Parameters<typeof save>[1] : []),
     ]);
@@ -128,7 +132,7 @@ export function DebtForm({ m, personId, from, onClose }: { m: Model; personId?: 
   };
   return (
     <Sheet open onClose={onClose} title="New debt">
-      <Seg value={kind} onChange={setKind} options={[['owed', 'They owe me'], ['loan', 'I owe them']]} />
+      <Seg value={kind} onChange={setKind} options={[['owed', 'They owe you'], ['loan', 'You owe them']]} />
       {choices.length ? (
         <View style={{ gap: 6 }}>
           <T k="meta">Who</T>
@@ -226,7 +230,7 @@ export function LinkToDebt({ m, t, onClose }: { m: Model; t: TransactionRow; onC
   return (
     <Sheet open onClose={onClose} title="Add to a debt">
       <List>{mine.map((d) => (
-        <Row key={d.id} disabled={busy} title={debtTitle(d)} meta={`${debtLine(d)}. Adds it as ${WORD[eventKindFor(d.kind, t)]?.toLowerCase()}.`}
+        <Row key={d.id} disabled={busy} title={debtTitle(d)} meta={`${debtLine(d)} Adds it as ${WORD[eventKindFor(d.kind, t)]?.toLowerCase()}.`}
           end={<Btn kind="ghost" label="Add" disabled={busy} onPress={() => void link(d, [t]).then((ok) => { if (ok) onClose(); })} />} />
       ))}</List>
       <FormErr err={err} />
@@ -237,7 +241,7 @@ export function LinkToDebt({ m, t, onClose }: { m: Model; t: TransactionRow; onC
 
 const DISMISS = 'cashflow:debt-dismissed';
 
-/** New transfers that probably belong to an open debt, with one-tap add. Dismissed ones stay hidden on this phone. */
+/** New transfers with a person who has an open debt: the owner says Add or No (agreed 28 Nov: asked in place, never added alone). Dismissed ones stay hidden on this phone. */
 export function DebtSuggestions({ m }: { m: Model }) {
   const people = useMemo(() => peopleOf(m), [m]);
   const [hidden, setHidden] = useState<Set<string> | null>(null);
@@ -258,7 +262,7 @@ export function DebtSuggestions({ m }: { m: Model }) {
       <Sec>Part of a debt?</Sec>
       <List>{list.map(({ debt, tx }) => (
         <Row key={tx.id} title={`${tx.kind === 'income' ? `${debt.name} sent` : `You sent ${debt.name}`} ${kr(tx.amount_minor)}`}
-          meta={`${shortDate(tx.occurred_on)}, ${debtTitle(debt).toLowerCase()}. Add it as ${WORD[eventKindFor(debt.kind, tx)]?.toLowerCase()}?`}
+          meta={`${shortDate(tx.occurred_on)}. Add it to “${debtTitle(debt)}”?`}
           end={<View style={{ flexDirection: 'row', gap: 4 }}><Btn kind="link" label="No" onPress={() => dismiss(tx.id)} /><Btn kind="ghost" label="Add" disabled={busy} onPress={() => void link(debt, [tx as TransactionRow])} /></View>} />
       ))}</List>
     </>
