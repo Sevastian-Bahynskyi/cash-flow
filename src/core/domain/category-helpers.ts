@@ -1,6 +1,3 @@
-// Category colours from the Expo tokens; Two inks draws categories in ink, these remain for data only.
-const colors = { success: '#3DD68C', accent: '#7C5CFF', textMuted: '#9A9AAA', danger: '#FF5C7A' };
-import type { TransactionKind } from './transaction-types';
 import type { CategoryOverrideRow, CategoryRow } from './categories-types';
 
 export type CategoryMeta = {
@@ -13,56 +10,14 @@ export type CategoryMeta = {
 
 const normalize = (value: string): string => value.trim().toLowerCase();
 
-const isTransferParentName = (value: string): boolean => normalize(value) === 'transfers';
 const isIncomeParentName = (value: string): boolean => normalize(value) === 'income';
 const isOtherIncomeName = (value: string): boolean => {
   const normalized = normalize(value);
   return normalized === 'other income' || normalized === 'others';
 };
 
-const incomeOtherTone = '#6F8F7D';
-const expenseTransferTone = '#7C5CFF';
-
 export const getDisplayCategoryName = (parentName: string, name: string): string =>
   isIncomeParentName(parentName) && isOtherIncomeName(name) ? 'Others' : name;
-
-export const getCategoryDisplayColor = ({
-  kind,
-  parentName,
-  name,
-  parentColor,
-  color,
-}: {
-  kind: TransactionKind;
-  parentName: string;
-  name: string;
-  parentColor?: string | null;
-  color?: string | null;
-}): string => {
-  if (isTransferParentName(parentName)) {
-    return kind === 'income' ? colors.success : expenseTransferTone;
-  }
-
-  if (isIncomeParentName(parentName)) {
-    return isOtherIncomeName(name) ? incomeOtherTone : colors.success;
-  }
-
-  return parentColor ?? color ?? colors.textMuted;
-};
-
-export const getCategoryMetaDisplayColor = (
-  meta: Pick<CategoryMeta, 'parentName' | 'name' | 'color'> | null | undefined,
-  kind: TransactionKind,
-): string => {
-  if (!meta) return colors.textMuted;
-  return getCategoryDisplayColor({
-    kind,
-    parentName: meta.parentName,
-    name: meta.name,
-    color: meta.color,
-    parentColor: meta.color,
-  });
-};
 
 export const buildCategoryMeta = (
   categories: readonly CategoryRow[],

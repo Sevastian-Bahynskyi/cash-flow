@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Image, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Text, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
@@ -452,4 +452,3 @@ export function RichNote({ text }: { text: string }) {
 
 export { Empty, Sec };
 export const Loading = () => <View style={{ padding: 24, alignItems: 'center' }}><ActivityIndicator color={C.ink} /></View>;
-export const Tappable = Pressable;

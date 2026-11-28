@@ -21,26 +21,6 @@ export type TransactionInsert = {
   fx_rate: number;
 };
 
-export type TransactionDraft = {
-  id?: string;
-  kind?: TransactionKind;
-  amount_minor?: number;
-  original_amount_minor?: number;
-  currency_code?: string;
-  category_id?: string | null;
-  name?: string;
-  comment?: string | null;
-  occurred_on?: string;
-  recurring?: boolean;
-  shared?: boolean;
-  shared_participant?: SharedParticipant | null;
-  is_salary?: boolean;
-  is_shared_topup?: boolean;
-  /** When true, entry came from Shared tab: shared expense vs top-up fixed from draft. */
-  from_shared_screen?: boolean;
-  country_iso?: string | null;
-};
-
 export type Movement = 'spend' | 'income' | 'moved' | 'topup' | 'person' | 'refund' | 'ignore';
 export type ReasonSource = 'transfer' | 'salary' | 'person' | 'rule' | 'memory' | 'mcc' | 'ai' | 'you' | 'manual';
 

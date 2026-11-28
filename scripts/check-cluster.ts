@@ -1,6 +1,6 @@
-// Self-check for the map clustering: node src/screens/map/cluster.check.ts
+// Self-check for the map clustering: node scripts/check-cluster.ts
 import assert from 'node:assert/strict'
-import { clusters, fitRegion, glowSize, levelOf, type Pt } from './cluster.ts'
+import { clusters, fitRegion, glowSize, levelOf, type Pt } from '../src/screens/map/cluster.ts'
 
 const pt = (id: string, lat: number, lng: number, minor: number, country: string, city: string): Pt =>
   ({ id, lat, lng, minor, on: '2026-11-01', country, countryName: country, city })

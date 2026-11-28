@@ -15,8 +15,6 @@ export type SalaryCycle = {
   label: string; // e.g. "May 2026"
 };
 
-const formatRangeDate = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' });
-
 const parseYmd = (ymd: string): { y: number; m: number; d: number } => {
   const parts = ymd.split('-');
   if (parts.length !== 3) {
@@ -67,30 +65,9 @@ export const findCycleFor = (
   return null;
 };
 
-export const activeCycle = (cycles: readonly SalaryCycle[]): SalaryCycle | null => {
-  if (cycles.length === 0) return null;
-  return cycles[cycles.length - 1] ?? null;
-};
-
 type YmdParts = { y: number; m: number; d: number };
 
 const pad2 = (value: number): string => String(value).padStart(2, '0');
-
-export const toLocalIsoDay = (date: Date): string =>
-  `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
-
-export const cycleMatch = (
-  row: { occurred_on: string },
-  cycle: SalaryCycle | null,
-): boolean => {
-  if (!cycle) return false;
-  const afterStart = row.occurred_on >= cycle.startOn;
-  const beforeEnd = cycle.endOnExclusive === null || row.occurred_on < cycle.endOnExclusive;
-  return afterStart && beforeEnd;
-};
-
-const addDays = (date: Date, amount: number): Date =>
-  new Date(date.getFullYear(), date.getMonth(), date.getDate() + amount);
 
 const addMonths = ({ y, m, d }: YmdParts, delta: number): YmdParts => {
   const idx = (y * 12 + (m - 1)) + delta;
@@ -100,21 +77,6 @@ const addMonths = ({ y, m, d }: YmdParts, delta: number): YmdParts => {
 };
 
 const monthStartYmd = (y: number, m: number): string => `${y}-${pad2(m)}-01`;
-
-export const formatHeroCycleRange = (cycle: SalaryCycle, today: Date): string => formatCycleDisplayRange(cycle, today);
-
-export const formatCycleDisplayRange = (cycle: SalaryCycle, today: Date): string => {
-  const start = parseYmd(cycle.startOn);
-  const endExclusive = cycle.endOnExclusive
-    ? parseYmd(cycle.endOnExclusive)
-    : { y: today.getFullYear(), m: today.getMonth() + 1, d: today.getDate() };
-
-  const endDate = cycle.endOnExclusive && endExclusive.d === 1
-    ? addDays(new Date(endExclusive.y, endExclusive.m - 1, endExclusive.d), -1)
-    : new Date(endExclusive.y, endExclusive.m - 1, endExclusive.d);
-
-  return `${formatRangeDate.format(new Date(start.y, start.m - 1, start.d))} – ${formatRangeDate.format(endDate)}`;
-};
 
 const monthKey = (ymd: string): { y: number; m: number } => {
   const { y, m } = parseYmd(ymd);
@@ -261,23 +223,4 @@ export const buildNavigableCycles = (
   if (latest) cycles[lastIndex] = { ...latest, endOnExclusive: null };
 
   return cycles;
-};
-
-// Group arbitrary rows with an `occurred_on` by cycle id.
-// Rows that fall before the first cycle are placed under the special key "pre-cycle".
-export const PRE_CYCLE = 'pre-cycle' as const;
-
-export const groupByCycle = <T extends { occurred_on: string }>(
-  rows: readonly T[],
-  cycles: readonly SalaryCycle[],
-): Map<string, T[]> => {
-  const out = new Map<string, T[]>();
-  for (const row of rows) {
-    const cycle = findCycleFor(cycles, row.occurred_on);
-    const key = cycle ? cycle.id : PRE_CYCLE;
-    const bucket = out.get(key);
-    if (bucket) bucket.push(row);
-    else out.set(key, [row]);
-  }
-  return out;
 };
