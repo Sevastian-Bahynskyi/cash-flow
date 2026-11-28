@@ -39,11 +39,18 @@ function People({ m }: { m: Model }) {
   const [newDebt, setNewDebt] = useState<string | null | undefined>(undefined);
   const people: PersonInput[] = useMemo(() => m.t.transfer_people.map((p) => ({ id: p.id, name: p.name, kind: p.kind ?? 'settle_up', opening_balance_minor: p.opening_balance_minor ?? 0, alias_of: p.alias_of ?? null })), [m.t.transfer_people]);
   // Transfers in a debt are counted there, not in the running balance.
+  const byIdTx = useMemo(() => new Map(m.tx.map((t) => [t.id, t])), [m.tx]);
   const txs = useMemo(() => m.tx.filter((t) => !m.linked.has(t.id)).map((t) => ({ ...t, counterparty_person_id: t.counterparty_person_id ?? null })), [m.tx, m.linked]);
   const balances = useMemo(() => owedBalances(people, txs), [people, txs]);
   // A transfer in a debt is already explained, so it is never offered as a payback.
   const taken = useMemo(() => new Set([...m.t.paybacks.flatMap((p) => [p.payment_transaction_id, p.expense_transaction_id]), ...m.linked]), [m.t.paybacks, m.linked]);
-  const suggestions = useMemo(() => paybackSuggestions(people, txs, taken), [people, txs, taken]);
+  // One best guess per payment, newest first; the rest wait behind "Show more".
+  const suggestions = useMemo(() => {
+    const seen = new Set<string>();
+    return paybackSuggestions(people, txs, taken).filter((x) => !seen.has(x.payment_transaction_id) && Boolean(seen.add(x.payment_transaction_id)))
+      .sort((a, b) => (byIdTx.get(b.payment_transaction_id)?.occurred_on ?? '').localeCompare(byIdTx.get(a.payment_transaction_id)?.occurred_on ?? ''));
+  }, [people, txs, taken, byIdTx]);
+  const [allPaid, setAllPaid] = useState(false);
   const byId = new Map(m.tx.map((t) => [t.id, t]));
   const p = pot(m.tx.filter(m.inCycle(m.current)));
   const partner = balances.find((b) => b.kind === 'partner');
@@ -80,23 +87,24 @@ function People({ m }: { m: Model }) {
         </Panel>
       </Press>
 
+      <DebtSuggestions m={m} />
+
+      <Sec right={<Btn kind="link" label="New debt" onPress={() => setNewDebt(null)} />}>Debts</Sec>
+      {m.debts.length ? <DebtList m={m} onOpen={setDebt} /> : <Panel><Empty title="No debts" sub="When you lend or borrow money, add a debt and tick the transfers that belong to it." /></Panel>}
+
       {suggestions.length > 0 ? (
         <>
           <Sec>Paid back?</Sec>
-          <List>{suggestions.map((s) => {
+          <List>{(allPaid ? suggestions : suggestions.slice(0, 3)).map((s) => {
             const pay = byId.get(s.payment_transaction_id);
             const who = balances.find((b) => b.person_id === canonicalId(people, s.person_id))?.name ?? 'Someone';
             const what = s.items.map((i) => byId.get(i.expense_transaction_id)?.name ?? 'an expense').join(', ');
             return pay ? <Row key={s.payment_transaction_id + s.items.map((i) => i.expense_transaction_id).join()} lead={<Initial name={who} />} title={`${who} sent ${kr(pay.amount_minor)}`} meta={`${s.ratio === 1 ? 'All' : 'Half'} of ${what}, ${shortDate(pay.occurred_on)}`} end={<Btn kind="ghost" label="Yes" disabled={busy} onPress={() => void accept(s)} />} /> : null;
           }).filter(Boolean) as React.JSX.Element[]}</List>
+          {suggestions.length > 3 && !allPaid ? <Btn kind="link" label={`Show ${suggestions.length - 3} more`} onPress={() => setAllPaid(true)} /> : null}
           <T k="note">Yes takes that part out of your spending.</T>
         </>
       ) : null}
-
-      <DebtSuggestions m={m} />
-
-      <Sec right={<Btn kind="link" label="New debt" onPress={() => setNewDebt(null)} />}>Debts</Sec>
-      {m.debts.length ? <DebtList m={m} onOpen={setDebt} /> : <Panel><Empty title="No debts" sub="When you lend or borrow money, add a debt and tick the transfers that belong to it." /></Panel>}
 
       <Sec>Who owes whom</Sec>
       {list.length ? <List>{list.map((b) => (

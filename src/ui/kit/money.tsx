@@ -22,18 +22,20 @@ export const whoOf = (t: TransactionRow): Who => t.is_shared_topup ? (t.shared_p
 export const WHO_LABEL: Record<Who, string> = { none: 'Yours', shared: `Shared with ${PARTNER}`, moved: 'Moved to the shared pot', annain: `${PARTNER}, into the shared pot`, income: 'Money in', own: 'Moved between your accounts' };
 
 /** One transaction row: whose it is, name, category, amount with sign and colour. Shared rows wear the turning ring. */
-/** The merchant's logo with its category as a small badge; the plain category disc when the logo fails to load. */
+/** The merchant's logo with its category as a small badge; the plain category disc when the logo fails to load.
+ *  Shared rows: the logo shrinks inside the turning ring and the badge moves in with it, so the ring stays whole. */
 function LogoDisc({ uri, icon, color, children }: { uri: string; icon: string; color: string; children?: ReactNode }) {
   const [failed, setFailed] = useState(false);
   if (failed) return <Disc icon={icon} color={color}>{children}</Disc>;
+  const ring = Boolean(children);
+  const logo = ring ? 34 : 40, badge = ring ? 18 : 24, at = ring ? 20 : 22;
   return (
     <View style={{ width: 40, height: 40 }}>
-      {/* the shared ring goes first, so the category badge sits on top of it */}
       {children}
       {/* logos are drawn for white pages */}
-      <Image source={{ uri }} onError={() => setFailed(true)} accessibilityIgnoresInvertColors style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#fff' }} />
-      <View style={{ position: 'absolute', right: -6, bottom: -6, width: 24, height: 24, borderRadius: 12, backgroundColor: C.surface2, borderWidth: 2, borderColor: C.surface, alignItems: 'center', justifyContent: 'center' }}>
-        <Icon name={icon} size={13} color={color} />
+      <Image source={{ uri }} onError={() => setFailed(true)} accessibilityIgnoresInvertColors style={{ position: 'absolute', left: (40 - logo) / 2, top: (40 - logo) / 2, width: logo, height: logo, borderRadius: logo / 2, backgroundColor: '#fff' }} />
+      <View style={{ position: 'absolute', left: at, top: at, width: badge, height: badge, borderRadius: badge / 2, backgroundColor: C.surface2, borderWidth: ring ? 1.5 : 2, borderColor: C.surface, alignItems: 'center', justifyContent: 'center' }}>
+        <Icon name={icon} size={ring ? 10 : 13} color={color} />
       </View>
     </View>
   );
